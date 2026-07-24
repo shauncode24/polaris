@@ -15,7 +15,7 @@ from app.services.jobs.interpretation import (
     generate_narrative_analysis,
 )
 from app.services.jobs.jd_extraction import extract_jd_requirements
-from app.services.jobs.skill_categories import compute_category_breakdown, compute_overall_match
+from app.services.jobs.skill_categories import compute_category_breakdown, compute_overall_match, compute_peer_benchmarks
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_default_user
 

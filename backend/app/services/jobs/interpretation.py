@@ -3,6 +3,7 @@ import json
 from app.core.llm import client, MODEL
 from app.prompts.jd_interpretation import INTERPRETATION_SYSTEM_PROMPT
 from app.schemas.interpretation import LearningPlanItem, NarrativeAnalysis
+from app.services.jobs.skill_categories import get_curriculum_phase
 
 
 class InterpretationError(Exception):
@@ -15,13 +16,46 @@ def build_narrative_context(
     *, role, company, have, partial, missing, priority_order,
     estimated_weeks_by_skill, category_breakdown, overall_match, profile_context,
 ) -> dict:
+    learning_plan_curriculum = [
+        {
+            "skill": s,
+            "weeks": estimated_weeks_by_skill.get(s, 1),
+            "phase": get_curriculum_phase(s),
+        }
+        for s in priority_order
+    ]
+
     return {
         "role": role,
         "company": company,
-        "have": [{"skill": h.skill, "confidence": h.confidence, "evidence": h.evidence} for h in have],
-        "partial": [{"skill": p.skill, "confidence": p.confidence, "reason": p.reason} for p in partial],
-        "missing": [{"skill": m.skill, "reason": m.reason} for m in missing],
+        "have": [
+            {
+                "skill": h.skill,
+                "confidence": h.confidence,
+                "evidence": h.evidence,
+                "explanation": h.explanation,
+            }
+            for h in have
+        ],
+        "partial": [
+            {
+                "skill": p.skill,
+                "confidence": p.confidence,
+                "reason": p.reason,
+                "explanation": p.explanation,
+            }
+            for p in partial
+        ],
+        "missing": [
+            {
+                "skill": m.skill,
+                "reason": m.reason,
+                "unmatched_explanation": m.unmatched_explanation,
+            }
+            for m in missing
+        ],
         "missing_priority_order": priority_order,
+        "learning_plan_curriculum": learning_plan_curriculum,
         "estimated_weeks_by_skill": estimated_weeks_by_skill,
         "category_breakdown": category_breakdown,
         "overall_match_percentage": overall_match["percentage"],
@@ -44,7 +78,23 @@ async def generate_narrative_analysis(context: dict) -> NarrativeAnalysis:
         )
         content = response.choices[0].message.content
         print(f"[TRACING] Raw narrative JSON:\n{content}", flush=True)
-        parsed = NarrativeAnalysis.model_validate(json.loads(content))
+        parsed_dict = json.loads(content)
+        # Coerce list fields if returned as single strings
+        for list_key in ["role_focus", "strengths", "risks", "resume_advice", "interview_focus", "next_steps"]:
+            if list_key in parsed_dict and isinstance(parsed_dict[list_key], str):
+                parsed_dict[list_key] = [parsed_dict[list_key]]
+            elif list_key not in parsed_dict:
+                parsed_dict[list_key] = []
+
+        # Make sure learning plan items are complete dicts
+        if "learning_plan" in parsed_dict and isinstance(parsed_dict["learning_plan"], list):
+            for item in parsed_dict["learning_plan"]:
+                if isinstance(item, dict):
+                    if "phase" not in item or not item["phase"]:
+                        item["phase"] = get_curriculum_phase(item.get("skill", ""))
+                    if "rationale" not in item or not item["rationale"]:
+                        item["rationale"] = f"Flagged as a priority gap in the {item.get('phase', 'General')} phase."
+        parsed = NarrativeAnalysis.model_validate(parsed_dict)
     except Exception as e:
         raise InterpretationError(f"Narrative LLM call failed: {e}") from e
 
@@ -53,12 +103,19 @@ async def generate_narrative_analysis(context: dict) -> NarrativeAnalysis:
     # list blindly" rule gap_analysis.py already applies to priority_order.
     valid_skills = set(context["missing_priority_order"])
     parsed.learning_plan = [item for item in parsed.learning_plan if item.skill in valid_skills]
+    
+    # Force set/overwrite correct phases and weeks from code facts to prevent hallucinations
+    for item in parsed.learning_plan:
+        item.phase = get_curriculum_phase(item.skill)
+        item.weeks = context["estimated_weeks_by_skill"].get(item.skill, item.weeks)
+
     if not parsed.learning_plan and context["missing_priority_order"]:
         parsed.learning_plan = [
             LearningPlanItem(
                 skill=s,
                 weeks=context["estimated_weeks_by_skill"].get(s, 1),
                 rationale="Flagged as a priority gap in the skill-gap analysis.",
+                phase=get_curriculum_phase(s),
             )
             for s in context["missing_priority_order"]
         ]
@@ -89,18 +146,26 @@ def fallback_narrative(context: dict) -> NarrativeAnalysis:
             skill=s,
             weeks=context["estimated_weeks_by_skill"].get(s, 1),
             rationale="Flagged as a priority gap in the skill-gap analysis.",
+            phase=get_curriculum_phase(s),
         )
         for s in missing_names
     ]
 
     return NarrativeAnalysis(
         executive_summary=summary,
+        role_focus=["Production backend engineering", "Scalable architectures"],
         strengths=[f"Verified evidence for {h['skill']}" for h in context["have"][:4]],
         risks=[f"No verified evidence for {m['skill']}" for m in context["missing"][:4]],
         learning_plan=learning_plan,
         resume_advice=[],
         interview_focus=missing_names[:5],
-        confidence_narrative="; ".join(
+        hiring_perspective="; ".join(
             f"{c['category']}: {c['label']}" for c in context["category_breakdown"]
         ),
+        career_strategy="Prioritize learning required missing technologies like Docker and PostgreSQL first.",
+        next_steps=[
+            "Build a small Dockerized FastAPI project with Postgres.",
+            "Add the new projects and deployment details to your resume.",
+            "Prepare for database and deployment design review questions.",
+        ],
     )

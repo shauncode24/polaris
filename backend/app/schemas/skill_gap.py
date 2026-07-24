@@ -20,18 +20,21 @@ class HaveSkill(BaseModel):
     skill: str
     confidence: float
     evidence: list[str]
+    explanation: str = ""
 
 
 class PartialSkill(BaseModel):
     skill: str
     confidence: float
     reason: str
+    explanation: str = ""
 
 
 class MissingSkill(BaseModel):
     skill: str
     reason: str
     estimated_weeks: int = 0
+    unmatched_explanation: str = ""
 
 
 class SkillGapReport(BaseModel):
