@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import LeetcodeSnapshot
 from app.models.inference import ProfileSnapshot, SkillEvidence
-from app.services.confidence import WEIGHTS
-from app.services.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
-from app.services.skill_classifier import resolve_skills
+from app.services.resume.confidence import WEIGHTS
+from app.services.leetcode.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
+from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_default_user, get_or_create_skill
 
 

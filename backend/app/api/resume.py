@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, Depends
 from app.core.database import get_db
-from app.services.ingestion import ingest_resume
+from app.services.resume.ingestion import ingest_resume
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 

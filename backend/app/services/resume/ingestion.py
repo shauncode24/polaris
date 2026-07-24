@@ -11,11 +11,11 @@ from app.models.facts import User, Experience, Project
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence, ProfileSnapshot
 
-from app.services.pdf_parser import extract_text_from_pdf
-from app.services.extraction import extract_resume_data
-from app.services.skill_classifier import resolve_skills
-from app.services.confidence import WEIGHTS, compute_skill_confidence
-from app.services.review import flag_for_review, REVIEW_THRESHOLD
+from app.services.resume.pdf_parser import extract_text_from_pdf
+from app.services.resume.extraction import extract_resume_data
+from app.services.resume.skill_classifier import resolve_skills
+from app.services.resume.confidence import WEIGHTS, compute_skill_confidence
+from app.services.resume.review import flag_for_review, REVIEW_THRESHOLD
 
 
 def _mentions_skill(text: str, raw_name: str) -> bool:

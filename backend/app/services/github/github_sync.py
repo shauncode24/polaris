@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import GithubSnapshot
 from app.models.inference import ProfileSnapshot
-from app.services.github_client import (
+from app.services.github.github_client import (
     GithubSyncError,
     fetch_commit_count_last_30d,
     fetch_ci_config_exists,
@@ -16,9 +16,9 @@ from app.services.github_client import (
     fetch_repos,
     fetch_test_signal,
 )
-from app.services.github_insights import build_github_insights
-from app.services.github_scoring import score_repository
-from app.services.github_taxonomy import categorize_technologies
+from app.services.github.github_insights import build_github_insights
+from app.services.github.github_scoring import score_repository
+from app.services.github.github_taxonomy import categorize_technologies
 from app.services.user_helpers import get_or_create_default_user
 
 
