@@ -23,40 +23,50 @@ def score_repository(
     pushed_at: str | None,
     archived: bool,
     has_description: bool,
-) -> int:
-    score = 0.0
-
+) -> dict:
     # Activity (0-25) — capped so one hyperactive repo doesn't blow the scale
-    score += min(commits_30d, 25) / 25 * 25
+    activity = min(commits_30d, 25) / 25 * 25
 
-    # Recency (0-20) — decays smoothly, floors near 0 past ~180 days idle
+    # Maintenance/Recency (0-20) — decays smoothly, floors near 0 past ~180 days idle
+    maintenance = 0.0
     if pushed_at:
         pushed = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
         days_since_push = (datetime.now(timezone.utc) - pushed).days
-        score += max(0, 20 - (days_since_push / 180 * 20))
+        maintenance = max(0.0, 20.0 - (days_since_push / 180 * 20))
 
     # Documentation (0-15)
+    documentation = 0.0
     if has_readme:
-        score += 10
+        documentation += 10.0
     if has_description:
-        score += 5
+        documentation += 5.0
 
-    # Testing (0-15)
+    # Engineering/Testing/CI & Complexity (0-40)
+    engineering = 0.0
     if has_tests:
-        score += 15
-
-    # CI/CD (0-10)
+        engineering += 15.0
     if has_ci:
-        score += 10
-
-    # Complexity / maturity (0-15)
-    score += min(language_count, 4) / 4 * 6
-    score += min(topic_count, 5) / 5 * 4
-    score += min(size_kb, 5000) / 5000 * 3
-    score += min(stars + forks, 10) / 10 * 2
+        engineering += 10.0
+    engineering += min(language_count, 4) / 4 * 6
+    engineering += min(topic_count, 5) / 5 * 4
+    engineering += min(size_kb, 5000) / 5000 * 3
+    engineering += min(stars + forks, 10) / 10 * 2
 
     if archived:
-        # Frozen in time — still real evidence, shouldn't outrank active work
-        score *= 0.7
+        # Frozen in time — scale all components
+        activity *= 0.7
+        maintenance *= 0.7
+        documentation *= 0.7
+        engineering *= 0.7
 
-    return round(min(score, MAX_SCORE))
+    overall = activity + maintenance + documentation + engineering
+
+    return {
+        "overall": round(min(overall, MAX_SCORE)),
+        "breakdown": {
+            "activity": round(activity),
+            "documentation": round(documentation),
+            "engineering": round(engineering),
+            "maintenance": round(maintenance),
+        },
+    }

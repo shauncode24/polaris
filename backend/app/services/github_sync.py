@@ -113,7 +113,7 @@ async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
                 "pushed_at": repo.get("pushed_at"),
                 "archived": is_archived, "is_new": is_new,
                 "has_readme": has_readme, "has_ci": has_ci, "has_tests": has_tests,
-                "score": score,
+                "project_score": score,
             })
 
     for row in snapshot_rows:
@@ -124,8 +124,24 @@ async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
     removed_repo_names = previously_synced - current_repo_names
     languages_detected, total_language_bytes = _aggregate_languages(repo_language_map)
     tech_distribution = categorize_technologies(repo_language_map, repo_topics_map)
-    scores = {r["name"]: r["score"] for r in repositories_report}
-    insights = build_github_insights(repositories_report, scores, tech_distribution, total_language_bytes)
+    scores = {r["name"]: r["project_score"]["overall"] for r in repositories_report}
+
+    prev_stmt = (
+        select(ProfileSnapshot)
+        .where(ProfileSnapshot.user_id == user.id)
+        .where(ProfileSnapshot.note == "github sync")
+        .order_by(ProfileSnapshot.taken_at.desc())
+        .limit(1)
+    )
+    prev_result = await db.execute(prev_stmt)
+    prev_snapshot = prev_result.scalar_one_or_none()
+    prev_insights = None
+    if prev_snapshot and isinstance(prev_snapshot.skills_json, dict):
+        prev_insights = prev_snapshot.skills_json.get("insights")
+
+    insights = build_github_insights(
+        repositories_report, scores, tech_distribution, total_language_bytes, prev_insights
+    )
 
     snapshot = ProfileSnapshot(
         user_id=user.id, taken_at=datetime.now(timezone.utc),

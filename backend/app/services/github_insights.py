@@ -7,122 +7,182 @@ belongs in the raw snapshot, not here.
 """
 from datetime import datetime, timezone
 
-NEGLECT_THRESHOLD_DAYS = 60
-MAX_NEGLECTED = 5
-MAX_STRONGEST = 5
-MAX_ACTIVE = 10
-
-
-def _days_since(pushed_at: str | None) -> int | None:
-    if not pushed_at:
-        return None
-    pushed = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
-    return (datetime.now(timezone.utc) - pushed).days
-
-
-def _neglect_reason(repo: dict, score: int) -> str:
-    """Template-based, not LLM-generated — deterministic and free to run
-    on every sync, for every repo."""
-    if score >= 60:
-        return "High-scoring project with no recent activity — a strong candidate to resume."
-    if not repo.get("has_readme") or not repo.get("description"):
-        return "Portfolio project that could benefit from documentation and a description."
-    if repo.get("stars", 0) + repo.get("forks", 0) > 0:
-        return "Has external interest (stars/forks) but has gone quiet."
-    return "Idle project — consider finishing, documenting, or archiving it."
-
-
-def _category_label(category: str) -> str:
-    return {
-        "frontend": "Frontend Development", "backend": "Backend Development",
-        "databases": "Database Engineering", "devops": "DevOps",
-        "ai": "AI Applications", "mobile": "Mobile Development",
-        "testing": "Test Engineering", "languages": "General Software Development",
-    }.get(category, category.title())
-
 
 def build_github_insights(
     repositories: list[dict],
     scores: dict[str, int],
     tech_distribution: dict[str, dict[str, int]],
     total_language_bytes: dict[str, int],
+    prev_insights: dict | None = None,
 ) -> dict:
-    non_archived = [r for r in repositories if not r.get("archived")]
     total = len(repositories) or 1
-
-    active_projects = [
-        r["name"] for r in sorted(
-            (r for r in repositories if r.get("commits_last_30_days", 0) > 0),
-            key=lambda r: r["commits_last_30_days"], reverse=True,
-        )[:MAX_ACTIVE]
-    ]
-
-    strongest_projects = [
-        {"name": r["name"], "score": scores.get(r["name"], 0)}
-        for r in sorted(repositories, key=lambda r: scores.get(r["name"], 0), reverse=True)[:MAX_STRONGEST]
-    ]
-
-    neglect_candidates = []
-    for r in non_archived:
-        days = _days_since(r.get("pushed_at"))
-        if r.get("commits_last_30_days", 0) == 0 and days is not None and days > NEGLECT_THRESHOLD_DAYS:
-            neglect_candidates.append((r, days))
-    neglect_candidates.sort(key=lambda pair: scores.get(pair[0]["name"], 0), reverse=True)
-
-    neglected_projects = [
-        {"name": r["name"], "last_commit_days": days, "reason": _neglect_reason(r, scores.get(r["name"], 0))}
-        for r, days in neglect_candidates[:MAX_NEGLECTED]
-    ]
-
     category_counts = {cat: sum(techs.values()) for cat, techs in tech_distribution.items()}
-    ranked_categories = sorted(category_counts.items(), key=lambda kv: kv[1], reverse=True)
-    primary_focus = _category_label(ranked_categories[0][0]) if ranked_categories else "Unclear"
-    secondary_focus = _category_label(ranked_categories[1][0]) if len(ranked_categories) > 1 else None
+
+    # 1. Portfolio Profile (Domains and Project Types)
+    domains = []
+    if category_counts.get("frontend", 0) > 0 or category_counts.get("backend", 0) > 0 or category_counts.get("databases", 0) > 0:
+        domains.append("Web Applications")
+    if category_counts.get("ai", 0) > 0:
+        domains.append("AI Applications")
+    if category_counts.get("mobile", 0) > 0:
+        domains.append("Mobile Applications")
+    if category_counts.get("devops", 0) > 0:
+        domains.append("Cloud & Infrastructure")
+    if category_counts.get("testing", 0) > 0:
+        domains.append("Test Engineering")
+    if not domains and category_counts.get("languages", 0) > 0:
+        domains.append("Developer Tools")
+
+    project_types_set = set()
+    for repo in repositories:
+        langs = {l.lower() for l in repo.get("languages", [])}
+        topics = {t.lower() for t in repo.get("topics", [])}
+
+        has_frontend = any(l in {"javascript", "typescript", "html", "css"} for l in langs) or any(
+            t in {"react", "vue", "angular", "svelte", "nextjs", "tailwind"} for t in topics
+        )
+        has_backend = any(l in {"python", "go", "rust", "c#", "java", "php", "ruby"} for l in langs) or any(
+            t in {"fastapi", "django", "flask", "express", "nodejs", "spring"} for t in topics
+        )
+
+        if has_frontend and has_backend:
+            project_types_set.add("Full Stack")
+        elif has_backend:
+            project_types_set.add("Backend APIs")
+        elif has_frontend:
+            project_types_set.add("Frontend Web")
+        else:
+            project_types_set.add("Automation & Libraries")
+
+    project_types = sorted(list(project_types_set))
+
+    # 2. Engineering Habits / Practices
+    repos_with_readme = sum(1 for r in repositories if r.get("has_readme"))
+    doc_score = round((repos_with_readme / total) * 100)
+
+    repos_with_tests = sum(1 for r in repositories if r.get("has_tests"))
+    test_score = round((repos_with_tests / total) * 100)
+
+    docker_count = sum(
+        1
+        for r in repositories
+        if any("docker" in t.lower() for t in r.get("topics", []))
+        or (r.get("description") and "docker" in r["description"].lower())
+    )
+    ci_count = sum(1 for r in repositories if r.get("has_ci"))
+
+    active_projects = sum(1 for r in repositories if r.get("commits_last_30_days", 0) > 0)
+    stale_projects = len(repositories) - active_projects
+
+    # 3. Progress and Trends
     dominant_languages = [
         lang for lang, _ in sorted(total_language_bytes.items(), key=lambda kv: kv[1], reverse=True)[:2]
     ]
+    recent_focus = dominant_languages[0] if dominant_languages else "None"
 
-    tested_count = sum(1 for r in repositories if r.get("has_tests"))
-    ci_count = sum(1 for r in repositories if r.get("has_ci"))
-    readme_count = sum(1 for r in repositories if r.get("has_readme"))
+    backend_activity = "Unchanged"
+    documentation_trend = "Unchanged"
+    testing_trend = "Unchanged"
+    new_technologies = []
 
-    experience_level = (
-        "Advanced" if len(non_archived) >= 15 and tested_count / total > 0.3
-        else "Intermediate" if len(non_archived) >= 5
-        else "Early"
-    )
+    if prev_insights:
+        prev_backend_count = sum(prev_insights.get("technology_distribution", {}).get("backend", {}).values())
+        curr_backend_count = sum(tech_distribution.get("backend", {}).values())
+        if curr_backend_count > prev_backend_count:
+            backend_activity = "Increasing"
+        elif curr_backend_count < prev_backend_count:
+            backend_activity = "Decreasing"
 
-    strengths: list[str] = []
-    for category, _ in ranked_categories[:2]:
-        top_tech = max(tech_distribution[category].items(), key=lambda kv: kv[1], default=None)
-        if top_tech:
-            strengths.append(f"Strong {top_tech[0]} portfolio ({top_tech[1]} repositories)")
+        prev_doc_score = prev_insights.get("engineering_practices", {}).get("documentation", {}).get("score", 0)
+        if doc_score > prev_doc_score:
+            documentation_trend = "Improving"
+        elif doc_score < prev_doc_score:
+            documentation_trend = "Declining"
+
+        prev_test_score = prev_insights.get("engineering_practices", {}).get("testing", {}).get("score", 0)
+        if test_score > prev_test_score:
+            testing_trend = "Improving"
+        elif test_score < prev_test_score:
+            testing_trend = "Declining"
+
+        curr_techs = set()
+        for techs in tech_distribution.values():
+            curr_techs.update(techs.keys())
+
+        prev_techs = set()
+        for techs in prev_insights.get("technology_distribution", {}).values():
+            prev_techs.update(techs.keys())
+
+        new_technologies = sorted(list(curr_techs - prev_techs))
+
+    # 4. Recommendations
+    recommendations = []
+    highest_scored_repo = max(repositories, key=lambda r: scores.get(r["name"], 0), default=None)
+    if highest_scored_repo:
+        recommendations.append({
+            "project": highest_scored_repo["name"],
+            "reason": "Highest engineering score. Continue investing here.",
+        })
+
+    good_inactive_repos = [
+        r for r in repositories if r.get("commits_last_30_days", 0) == 0 and scores.get(r["name"], 0) >= 30
+    ]
+    good_inactive_repo = max(good_inactive_repos, key=lambda r: scores.get(r["name"], 0), default=None)
+    if good_inactive_repo:
+        recommendations.append({
+            "project": good_inactive_repo["name"],
+            "reason": "Good foundation but lacks recent activity.",
+        })
+
+    most_active_repo = max(repositories, key=lambda r: r.get("commits_last_30_days", 0), default=None)
+    if most_active_repo and most_active_repo.get("commits_last_30_days", 0) > 0:
+        recommendations.append({
+            "project": most_active_repo["name"],
+            "reason": "Most active repository this month.",
+        })
+
+    # Softer, non-absolute observations for strengths
+    strengths_list = []
+    if category_counts.get("frontend", 0) >= 2 or any(lang.lower() in {"javascript", "typescript"} for lang in dominant_languages):
+        strengths_list.append("Portfolio contains multiple frontend applications demonstrating sustained JavaScript/TypeScript usage.")
+    if category_counts.get("backend", 0) >= 2:
+        strengths_list.append("Portfolio features backend services demonstrating API design.")
+    if category_counts.get("databases", 0) >= 2:
+        strengths_list.append("Portfolio includes implementations leveraging database technologies.")
     if category_counts.get("ai", 0) > 0:
-        strengths.append("Growing AI/ML project experience")
-    if len(tech_distribution.get("databases", {})) >= 2:
-        strengths.append("Comfortable across multiple database technologies")
-
-    gaps: list[str] = []
-    if tested_count / total < 0.2:
-        gaps.append("Very little automated testing across repositories")
-    if ci_count / total < 0.2:
-        gaps.append("Few projects with CI/CD configured")
-    if readme_count / total < 0.5:
-        gaps.append("Many repositories lack documentation")
-    if not any(r.get("stars", 0) + r.get("forks", 0) > 3 for r in repositories):
-        gaps.append("No large collaborative open-source contributions")
+        strengths_list.append("Portfolio includes applications with integrated AI/ML components.")
 
     return {
-        "active_projects": active_projects,
-        "strongest_projects": strongest_projects,
-        "neglected_projects": neglected_projects,
-        "technology_distribution": tech_distribution,
-        "engineering_profile": {
-            "primary_focus": primary_focus,
-            "secondary_focus": secondary_focus,
-            "experience_level": experience_level,
-            "dominant_languages": dominant_languages,
+        "portfolio_profile": {
+            "domains": domains,
+            "project_types": project_types,
         },
-        "strengths": strengths,
-        "gaps": gaps,
+        "engineering_practices": {
+            "documentation": {
+                "score": doc_score,
+                "repos_with_readme": repos_with_readme,
+            },
+            "testing": {
+                "score": test_score,
+                "repos_with_tests": repos_with_tests,
+            },
+            "devops": {
+                "docker": docker_count,
+                "ci": ci_count,
+            },
+            "maintenance": {
+                "active_projects": active_projects,
+                "stale_projects": stale_projects,
+            },
+        },
+        "progress": {
+            "recent_focus": recent_focus,
+            "backend_activity": backend_activity,
+            "documentation": documentation_trend,
+            "testing": testing_trend,
+            "new_technologies": new_technologies,
+        },
+        "recommendations": recommendations,
+        "technology_distribution": tech_distribution,
+        "strengths": strengths_list,
     }
