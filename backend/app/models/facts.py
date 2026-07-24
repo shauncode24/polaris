@@ -91,7 +91,7 @@ class JobDescription(Base):
     role: Mapped[str | None] = mapped_column(String(255))
     raw_text: Mapped[str] = mapped_column(Text)
     extracted_requirements: Mapped[dict | None] = mapped_column(JSONB)
-    analysis_result: Mapped[dict | None] = mapped_column(JSONB)   # NEW — full SkillGapAnalysisResponse
+    analysis_result: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = created_at_col()
 
 
@@ -114,3 +114,19 @@ class Note(Base):
     date: Mapped[date] = mapped_column(Date)
     content: Mapped[str] = mapped_column(Text)
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
+
+
+class Resume(Base):
+    """Raw, immutable resume text — a fact table per §5.5, kept for its
+    own sake (ATS-style checks need real layout/wording, not just what
+    the extraction pipeline pulled structurally out of it in Phase 2).
+    Append-only: every re-upload creates a new row rather than
+    overwriting the previous one.
+    """
+    __tablename__ = "resumes"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    raw_text: Mapped[str] = mapped_column(Text)
+    filename: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = created_at_col()

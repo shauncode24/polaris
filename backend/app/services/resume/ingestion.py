@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import User, Experience, Project
+from app.models.facts import User, Experience, Project, Resume
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence, ProfileSnapshot
 
@@ -52,13 +52,22 @@ async def _get_or_create_skill(db: AsyncSession, canonical_name: str, display_na
     return Skill(id=skill_id, name=display_name, canonical_name=canonical_name)
 
 
-async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
+async def ingest_resume(raw_bytes: bytes, db: AsyncSession, filename: str | None = None) -> dict:
     raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
     if not raw_text.strip():
         raise ValueError("No extractable text found in PDF")
 
     extraction = await extract_resume_data(raw_text)
     user = await _get_or_create_default_user(db)
+
+    # Persist the raw text as its own fact (Phase 5 needs it for
+    # ATS-style checks — see docs/development notes on §5.5).
+    resume_row = Resume(
+        user_id=user.id, raw_text=raw_text, filename=filename,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(resume_row)
+    await db.flush()
 
     experience_rows: list[Experience] = []
     for exp in extraction.experiences:
@@ -121,7 +130,6 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
         weights: list[float] = []
         raw_name = canonical_to_raw[canonical].lower()
 
-        # Project evidence: stack OR description mention (one entry per project)
         for proj_row, proj_extracted in zip(project_rows, extraction.projects):
             stack_match = any(resolved.get(s) == canonical for s in proj_extracted.stack)
             desc_match = bool(proj_extracted.description) and _mentions_skill(
@@ -135,13 +143,6 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
                     "detail": proj_extracted.name,
                 })
 
-        # Experience evidence: stack OR bullet mention.
-        # FIX: previously only bullets were checked here, while projects
-        # checked both stack and description — an inconsistency that
-        # under-counted skills tied to an experience's stack but not
-        # repeated verbatim in a bullet. Now stack is checked too, as one
-        # combined entry per experience (not double-counted alongside
-        # bullet matches from the same experience).
         for exp_row, exp_extracted in zip(experience_rows, extraction.experiences):
             stack_match = any(resolved.get(s) == canonical for s in exp_extracted.stack)
             bullet_hits = [b for b in exp_extracted.bullets if _mentions_skill(b, raw_name)]
@@ -196,6 +197,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
 
     return {
         "user_id": str(user.id),
+        "resume_id": str(resume_row.id),
         "experiences_created": len(experience_rows),
         "projects_created": len(project_rows),
         "skills_processed": len(skill_objs),

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -14,7 +14,7 @@ class SkillEvidence(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     skill_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("skills.id"), index=True)
-    source_type: Mapped[str] = mapped_column(String(50))  # "project" | "experience" | "certificate" | "leetcode_tag"
+    source_type: Mapped[str] = mapped_column(String(50))
     source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     weight: Mapped[float] = mapped_column(Float)
 
@@ -38,3 +38,20 @@ class ReadinessScore(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     score: Mapped[float] = mapped_column(Float)
     basis: Mapped[str | None] = mapped_column(Text)
+
+
+class ResumeReview(Base):
+    """Derived, recomputable review output (§5.5 'inference') — never a
+    source of truth, safe to regenerate any time bullet_analysis.py or
+    the LLM prompt changes. Tied to the specific Resume row it reviewed
+    so you can see review quality evolve as the resume itself evolves.
+    """
+    __tablename__ = "resume_reviews"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    resume_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"))
+    review_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
