@@ -8,6 +8,10 @@ dependencies = [
     "fastapi>=0.139.2",
     "python-dotenv>=1.2.2",
     "uvicorn[standard]>=0.51.0",
+    "sqlalchemy>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "pgvector>=0.3.6",
 ]
 
 [dependency-groups]
