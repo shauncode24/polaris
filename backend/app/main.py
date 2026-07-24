@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 
 from app.api.resume import router as resume_router
+from app.api.sync import router as sync_router
 
 app = FastAPI(title="Polaris API")
 
 app.include_router(resume_router)
+app.include_router(sync_router)
 
 
 @app.get("/health")

@@ -15,10 +15,10 @@ dependencies = [
     "pdfplumber>=0.11.10",
     "openai>=2.48.0",
     "python-multipart>=0.0.32",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "pytest>=9.1.1",
 ]

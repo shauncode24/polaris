@@ -36,5 +36,10 @@ class Settings:
             )
         )
 
+        # --- Phase 3: sync credentials ---
+        self.github_token = os.environ.get("GITHUB_TOKEN", "")
+        self.github_username = os.environ.get("GITHUB_USERNAME", "")
+        self.leetcode_username = os.environ.get("LEETCODE_USERNAME", "")
+
 
 settings = Settings()
