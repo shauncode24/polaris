@@ -91,6 +91,7 @@ class JobDescription(Base):
     role: Mapped[str | None] = mapped_column(String(255))
     raw_text: Mapped[str] = mapped_column(Text)
     extracted_requirements: Mapped[dict | None] = mapped_column(JSONB)
+    analysis_result: Mapped[dict | None] = mapped_column(JSONB)   # NEW — full SkillGapAnalysisResponse
     created_at: Mapped[datetime] = created_at_col()
 
 
