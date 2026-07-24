@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-
+import base64
 import httpx
 
 GITHUB_API_BASE = "https://api.github.com"
@@ -86,3 +86,62 @@ async def fetch_commit_count_last_30d(
             break
         page += 1
     return count
+
+async def fetch_repo_file(
+    client: httpx.AsyncClient, owner: str, repo: str, path: str, token: str
+) -> str | None:
+    """Returns decoded text content of a file at `path` in the repo's
+    default branch, or None if it doesn't exist. Used to inspect manifest
+    files (package.json, requirements.txt, ...) for technology signals.
+    A 404 here is an expected, non-error outcome — most repos won't have
+    every manifest type — so it's not routed through GithubSyncError.
+    """
+    resp = await client.get(
+        f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}",
+        headers=_auth_headers(token),
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    if isinstance(data, list):  # path is a directory, not a file
+        return None
+    try:
+        return base64.b64decode(data.get("content", "")).decode("utf-8", errors="ignore")
+    except Exception:
+        return None
+
+
+async def fetch_repo_path_exists(
+    client: httpx.AsyncClient, owner: str, repo: str, path: str, token: str
+) -> bool:
+    """Cheap existence check for a file OR directory (e.g. '.github/workflows',
+    'tests'). Used for signals where we only care whether something is
+    present, not its content.
+    """
+    resp = await client.get(
+        f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}",
+        headers=_auth_headers(token),
+    )
+    return resp.status_code == 200
+
+
+async def fetch_last_commit_date(
+    client: httpx.AsyncClient, owner: str, repo: str, token: str
+) -> datetime | None:
+    """Timestamp of the single most recent commit, used to derive
+    last_activity_days. Separate from fetch_commit_count_last_30d, which
+    only counts — it never tells you *when* the most recent activity was
+    if it falls outside the 30-day window (e.g. a repo untouched for 6 months).
+    """
+    resp = await client.get(
+        f"{GITHUB_API_BASE}/repos/{owner}/{repo}/commits",
+        headers=_auth_headers(token),
+        params={"per_page": 1},
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    if not data:
+        return None
+    date_str = data[0]["commit"]["committer"]["date"]
+    return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
