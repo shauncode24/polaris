@@ -12,6 +12,11 @@ from app.services.user_helpers import get_or_create_default_user
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
+# Precedence when the same canonical skill shows up in more than one
+# category (e.g. named directly AND implied by a responsibility) — the
+# strongest/most-committal category wins.
+_CATEGORY_PRECEDENCE = ["required", "implicit", "nice_to_have"]
+
 
 @router.post("/analyze", response_model=SkillGapReport)
 async def analyze_job_description(payload: JDPasteRequest, db=Depends(get_db)):
@@ -19,19 +24,31 @@ async def analyze_job_description(payload: JDPasteRequest, db=Depends(get_db)):
     user = await get_or_create_default_user(db)
 
     extraction = await extract_jd_requirements(payload.raw_text)
-    print(f"[TRACING] JD extraction found {len(extraction.required_skills)} required skills.", flush=True)
+    print(
+        f"[TRACING] JD extraction found {len(extraction.required_skills)} required, "
+        f"{len(extraction.implicit_skills)} implicit, {len(extraction.nice_to_have)} nice-to-have, "
+        f"{len(extraction.architecture_topics)} architecture topics.",
+        flush=True,
+    )
 
-    resolved = await resolve_skills(set(extraction.required_skills), db)
+    raw_by_category = {
+        "required": extraction.required_skills,
+        "implicit": extraction.implicit_skills,
+        "nice_to_have": extraction.nice_to_have,
+    }
+    all_raw_strings = {s for skills in raw_by_category.values() for s in skills}
+    resolved = await resolve_skills(all_raw_strings, db)
 
-    # Canonical, deduplicated, in the JD's own original order — used both
-    # for persistence and as the tie-breaker in analyze_skill_gap().
+    canonical_skills: dict[str, str] = {}
     canonical_order: list[str] = []
-    seen: set[str] = set()
-    for raw in extraction.required_skills:
-        canonical = resolved.get(raw)
-        if canonical and canonical not in seen:
-            canonical_order.append(canonical)
-            seen.add(canonical)
+    for category in _CATEGORY_PRECEDENCE:
+        for raw in raw_by_category[category]:
+            canonical = resolved.get(raw)
+            if canonical is None:
+                continue
+            if canonical not in canonical_skills:
+                canonical_skills[canonical] = category
+                canonical_order.append(canonical)
 
     job_description = JobDescription(
         user_id=user.id,
@@ -39,7 +56,10 @@ async def analyze_job_description(payload: JDPasteRequest, db=Depends(get_db)):
         role=payload.role or extraction.role,
         raw_text=payload.raw_text,
         extracted_requirements={
-            "raw_skills": extraction.required_skills,
+            "raw_required": extraction.required_skills,
+            "raw_implicit": extraction.implicit_skills,
+            "raw_nice_to_have": extraction.nice_to_have,
+            "architecture_topics": extraction.architecture_topics,
             "resolved_skills": canonical_order,
         },
         created_at=datetime.now(timezone.utc),
@@ -48,10 +68,17 @@ async def analyze_job_description(payload: JDPasteRequest, db=Depends(get_db)):
     await db.flush()
     await db.commit()
 
-    report = await analyze_skill_gap(db, user.id, canonical_order)
+    report = await analyze_skill_gap(
+        db,
+        user.id,
+        canonical_skills,
+        extraction.architecture_topics,
+        role=payload.role or extraction.role,
+        company=payload.company or extraction.company,
+    )
     print(
-        f"[TRACING] Gap analysis complete: {len(report.have)} have, "
-        f"{len(report.missing)} missing, {report.estimated_weeks} weeks estimated.",
+        f"[TRACING] Gap analysis complete: {len(report.have)} have, {len(report.partial)} partial, "
+        f"{len(report.missing)} missing, {report.estimated_weeks} total estimated weeks.",
         flush=True,
     )
     return report
