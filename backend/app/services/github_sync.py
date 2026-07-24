@@ -1,25 +1,24 @@
-# backend/app/services/github_sync.py
 from collections import defaultdict
 from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import GithubSnapshot
 from app.models.inference import ProfileSnapshot
-from app.models.github_analysis import GithubProjectAnalysis, PortfolioAnalysis
-from app.services.github_analyzer import analyze_repo, build_portfolio_analysis
 from app.services.github_client import (
     GithubSyncError,
     fetch_commit_count_last_30d,
+    fetch_ci_config_exists,
     fetch_languages,
-    fetch_last_commit_date,
-    fetch_repo_file,
-    fetch_repo_path_exists,
+    fetch_readme_exists,
     fetch_repos,
+    fetch_test_signal,
 )
+from app.services.github_insights import build_github_insights
+from app.services.github_scoring import score_repository
+from app.services.github_taxonomy import categorize_technologies
 from app.services.user_helpers import get_or_create_default_user
 
 
@@ -30,82 +29,19 @@ async def _get_previously_synced_repo_names(db: AsyncSession, user_id) -> set[st
     return {row[0] for row in result.all()}
 
 
-def _aggregate_languages(repo_language_map: dict[str, dict]) -> list[dict]:
+def _aggregate_languages(repo_language_map: dict[str, dict]) -> tuple[list[dict], dict[str, int]]:
     totals: dict[str, int] = defaultdict(int)
     repo_counts: dict[str, int] = defaultdict(int)
     for languages in repo_language_map.values():
         for lang, byte_count in languages.items():
             totals[lang] += byte_count
             repo_counts[lang] += 1
-    return [
+
+    detected = [
         {"language": lang, "repos": repo_counts[lang], "bytes": totals[lang]}
         for lang in sorted(totals, key=lambda l: totals[l], reverse=True)
     ]
-
-
-async def _get_previous_technology_distribution(db: AsyncSession, user_id) -> dict[str, int] | None:
-    """Most recent portfolio_analysis row's tech distribution, used to
-    compute 'X usage increased since last sync' observations. None on a
-    user's very first sync, since there's nothing to diff against yet.
-    """
-    result = await db.execute(
-        select(PortfolioAnalysis.technology_distribution)
-        .where(PortfolioAnalysis.user_id == user_id)
-        .order_by(PortfolioAnalysis.computed_at.desc())
-        .limit(1)
-    )
-    row = result.scalar_one_or_none()
-    return row
-
-
-async def _inspect_repo(
-    client: httpx.AsyncClient, owner: str, repo_name: str, token: str
-) -> dict:
-    """One place that fetches everything the analyzer needs about a single
-    repo's contents. Isolated here so sync_github's main loop stays
-    readable, and so this is the one spot to touch if you add more
-    manifest types later (e.g. go.mod, Cargo.toml).
-    """
-    package_json = await fetch_repo_file(client, owner, repo_name, "package.json", token)
-    requirements_txt = await fetch_repo_file(client, owner, repo_name, "requirements.txt", token)
-    pyproject_toml = await fetch_repo_file(client, owner, repo_name, "pyproject.toml", token)
-    has_dockerfile = await fetch_repo_path_exists(client, owner, repo_name, "Dockerfile", token)
-    has_compose = await fetch_repo_path_exists(client, owner, repo_name, "docker-compose.yml", token)
-    has_workflows = await fetch_repo_path_exists(client, owner, repo_name, ".github/workflows", token)
-    has_tests_dir = (
-        await fetch_repo_path_exists(client, owner, repo_name, "tests", token)
-        or await fetch_repo_path_exists(client, owner, repo_name, "test", token)
-    )
-    has_readme = await fetch_repo_path_exists(client, owner, repo_name, "README.md", token)
-    last_commit_at = await fetch_last_commit_date(client, owner, repo_name, token)
-
-    return {
-        "package_json": package_json,
-        "requirements_txt": requirements_txt,
-        "pyproject_toml": pyproject_toml,
-        "has_dockerfile": has_dockerfile,
-        "has_compose": has_compose,
-        "has_workflows": has_workflows,
-        "has_tests_dir": has_tests_dir,
-        "has_readme": has_readme,
-        "last_commit_at": last_commit_at,
-    }
-
-
-async def _upsert_repo_analysis(db: AsyncSession, user_id, analysis: dict, computed_at: datetime) -> None:
-    stmt = (
-        pg_insert(GithubProjectAnalysis)
-        .values(
-            user_id=user_id,
-            computed_at=computed_at,
-            **analysis,
-        )
-        .on_conflict_do_update(
-            index_elements=["user_id", "repo_name"],
-            set_={**analysis, "computed_at": computed_at},
-        )
-    )
-    await db.execute(stmt)
+    return detected, dict(totals)
 
 
 async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
@@ -115,15 +51,13 @@ async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
     print(f"[TRACING] Starting GitHub sync for {username}...", flush=True)
     user = await get_or_create_default_user(db)
     previously_synced = await _get_previously_synced_repo_names(db, user.id)
-    previous_tech_distribution = await _get_previous_technology_distribution(db, user.id)
 
     repo_language_map: dict[str, dict] = {}
+    repo_topics_map: dict[str, list[str]] = {}
     repositories_report: list[dict] = []
-    repo_analyses: list[dict] = []
     snapshot_rows: list[GithubSnapshot] = []
 
-    total_stars = total_forks = total_commits = 0
-    new_count = archived_count = 0
+    total_stars = total_forks = total_commits = new_count = archived_count = 0
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         repos = await fetch_repos(client, username, token)
@@ -134,12 +68,17 @@ async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
             is_archived = bool(repo.get("archived", False))
             stars = repo.get("stargazers_count", 0)
             forks = repo.get("forks_count", 0)
+            topics = repo.get("topics", []) or []
+            default_branch = repo.get("default_branch", "main")
 
             languages = await fetch_languages(client, username, repo_name, token)
             commits_30d = await fetch_commit_count_last_30d(client, username, repo_name, username, token)
-            inspection = await _inspect_repo(client, username, repo_name, token)
+            has_readme = await fetch_readme_exists(client, username, repo_name, token)
+            has_ci = await fetch_ci_config_exists(client, username, repo_name, token)
+            has_tests = await fetch_test_signal(client, username, repo_name, token, default_branch)
 
             repo_language_map[repo_name] = languages
+            repo_topics_map[repo_name] = topics
             is_new = repo_name not in previously_synced
 
             if is_new:
@@ -157,55 +96,47 @@ async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
                     languages=languages, stars=stars,
                 )
             )
+
+            score = score_repository(
+                commits_30d=commits_30d, stars=stars, forks=forks,
+                has_readme=has_readme, has_ci=has_ci, has_tests=has_tests,
+                size_kb=repo.get("size", 0), language_count=len(languages),
+                topic_count=len(topics), pushed_at=repo.get("pushed_at"),
+                archived=is_archived, has_description=bool(repo.get("description")),
+            )
+
             repositories_report.append({
                 "name": repo_name, "stars": stars, "forks": forks,
-                "commits_last_30_days": commits_30d, "languages": list(languages.keys()),
+                "commits_last_30_days": commits_30d,
+                "languages": list(languages.keys()),
+                "topics": topics, "description": repo.get("description"),
+                "pushed_at": repo.get("pushed_at"),
                 "archived": is_archived, "is_new": is_new,
+                "has_readme": has_readme, "has_ci": has_ci, "has_tests": has_tests,
+                "score": score,
             })
-
-            analysis = analyze_repo(
-                repo_name=repo_name, languages=languages,
-                package_json=inspection["package_json"],
-                requirements_txt=inspection["requirements_txt"],
-                pyproject_toml=inspection["pyproject_toml"],
-                has_dockerfile=inspection["has_dockerfile"],
-                has_compose=inspection["has_compose"],
-                has_workflows=inspection["has_workflows"],
-                has_tests_dir=inspection["has_tests_dir"],
-                has_readme=inspection["has_readme"],
-                commits_30d=commits_30d,
-                last_commit_at=inspection["last_commit_at"],
-                is_archived=is_archived,
-            )
-            repo_analyses.append(analysis)
 
     for row in snapshot_rows:
         db.add(row)
     await db.flush()
 
-    computed_at = datetime.now(timezone.utc)
-    for analysis in repo_analyses:
-        await _upsert_repo_analysis(db, user.id, analysis, computed_at)
-
     current_repo_names = {r["name"] for r in repositories_report}
     removed_repo_names = previously_synced - current_repo_names
-    languages_detected = _aggregate_languages(repo_language_map)
+    languages_detected, total_language_bytes = _aggregate_languages(repo_language_map)
+    tech_distribution = categorize_technologies(repo_language_map, repo_topics_map)
+    scores = {r["name"]: r["score"] for r in repositories_report}
+    insights = build_github_insights(repositories_report, scores, tech_distribution, total_language_bytes)
 
     snapshot = ProfileSnapshot(
-        user_id=user.id, taken_at=computed_at,
-        skills_json={"repos_synced": sorted(current_repo_names)}, note="github sync",
+        user_id=user.id, taken_at=datetime.now(timezone.utc),
+        skills_json={"repos_synced": sorted(current_repo_names), "insights": insights},
+        note="github sync",
     )
     db.add(snapshot)
     await db.flush()
-
-    portfolio = build_portfolio_analysis(repo_analyses, previous_tech_distribution)
-    db.add(PortfolioAnalysis(
-        user_id=user.id, snapshot_id=snapshot.id, computed_at=computed_at, **portfolio,
-    ))
-    await db.flush()
     await db.commit()
 
-    print(f"[TRACING] GitHub sync complete. {len(snapshot_rows)} repo snapshots + analysis written.", flush=True)
+    print(f"[TRACING] GitHub sync complete. {len(snapshot_rows)} repo snapshots written.", flush=True)
 
     return {
         "status": "success",
@@ -225,8 +156,6 @@ async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
         },
         "repositories": repositories_report,
         "removed_repository_names": sorted(removed_repo_names),
+        "insights": insights,
         "profile_snapshot_created": True,
-        "insights": portfolio,   # <-- this is the new part: Interview Agent /
-                                 #     Career Planner / Resume Reviewer can all
-                                 #     read this directly instead of re-parsing GitHub
     }

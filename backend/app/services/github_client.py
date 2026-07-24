@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import base64
 import httpx
+import re
 
 GITHUB_API_BASE = "https://api.github.com"
 
@@ -145,3 +146,54 @@ async def fetch_last_commit_date(
         return None
     date_str = data[0]["commit"]["committer"]["date"]
     return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+
+async def fetch_readme_exists(client: httpx.AsyncClient, owner: str, repo: str, token: str) -> bool:
+    """True if the repo has a README at its root. Documentation signal
+    for scoring — a repo with no README is hard for anyone, including
+    future-you, to evaluate at a glance.
+    """
+    resp = await client.get(
+        f"{GITHUB_API_BASE}/repos/{owner}/{repo}/readme",
+        headers=_auth_headers(token),
+    )
+    return resp.status_code == 200
+
+async def fetch_ci_config_exists(client: httpx.AsyncClient, owner: str, repo: str, token: str) -> bool:
+    """True if .github/workflows exists and has at least one file in it —
+    our proxy for 'has CI/CD configured'."""
+    resp = await client.get(
+        f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/.github/workflows",
+        headers=_auth_headers(token),
+    )
+    if resp.status_code != 200:
+        return False
+    contents = resp.json()
+    return isinstance(contents, list) and len(contents) > 0
+
+
+TEST_FILE_PATTERN = re.compile(
+    r"(^|/)(tests?|__tests__|spec)(/|$)|"
+    r"(_test\.[a-z]+$|\.test\.[a-z]+$|_spec\.[a-z]+$|\.spec\.[a-z]+$|^test_.*\.py$)",
+    re.IGNORECASE,
+)
+
+async def fetch_test_signal(
+    client: httpx.AsyncClient, owner: str, repo: str, token: str, default_branch: str
+) -> bool:
+    """True if the repo's file tree contains anything that looks like a
+    test file or test directory. One recursive tree call per repo — a
+    binary 'has some testing set up' signal, not a coverage measurement.
+    """
+    resp = await client.get(
+        f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{default_branch}",
+        headers=_auth_headers(token),
+        params={"recursive": "1"},
+    )
+    if resp.status_code != 200:
+        return False
+    tree = resp.json().get("tree", [])
+    return any(
+        TEST_FILE_PATTERN.search(entry.get("path", ""))
+        for entry in tree
+        if entry.get("type") == "blob"
+    )
