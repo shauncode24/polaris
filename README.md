@@ -1,7 +1,5 @@
 # Polaris
 
-Polaris is a production-grade AI Engineering project focused on building an intelligent workflow orchestration platform using modern AI engineering practices.
-
 ## Tech Stack
 
 ### Backend
