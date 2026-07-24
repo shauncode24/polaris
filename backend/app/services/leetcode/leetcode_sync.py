@@ -1,3 +1,4 @@
+# backend/app/services/leetcode/leetcode_sync.py
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -7,15 +8,12 @@ from app.models.facts import LeetcodeSnapshot
 from app.models.inference import ProfileSnapshot, SkillEvidence
 from app.services.resume.confidence import WEIGHTS
 from app.services.leetcode.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
+from app.services.leetcode.leetcode_insights import build_leetcode_insights
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_default_user, get_or_create_skill
 
 
 async def _get_previous_tag_counts(db: AsyncSession, user_id) -> dict[str, int]:
-    """Most recent solved_count per tag from prior syncs, so we can tell
-    whether a tag's evidence is new, has grown, or is unchanged since the
-    last sync — instead of just re-reporting the current state blind.
-    """
     result = await db.execute(
         select(LeetcodeSnapshot.tag, LeetcodeSnapshot.solved_count, LeetcodeSnapshot.pulled_at)
         .where(LeetcodeSnapshot.user_id == user_id)
@@ -23,21 +21,34 @@ async def _get_previous_tag_counts(db: AsyncSession, user_id) -> dict[str, int]:
     )
     latest: dict[str, int] = {}
     for tag, solved_count, _pulled_at in result.all():
-        if tag not in latest:  # first row per tag = most recent, thanks to ORDER BY
+        if tag not in latest:
             latest[tag] = solved_count
     return latest
 
 
 async def _get_existing_evidence_skill_ids(db: AsyncSession) -> set:
-    """Skills that already have leetcode_tag evidence from a prior sync.
-    Prevents re-syncing an unchanged tag from silently inserting a
-    duplicate SkillEvidence row and inflating confidence for no reason —
-    keeps inference honestly re-derivable from facts (design doc §5.5).
-    """
     result = await db.execute(
         select(SkillEvidence.skill_id).where(SkillEvidence.source_type == "leetcode_tag")
     )
     return {row[0] for row in result.all()}
+
+
+async def _get_previous_leetcode_stats(db: AsyncSession, user_id) -> dict | None:
+    """Pulls total_solved / contest_rating from the last LeetCode sync's
+    ProfileSnapshot so build_progress() has a baseline to diff against —
+    same idea as github_sync.py's prev_insights lookup.
+    """
+    result = await db.execute(
+        select(ProfileSnapshot)
+        .where(ProfileSnapshot.user_id == user_id)
+        .where(ProfileSnapshot.note.in_(["leetcode sync", "leetcode manual submission"]))
+        .order_by(ProfileSnapshot.taken_at.desc())
+        .limit(1)
+    )
+    prev = result.scalar_one_or_none()
+    if prev and isinstance(prev.skills_json, dict):
+        return prev.skills_json.get("stats")
+    return None
 
 
 async def _persist_leetcode_data(
@@ -50,24 +61,22 @@ async def _persist_leetcode_data(
 
     previous_tag_counts = await _get_previous_tag_counts(db, user.id)
     existing_evidence_skill_ids = await _get_existing_evidence_skill_ids(db)
+    previous_stats = await _get_previous_leetcode_stats(db, user.id)
 
     for tag, count in tag_counts.items():
         db.add(
             LeetcodeSnapshot(
-                user_id=user.id,
-                pulled_at=datetime.now(timezone.utc),
-                tag=tag,
-                solved_count=count,
-                difficulty=None,
+                user_id=user.id, pulled_at=datetime.now(timezone.utc),
+                tag=tag, solved_count=count, difficulty=None,
             )
         )
 
     resolved = await resolve_skills(set(tag_counts.keys()), db)
 
     tags_report: list[dict] = []
-    evidence_created = 0
-    evidence_updated = 0
-    evidence_unchanged = 0
+    reinforced_skills: list[str] = []
+    new_skills: list[str] = []
+    unchanged_skills: list[str] = []
 
     for tag, count in tag_counts.items():
         canonical = resolved.get(tag)
@@ -78,40 +87,48 @@ async def _persist_leetcode_data(
             prev_count = previous_tag_counts.get(tag)
 
             if skill.id not in existing_evidence_skill_ids:
-                # First time this skill has ever gotten leetcode evidence.
-                db.add(
-                    SkillEvidence(
-                        skill_id=skill.id,
-                        source_type="leetcode_tag",
-                        source_id=None,
-                        weight=WEIGHTS["leetcode_tag"],
-                    )
-                )
+                db.add(SkillEvidence(
+                    skill_id=skill.id, source_type="leetcode_tag",
+                    source_id=None, weight=WEIGHTS["leetcode_tag"],
+                ))
                 existing_evidence_skill_ids.add(skill.id)
-                evidence_created += 1
+                new_skills.append(canonical)
                 skill_updated = True
             elif prev_count is not None and count > prev_count:
-                # Evidence already exists (weight is fixed per §4.3), but a
-                # rising solved-count is still worth surfacing as activity —
-                # without inserting a second, redundant evidence row.
-                evidence_updated += 1
+                reinforced_skills.append(canonical)
                 skill_updated = True
             else:
-                evidence_unchanged += 1
+                unchanged_skills.append(canonical)
 
         tags_report.append({"tag": tag, "solved": count, "skill_updated": skill_updated})
 
     await db.flush()
 
-    snapshot_skills_json = {"leetcode_tags_synced": list(tag_counts.keys())}
+    insights = build_leetcode_insights(
+        tag_counts=tag_counts,
+        previous_tag_counts=previous_tag_counts or None,
+        total_solved=(extra_stats or {}).get("total_solved", sum(tag_counts.values())),
+        previous_total_solved=(previous_stats or {}).get("total_solved"),
+        easy=(extra_stats or {}).get("easy", 0),
+        medium=(extra_stats or {}).get("medium", 0),
+        hard=(extra_stats or {}).get("hard", 0),
+        contest_rating=(extra_stats or {}).get("contest_rating"),
+        previous_contest_rating=(previous_stats or {}).get("contest_rating"),
+        attended_contests_count=(extra_stats or {}).get("attended_contests_count", 0),
+        active_days_last_30=(extra_stats or {}).get("active_days_last_30", 0),
+        submissions_last_30=(extra_stats or {}).get("submissions_last_30", 0),
+        reinforced_skills=reinforced_skills,
+        new_skills=new_skills,
+        unchanged_skills=unchanged_skills,
+    )
+
+    snapshot_skills_json = {"leetcode_tags_synced": list(tag_counts.keys()), "insights": insights}
     if extra_stats:
         snapshot_skills_json["stats"] = extra_stats
 
     snapshot = ProfileSnapshot(
-        user_id=user.id,
-        taken_at=datetime.now(timezone.utc),
-        skills_json=snapshot_skills_json,
-        note=note,
+        user_id=user.id, taken_at=datetime.now(timezone.utc),
+        skills_json=snapshot_skills_json, note=note,
     )
     db.add(snapshot)
     await db.flush()
@@ -122,23 +139,16 @@ async def _persist_leetcode_data(
         "synced_at": snapshot.taken_at.isoformat(),
         "user_id": str(user.id),
         "snapshot_id": str(snapshot.id),
-        "summary": {
-            "total_solved": extra_stats.get("total_solved") if extra_stats else None,
-            "easy": extra_stats.get("easy") if extra_stats else None,
-            "medium": extra_stats.get("medium") if extra_stats else None,
-            "hard": extra_stats.get("hard") if extra_stats else None,
-            "contest_rating": extra_stats.get("contest_rating") if extra_stats else None,
-            "global_ranking": extra_stats.get("global_ranking") if extra_stats else None,
-            "active_days_last_30": extra_stats.get("active_days_last_30") if extra_stats else None,
-            "longest_streak": extra_stats.get("longest_streak") if extra_stats else None,
-            "current_streak": extra_stats.get("current_streak") if extra_stats else None,
-        },
+        "summary": {k: (extra_stats or {}).get(k) for k in (
+            "total_solved", "easy", "medium", "hard", "contest_rating",
+            "global_ranking", "attended_contests_count", "active_days_last_30",
+            "longest_streak", "current_streak",
+        )},
         "tags": tags_report,
         "skill_evidence": {
-            "created": evidence_created,
-            "updated": evidence_updated,
-            "unchanged": evidence_unchanged,
+            "created": len(new_skills), "updated": len(reinforced_skills), "unchanged": len(unchanged_skills),
         },
+        "insights": insights,
         "profile_snapshot_created": True,
     }
 
@@ -147,19 +157,14 @@ async def sync_leetcode(db: AsyncSession, username: str) -> dict:
     print(f"[TRACING] Starting LeetCode sync for {username}...", flush=True)
     profile = await fetch_leetcode_profile(username)
     print(f"[TRACING] LeetCode sync fetched {len(profile['tag_counts'])} tags.", flush=True)
-
     extra_stats = {k: v for k, v in profile.items() if k != "tag_counts"}
-    result = await _persist_leetcode_data(
-        db, profile["tag_counts"], note="leetcode sync", extra_stats=extra_stats
-    )
-    print(f"[TRACING] LeetCode sync complete.", flush=True)
+    result = await _persist_leetcode_data(db, profile["tag_counts"], note="leetcode sync", extra_stats=extra_stats)
+    print("[TRACING] LeetCode sync complete.", flush=True)
     return result
 
 
 async def sync_leetcode_manual(db: AsyncSession, tag_counts: dict[str, int]) -> dict:
-    # No difficulty/contest/streak data available from the manual form —
-    # those fields come back as null in the report rather than fabricated.
     print(f"[TRACING] Persisting manual LeetCode submission ({len(tag_counts)} tags)...", flush=True)
     result = await _persist_leetcode_data(db, tag_counts, note="leetcode manual submission")
-    print(f"[TRACING] Manual LeetCode submission persisted.", flush=True)
+    print("[TRACING] Manual LeetCode submission persisted.", flush=True)
     return result

@@ -153,3 +153,30 @@ async def fetch_leetcode_profile(username: str, graphql_url: str = LEETCODE_GRAP
         "longest_streak": longest_streak,
         "current_streak": current_streak,
     }
+
+def _submissions_last_30(submission_calendar: dict[int, int]) -> int:
+    """Total problem submissions in the last 30 days — distinct from
+    active_days_last_30, which only counts *days* with >=1 submission.
+    Needed for average_problems_per_session in practice_habits.
+    """
+    cutoff_ts = int((datetime.now(timezone.utc) - timedelta(days=30)).timestamp())
+    return sum(count for ts, count in submission_calendar.items() if ts >= cutoff_ts)
+
+
+# inside fetch_leetcode_profile(), after computing longest_streak/current_streak:
+    submissions_last_30 = _submissions_last_30(submission_calendar)
+
+    return {
+        "tag_counts": tag_counts,
+        "total_solved": difficulty_counts["All"],
+        "easy": difficulty_counts["Easy"],
+        "medium": difficulty_counts["Medium"],
+        "hard": difficulty_counts["Hard"],
+        "contest_rating": contest.get("rating"),
+        "global_ranking": contest.get("globalRanking"),
+        "attended_contests_count": contest.get("attendedContestsCount", 0),
+        "active_days_last_30": _active_days_last_30(submission_calendar),
+        "submissions_last_30": submissions_last_30,
+        "longest_streak": longest_streak,
+        "current_streak": current_streak,
+    }
