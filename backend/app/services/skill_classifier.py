@@ -34,25 +34,7 @@ CANONICAL_SKILLS: dict[str, str] = {
     "rag": "rag",
 }
 
-CLASSIFICATION_SYSTEM_PROMPT = """You classify raw strings extracted from a resume.
-For each input string, decide:
-1. Is it a real, concrete technology, language, framework, library, tool, or platform
-   (e.g. "Docker", "Redis", "FastAPI", "Kubernetes")? If yes, is_valid_skill = true.
-   Note: Single ambiguous words describing a security concept or process (e.g. "Authorization",
-   "Validation", "Caching" used alone, without a specific product/library name attached)
-   should be classified as is_valid_skill = false — these describe what was built, not a
-   specific technology used to build it.
-2. Is it instead a general practice, concept, descriptive phrase, or capability
-   (e.g. "CRUD operations", "Clean Architecture", "Responsive design", "Modular components")?
-   If so, is_valid_skill = false and canonical should be null.
-3. If valid, provide "canonical": a lowercase, deduplicated name using underscores instead
-   of spaces (e.g. "Kubernetes" and "K8s" should both canonicalize to "kubernetes").
-
-Output ONLY valid JSON matching this schema, no prose, no markdown fences:
-{"results": [{"raw": str, "canonical": str|null, "is_valid_skill": bool}]}
-
-Include exactly one result per input string, with "raw" echoing the input string exactly
-as given, unchanged."""
+from app.prompts.classification import CLASSIFICATION_SYSTEM_PROMPT
 
 
 async def _classify_via_llm(raw_strings: list[str]) -> dict[str, tuple[str | None, bool]]:

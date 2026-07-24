@@ -15,14 +15,10 @@ from app.services.pdf_parser import extract_text_from_pdf
 from app.services.extraction import extract_resume_data
 from app.services.skill_classifier import resolve_skills
 from app.services.confidence import WEIGHTS, compute_skill_confidence
-from app.services.review import flag_for_review
+from app.services.review import flag_for_review, REVIEW_THRESHOLD
 
 
 def _mentions_skill(text: str, raw_name: str) -> bool:
-    """True if raw_name appears as a whole token in text, not as a
-    substring inside another word (e.g. skill 'c' should not match
-    inside 'architecture').
-    """
     pattern = r"(?<![a-zA-Z0-9])" + re.escape(raw_name.lower()) + r"(?![a-zA-Z0-9])"
     return re.search(pattern, text.lower()) is not None
 
@@ -57,31 +53,18 @@ async def _get_or_create_skill(db: AsyncSession, canonical_name: str, display_na
 
 
 async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
-    # 1. Fetch: PDF -> raw text
-    print(f"[TRACING] Starting PDF text extraction...", flush=True)
     raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
-    print(f"[TRACING] PDF text extraction complete. Extracted {len(raw_text)} characters.", flush=True)
     if not raw_text.strip():
         raise ValueError("No extractable text found in PDF")
 
-    # 2. Extract: LLM call -> validated structured data
-    print(f"[TRACING] Sending extracted text to LLM...", flush=True)
     extraction = await extract_resume_data(raw_text)
-    print(f"[TRACING] LLM extraction complete.", flush=True)
-
     user = await _get_or_create_default_user(db)
 
-    # 3. Store facts: experiences and projects, verbatim, append-only
     experience_rows: list[Experience] = []
     for exp in extraction.experiences:
         row = Experience(
-            user_id=user.id,
-            role=exp.role,
-            company=exp.company,
-            start_date=None,
-            end_date=None,
-            stack=exp.stack,
-            bullets=exp.bullets,
+            user_id=user.id, role=exp.role, company=exp.company,
+            start_date=None, end_date=None, stack=exp.stack, bullets=exp.bullets,
             created_at=datetime.now(timezone.utc),
         )
         db.add(row)
@@ -90,12 +73,8 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
     project_rows: list[Project] = []
     for proj in extraction.projects:
         row = Project(
-            user_id=user.id,
-            name=proj.name,
-            description=proj.description,
-            stack=proj.stack,
-            repo_url=None,
-            impact_metrics=None,
+            user_id=user.id, name=proj.name, description=proj.description,
+            stack=proj.stack, repo_url=None, impact_metrics=None,
             created_at=datetime.now(timezone.utc),
         )
         db.add(row)
@@ -103,16 +82,12 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
 
     await db.flush()
 
-    # 4. Gather every raw skill string mentioned anywhere
     raw_skill_strings: set[str] = set(extraction.skills)
     for proj in extraction.projects:
         raw_skill_strings.update(proj.stack)
     for exp in extraction.experiences:
         raw_skill_strings.update(exp.stack)
 
-    # 5. Hybrid resolution: dict -> DB cache -> batched LLM classification.
-    #    Result maps each raw string to its canonical name, or None if it
-    #    isn't a real skill at all (e.g. "Modular components").
     resolved = await resolve_skills(raw_skill_strings, db)
 
     canonical_to_raw: dict[str, str] = {}
@@ -120,7 +95,6 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
         if canonical is not None:
             canonical_to_raw[canonical] = raw
 
-    # 6. Structure: get-or-create each Skill row, link ProjectSkill
     skill_objs: dict[str, Skill] = {}
     for canonical, raw in canonical_to_raw.items():
         skill_objs[canonical] = await _get_or_create_skill(db, canonical, raw)
@@ -138,19 +112,18 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
             )
             await db.execute(link_stmt)
 
-    # 7. Score confidence per canonical skill
     skills_json: dict[str, dict] = {}
     flagged: list[dict] = []
+    high_conf = medium_conf = low_conf = 0
 
     for canonical, skill in skill_objs.items():
         evidence_entries: list[dict] = []
         weights: list[float] = []
         raw_name = canonical_to_raw[canonical].lower()
 
+        # Project evidence: stack OR description mention (one entry per project)
         for proj_row, proj_extracted in zip(project_rows, extraction.projects):
-            stack_match = any(
-                resolved.get(s) == canonical for s in proj_extracted.stack
-            )
+            stack_match = any(resolved.get(s) == canonical for s in proj_extracted.stack)
             desc_match = bool(proj_extracted.description) and _mentions_skill(
                 proj_extracted.description, raw_name
             )
@@ -162,15 +135,32 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
                     "detail": proj_extracted.name,
                 })
 
+        # Experience evidence: stack OR bullet mention.
+        # FIX: previously only bullets were checked here, while projects
+        # checked both stack and description — an inconsistency that
+        # under-counted skills tied to an experience's stack but not
+        # repeated verbatim in a bullet. Now stack is checked too, as one
+        # combined entry per experience (not double-counted alongside
+        # bullet matches from the same experience).
         for exp_row, exp_extracted in zip(experience_rows, extraction.experiences):
-            for bullet in exp_extracted.bullets:
-                if _mentions_skill(bullet, raw_name):
+            stack_match = any(resolved.get(s) == canonical for s in exp_extracted.stack)
+            bullet_hits = [b for b in exp_extracted.bullets if _mentions_skill(b, raw_name)]
+
+            if bullet_hits:
+                for bullet in bullet_hits:
                     weights.append(WEIGHTS["experience"])
                     evidence_entries.append({
                         "source_type": "experience",
                         "source_id": str(exp_row.id),
                         "detail": bullet,
                     })
+            elif stack_match:
+                weights.append(WEIGHTS["experience"])
+                evidence_entries.append({
+                    "source_type": "experience",
+                    "source_id": str(exp_row.id),
+                    "detail": f"Listed in stack for {exp_extracted.role}",
+                })
 
         confidence = compute_skill_confidence(weights)
 
@@ -182,25 +172,26 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
                 weight=WEIGHTS[entry["source_type"]],
             ))
 
-        skills_json[canonical] = {
-            "confidence": confidence,
-            "evidence": evidence_entries,
-        }
+        skills_json[canonical] = {"confidence": confidence, "evidence": evidence_entries}
+
+        if confidence >= 0.6:
+            high_conf += 1
+        elif confidence >= REVIEW_THRESHOLD:
+            medium_conf += 1
+        else:
+            low_conf += 1
 
         review_flag = flag_for_review(canonical, confidence)
         if review_flag:
+            review_flag["evidence"] = evidence_entries
             flagged.append(review_flag)
 
-    # 8. Memory: write the profile snapshot
     snapshot = ProfileSnapshot(
-        user_id=user.id,
-        taken_at=datetime.now(timezone.utc),
-        skills_json=skills_json,
-        note="resume upload",
+        user_id=user.id, taken_at=datetime.now(timezone.utc),
+        skills_json=skills_json, note="resume upload",
     )
     db.add(snapshot)
     await db.flush()
-
     await db.commit()
 
     return {
@@ -208,6 +199,10 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession) -> dict:
         "experiences_created": len(experience_rows),
         "projects_created": len(project_rows),
         "skills_processed": len(skill_objs),
+        "skills_high_confidence": high_conf,
+        "skills_medium_confidence": medium_conf,
+        "skills_low_confidence": low_conf,
+        "skills": skills_json,
         "flagged_for_review": flagged,
         "snapshot_id": str(snapshot.id),
     }
