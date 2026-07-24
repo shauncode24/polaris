@@ -140,31 +140,8 @@ async def fetch_leetcode_profile(username: str, graphql_url: str = LEETCODE_GRAP
         raise LeetCodeSyncError(f"Unexpected LeetCode response shape: {e}") from e
 
     longest_streak, current_streak = _compute_streaks(submission_calendar)
-
-    return {
-        "tag_counts": tag_counts,
-        "total_solved": difficulty_counts["All"],
-        "easy": difficulty_counts["Easy"],
-        "medium": difficulty_counts["Medium"],
-        "hard": difficulty_counts["Hard"],
-        "contest_rating": contest.get("rating"),
-        "global_ranking": contest.get("globalRanking"),
-        "active_days_last_30": _active_days_last_30(submission_calendar),
-        "longest_streak": longest_streak,
-        "current_streak": current_streak,
-    }
-
-def _submissions_last_30(submission_calendar: dict[int, int]) -> int:
-    """Total problem submissions in the last 30 days — distinct from
-    active_days_last_30, which only counts *days* with >=1 submission.
-    Needed for average_problems_per_session in practice_habits.
-    """
-    cutoff_ts = int((datetime.now(timezone.utc) - timedelta(days=30)).timestamp())
-    return sum(count for ts, count in submission_calendar.items() if ts >= cutoff_ts)
-
-
-# inside fetch_leetcode_profile(), after computing longest_streak/current_streak:
     submissions_last_30 = _submissions_last_30(submission_calendar)
+    longest_gap_days = _longest_gap_last_30(submission_calendar)
 
     return {
         "tag_counts": tag_counts,
@@ -179,4 +156,38 @@ def _submissions_last_30(submission_calendar: dict[int, int]) -> int:
         "submissions_last_30": submissions_last_30,
         "longest_streak": longest_streak,
         "current_streak": current_streak,
+        "longest_gap_days": longest_gap_days,
     }
+
+
+def _submissions_last_30(submission_calendar: dict[int, int]) -> int:
+    """Total problem submissions in the last 30 days — distinct from
+    active_days_last_30, which only counts *days* with >=1 submission.
+    Needed for average_problems_per_session in practice_habits.
+    """
+    cutoff_ts = int((datetime.now(timezone.utc) - timedelta(days=30)).timestamp())
+    return sum(count for ts, count in submission_calendar.items() if ts >= cutoff_ts)
+
+
+def _longest_gap_last_30(submission_calendar: dict[int, int]) -> int:
+    cutoff_ts = int((datetime.now(timezone.utc) - timedelta(days=30)).timestamp())
+    active_days = sorted(ts for ts, count in submission_calendar.items() if count > 0 and ts >= cutoff_ts)
+    if not active_days:
+        return 30
+
+    today_ts = int(
+        datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    )
+
+    gaps = []
+    # Gap before the first submission in the last 30 days
+    gaps.append(max(0, (active_days[0] - cutoff_ts) // 86400))
+
+    # Gaps between submissions
+    for prev, curr in zip(active_days, active_days[1:]):
+        gaps.append(max(0, (curr - prev) // 86400))
+
+    # Gap after the last submission
+    gaps.append(max(0, (today_ts - active_days[-1]) // 86400))
+
+    return max(gaps) if gaps else 0

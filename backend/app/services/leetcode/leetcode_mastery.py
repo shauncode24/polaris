@@ -8,17 +8,17 @@ the design doc's own guidance in §4.3 for confidence scoring.
 """
 
 MASTERY_THRESHOLDS: list[tuple[int, str]] = [
-    (0, "Not Started"),
+    (0, "Not Practiced"),
     (3, "Introduced"),
-    (10, "Developing"),
-    (25, "Strong"),
+    (10, "Some Practice"),
+    (25, "Consistent Practice"),
 ]
-MASTERY_MAX_LABEL = "Advanced"
+MASTERY_MAX_LABEL = "Extensive Practice"
 
 
 def get_mastery_level(problems_solved: int) -> str:
     if problems_solved <= 0:
-        return "Not Started"
+        return "Not Practiced"
     for ceiling, label in MASTERY_THRESHOLDS[1:]:
         if problems_solved <= ceiling:
             return label
