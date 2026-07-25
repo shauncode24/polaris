@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.models.goals import Goal
 from app.models.inference import CareerPlan
-from app.schemas.career_plan import CareerPlanResponse, GoalCreateRequest, GoalResponse, SkillSignal
+from app.schemas.career_plan import CareerPlanResponse, GoalCreateRequest, GoalResponse, TopicSignal
 from app.services.career_planner.context_builder import build_career_plan_context
 from app.services.career_planner.plan_generation import generate_career_plan
 from app.services.user_helpers import get_or_create_default_user
@@ -78,7 +78,7 @@ async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
             "daily_plan": [d.model_dump() for d in llm_output.daily_plan],
             "check_ins": check_ins,
             "days_available": context["days_available"],
-            "skill_signals": context["skill_signals"],
+            "topic_signals": context["topic_signals"],
             "degraded": degraded,
         },
         created_at=datetime.now(timezone.utc),
@@ -97,5 +97,5 @@ async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
         check_ins=check_ins,
         generated_at=plan_row.created_at,
         degraded=degraded,
-        skill_signals=[SkillSignal(**s) for s in context["skill_signals"]],
+        topic_signals=[TopicSignal(**t) for t in context["topic_signals"]],
     )

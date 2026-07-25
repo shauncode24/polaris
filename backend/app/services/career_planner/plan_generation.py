@@ -103,32 +103,25 @@ async def _generate_chunk(
 
 def _build_weak_items(context: dict) -> list[tuple[str, str]]:
     """Last-resort safety net only, used when the LLM call fails every
-    retry — never the primary path. Built from skill_signals (lowest
-    confidence first) since that's still the best available ordering
-    when there's no creative reasoning to fall back on.
+    retry. Walks topic_signals in suggested_order (lowest coverage
+    first isn't even necessary here — this is purely a safety net, not
+    a quality bar) so even a degraded day stays inside the goal's
+    curriculum instead of falling back to something generic/irrelevant.
     """
     weak_items: list[tuple[str, str]] = []
 
-    for sig in context.get("skill_signals", []):
-        reason = "; ".join(sig.get("reasons", [])) or f"confidence {sig['confidence']:.2f}"
-        weak_items.append((sig["skill"], f"{sig['skill'].title()}: {reason}"))
-
-    blind_spots = context.get("leetcode_blind_spots", {})
-    for bs_type, label in (
-        ("missing_fundamentals", "fundamental DSA gap"),
-        ("advanced_topics", "advanced DSA gap"),
-    ):
-        for topic in blind_spots.get(bs_type, []):
-            weak_items.append((topic, f"{topic} has 0 solved LeetCode problems — a {label}."))
+    ordered = sorted(context.get("topic_signals", []), key=lambda t: t["suggested_order"])
+    for t in ordered:
+        reason = "; ".join(t.get("reasons", [])) or f"coverage: {t['coverage']}"
+        weak_items.append((t["topic"], f"{t['topic']}: {reason}"))
 
     if not weak_items:
         weak_items = [(
             "Foundational review",
-            "No skill or LeetCode evidence found yet — start building verifiable evidence.",
+            "No curriculum topics resolved for this goal yet — start with fundamentals.",
         )]
 
     return weak_items
-
 
 def _next_uncovered(weak_items: list[tuple[str, str]], covered: set[str], offset: int) -> tuple[str, str]:
     n = len(weak_items)

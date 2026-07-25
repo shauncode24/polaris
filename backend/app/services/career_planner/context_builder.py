@@ -8,12 +8,12 @@ from app.models.goals import Goal
 from app.models.inference import ProfileSnapshot, ResumeReview, SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
-from app.services.career_planner.priority_scoring import build_skill_signals
+from app.services.career_planner.curriculum import get_curriculum_topics, get_relevant_domains
+from app.services.career_planner.topic_signals import build_topic_signals
 from app.services.resume.confidence import compute_skill_confidence
 
 MAX_PLAN_DAYS = 14
 DEFAULT_PLAN_DAYS = 5
-MAX_SIGNALS_IN_PROMPT = 10
 MAX_PROJECTS_IN_PROMPT = 6
 
 
@@ -43,25 +43,6 @@ async def _get_skills_by_confidence(db: AsyncSession) -> list[dict]:
     return out
 
 
-async def _get_previous_skill_confidence(db: AsyncSession, user_id) -> dict[str, float]:
-    result = await db.execute(
-        select(ProfileSnapshot)
-        .where(ProfileSnapshot.user_id == user_id)
-        .where(ProfileSnapshot.note == "resume upload")
-        .order_by(ProfileSnapshot.taken_at.desc())
-        .offset(1)
-        .limit(1)
-    )
-    snapshot = result.scalar_one_or_none()
-    if snapshot is None or not isinstance(snapshot.skills_json, dict):
-        return {}
-    return {
-        canonical: data.get("confidence", 0.0)
-        for canonical, data in snapshot.skills_json.items()
-        if isinstance(data, dict)
-    }
-
-
 async def _get_latest_jd_missing_skills(db: AsyncSession, user_id) -> set[str]:
     result = await db.execute(
         select(JobDescription.analysis_result)
@@ -78,14 +59,6 @@ async def _get_latest_jd_missing_skills(db: AsyncSession, user_id) -> set[str]:
 
 
 async def _get_latest_ats_flags(db: AsyncSession, user_id) -> tuple[set[str], list[str]]:
-    """Pulls the most recent Resume Review (Phase 5) so the planner can
-    tie tasks back to real ATS/resume weaknesses instead of the two
-    agents never talking to each other.
-    Returns (missing_keyword_like_skill_names, raw_top_priority_fixes).
-    We can't reliably map every ATS flag to a canonical skill name, so we
-    surface the raw top_priority_fixes text too — the LLM can use those
-    directly even when they don't resolve to a known skill.
-    """
     result = await db.execute(
         select(ResumeReview)
         .where(ResumeReview.user_id == user_id)
@@ -98,9 +71,6 @@ async def _get_latest_ats_flags(db: AsyncSession, user_id) -> tuple[set[str], li
 
     top_fixes = review.review_json.get("top_priority_fixes", [])
     ats_flags = review.review_json.get("ats_flags", [])
-    # Best-effort: treat any single-word-ish detail in an ATS flag as a
-    # possible skill name (e.g. "Missing keyword: Docker") — loose on
-    # purpose, this only feeds an advisory signal, never a hard filter.
     keyword_guesses = set()
     for flag in ats_flags:
         detail = flag.get("detail", "") if isinstance(flag, dict) else ""
@@ -161,21 +131,23 @@ async def _get_recent_snapshots(db: AsyncSession, user_id, limit: int = 3) -> li
 async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> dict:
     days_available = compute_days_available(goal.deadline)
 
+    relevant_domains = get_relevant_domains(goal.title)
+    curriculum_topics = get_curriculum_topics(relevant_domains)
+
     skills_by_confidence = await _get_skills_by_confidence(db)
-    previous_confidence = await _get_previous_skill_confidence(db, user_id)
     jd_missing_skills = await _get_latest_jd_missing_skills(db, user_id)
     ats_missing_keywords, resume_top_fixes = await _get_latest_ats_flags(db, user_id)
+    leetcode = await _get_latest_leetcode_insights(db, user_id)
 
-    skill_signals = build_skill_signals(
-        skills_by_confidence,
-        goal_title=goal.title,
+    topic_signals = build_topic_signals(
+        curriculum_topics,
+        skills_by_confidence=skills_by_confidence,
+        leetcode_topic_mastery=leetcode["topic_mastery"],
         jd_missing_skills=jd_missing_skills,
         ats_missing_keywords=ats_missing_keywords,
-        previous_skill_confidence=previous_confidence,
-    )[:MAX_SIGNALS_IN_PROMPT]
+    )
 
     projects = await _get_projects(db, user_id)
-    leetcode = await _get_latest_leetcode_insights(db, user_id)
     notes = await _get_recent_notes(db, user_id)
     snapshots = await _get_recent_snapshots(db, user_id)
 
@@ -186,9 +158,17 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
             "priority": goal.priority,
         },
         "days_available": days_available,
-        # ADVISORY ONLY — a rough starting point, not a rulebook.
-        "skill_signals": skill_signals,
+        "relevant_domains": relevant_domains,
+        # The scoped curriculum pool — ADVISORY. Coverage/order are hints,
+        # not instructions. The LLM decides real priority and sequencing.
+        "topic_signals": topic_signals,
         "resume_review_top_fixes": resume_top_fixes,
+        # Kept for grounding cross-cutting tasks (e.g. "use your existing
+        # FastAPI experience to serve the model you build this week") —
+        # NOT used to pick which topics are in scope. That's curriculum's job.
+        "profile_skills_summary": [
+            {"skill": s["skill"], "confidence": s["confidence"]} for s in skills_by_confidence
+        ],
         "projects": projects,
         "leetcode_blind_spots": leetcode["blind_spots"],
         "leetcode_topic_mastery": leetcode["topic_mastery"],

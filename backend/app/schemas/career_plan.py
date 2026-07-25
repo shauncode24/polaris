@@ -21,6 +21,7 @@ class GoalResponse(BaseModel):
 class DailyPlanItem(BaseModel):
     day: int
     theme: str = ""
+    day_type: str = ""
     tasks: list[str] = []
     deliverable: str = ""
     estimated_time: str = ""
@@ -29,14 +30,15 @@ class DailyPlanItem(BaseModel):
 
 
 class CareerPlanLLMOutput(BaseModel):
-    """Shape the LLM itself is asked to return."""
     daily_plan: list[DailyPlanItem] = []
 
 
-class SkillSignal(BaseModel):
-    skill: str
-    confidence: float
-    is_strong: bool
+class TopicSignal(BaseModel):
+    domain: str
+    topic: str
+    suggested_order: int
+    coverage: str
+    confidence: float | None = None
     reasons: list[str] = []
 
 
@@ -44,8 +46,9 @@ class CareerPlanResponse(BaseModel):
     plan_id: str
     goal_id: str
     days_available: int
+    relevant_domains: list[str] = []
     daily_plan: list[DailyPlanItem]
     check_ins: list[str]
     generated_at: datetime
     degraded: bool = False
-    skill_signals: list[SkillSignal] = []  # advisory input, shown for transparency only
+    topic_signals: list[TopicSignal] = []
