@@ -72,3 +72,21 @@ class CareerPlan(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+class InterviewResponse(Base):
+    """Derived, recomputable output (§5.5 'inference') — one row per
+    question asked, so the design doc's own test case ('ask it 4-5
+    questions in a row') has a real history to inspect afterward. Never
+    a source of truth: safe to regenerate any time the prompt or
+    story-ranking logic changes.
+    """
+    __tablename__ = "interview_responses"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    question_type: Mapped[str] = mapped_column(String(100))
+    response_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
