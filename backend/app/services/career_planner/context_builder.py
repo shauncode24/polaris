@@ -10,23 +10,23 @@ from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
 from app.services.resume.confidence import compute_skill_confidence
 
-MAX_PLAN_WEEKS = 16
-DEFAULT_PLAN_WEEKS = 8
+# Day-by-day cram plans are for short, near-term prep (e.g. "I have an
+# interview in 5 days") — not a multi-month roadmap. Capped so a distant
+# deadline doesn't produce an unusably long day-by-day list; someone
+# planning months out should really be using a weekly view instead (a
+# future addition), not a 90-entry daily grind.
+MAX_PLAN_DAYS = 14
+DEFAULT_PLAN_DAYS = 5
 
 
-def compute_weeks_available(deadline: date | None) -> int:
-    """Deterministic, not LLM-guessed — same 'code decides facts, LLM only
-    reasons over them' rule the rest of the codebase follows
-    (effort_estimation.py, confidence.py). Capped at MAX_PLAN_WEEKS so a
-    multi-year deadline doesn't produce an unusably long single plan;
-    Career Planner v2 (Phase 10) is what re-plans as time actually passes,
-    not this basic version.
+def compute_days_available(deadline: date | None) -> int:
+    """Deterministic, not LLM-guessed — same 'code decides facts, LLM
+    only reasons over them' rule the rest of the codebase follows.
     """
     if deadline is None:
-        return DEFAULT_PLAN_WEEKS
+        return DEFAULT_PLAN_DAYS
     days_remaining = (deadline - date.today()).days
-    weeks = max(1, round(days_remaining / 7))
-    return min(weeks, MAX_PLAN_WEEKS)
+    return max(1, min(days_remaining, MAX_PLAN_DAYS))
 
 
 async def _get_skills_by_confidence(db: AsyncSession) -> list[dict]:
@@ -48,6 +48,7 @@ async def _get_skills_by_confidence(db: AsyncSession) -> list[dict]:
     out.sort(key=lambda s: s["confidence"])
     return out
 
+
 async def _get_latest_leetcode_insights(db: AsyncSession, user_id) -> dict:
     result = await db.execute(
         select(ProfileSnapshot)
@@ -67,18 +68,14 @@ async def _get_latest_leetcode_insights(db: AsyncSession, user_id) -> dict:
     }
 
 
-async def _get_recent_notes(db: AsyncSession, user_id, limit: int = 10) -> list[dict]:
+async def _get_recent_notes(db: AsyncSession, user_id, limit: int = 5) -> list[dict]:
     result = await db.execute(
         select(Note).where(Note.user_id == user_id).order_by(Note.date.desc()).limit(limit)
     )
     return [{"date": n.date.isoformat(), "content": n.content, "tags": n.tags or []} for n in result.scalars().all()]
 
 
-async def _get_recent_snapshots(db: AsyncSession, user_id, limit: int = 5) -> list[dict]:
-    """Deliberately thin at this point in the build — Phase 6 runs before
-    Phase 9's timeline view exists. Just enough for the LLM to see that
-    *some* history exists, not a full diff (design doc §5.3).
-    """
+async def _get_recent_snapshots(db: AsyncSession, user_id, limit: int = 3) -> list[dict]:
     result = await db.execute(
         select(ProfileSnapshot)
         .where(ProfileSnapshot.user_id == user_id)
@@ -89,7 +86,7 @@ async def _get_recent_snapshots(db: AsyncSession, user_id, limit: int = 5) -> li
 
 
 async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> dict:
-    weeks_available = compute_weeks_available(goal.deadline)
+    days_available = compute_days_available(goal.deadline)
 
     skills_by_confidence = await _get_skills_by_confidence(db)
     leetcode = await _get_latest_leetcode_insights(db, user_id)
@@ -102,7 +99,7 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
             "deadline": goal.deadline.isoformat() if goal.deadline else None,
             "priority": goal.priority,
         },
-        "weeks_available": weeks_available,
+        "days_available": days_available,
         "skills_by_confidence": skills_by_confidence,
         "leetcode_blind_spots": leetcode["blind_spots"],
         "leetcode_topic_mastery": leetcode["topic_mastery"],

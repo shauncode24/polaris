@@ -2,40 +2,33 @@ import json
 
 from app.core.llm import client, MODEL
 from app.prompts.career_planner import CAREER_PLANNER_SYSTEM_PROMPT
-from app.schemas.career_plan import CareerPlanLLMOutput, WeeklyPlanItem
+from app.schemas.career_plan import CareerPlanLLMOutput, DailyPlanItem
 
-# Smaller chunks = more detailed, reliable output per week (a 4B local
-# model produces genuinely good rationale when asked for 2 weeks at a
-# time — see the chunk [5,6,7,8] case, which came back fully populated
-# and specific). Larger asks push it toward giving up and returning "{}".
-CHUNK_SIZE = 2
-
-# How many previously-planned weeks to show the model as "already
-# covered" context. Kept small and DELIBERATELY only carries (week,
-# focus) — not the full rationale text — because sending the complete,
-# ever-growing history every chunk (as the first version of this code
-# did) is what caused chunks 3 and 4 to collapse to "{}": by week 9 the
-# prompt included 8 previous weeks' full text stacked on top of the
-# entire skills_by_confidence list, and the model's context broke down.
-PREVIOUS_WEEKS_CONTEXT_WINDOW = 4
-
-MAX_ATTEMPTS_PER_CHUNK = 2
+CHUNK_SIZE = 3
+RECENT_DAYS_DETAIL_WINDOW = 4
+MAX_ATTEMPTS_PER_CHUNK = 3
 
 
-class CareerPlanError(Exception):
-    """Raised when a chunk's LLM call fails (after retries) or returns
-    something we can't validate for that chunk. Caught internally, per
-    chunk — generate_career_plan() never raises this outward, it just
-    substitutes a deterministic chunk instead.
+def _chunk_days(days_available: int, chunk_size: int = CHUNK_SIZE) -> list[list[int]]:
+    all_days = list(range(1, days_available + 1))
+    return [all_days[i:i + chunk_size] for i in range(0, len(all_days), chunk_size)]
+
+
+def _focused_topics_so_far(full_plan: list[DailyPlanItem]) -> list[str]:
+    """Every focus item used anywhere in the plan so far — passed to the
+    model as ADVISORY context only. Nothing here forces the model's next
+    choice; it's information to reason with, same as any other fact in
+    the context (confidence scores, evidence). The model decides.
     """
+    seen: list[str] = []
+    for item in full_plan:
+        for f in item.focus:
+            if f not in seen:
+                seen.append(f)
+    return seen
 
 
-def _chunk_weeks(weeks_available: int, chunk_size: int = CHUNK_SIZE) -> list[list[int]]:
-    all_weeks = list(range(1, weeks_available + 1))
-    return [all_weeks[i:i + chunk_size] for i in range(0, len(all_weeks), chunk_size)]
-
-
-async def _call_llm_for_chunk(chunk_context: dict, chunk_weeks: list[int]) -> list[WeeklyPlanItem]:
+async def _call_llm_for_chunk(chunk_context: dict) -> dict[int, DailyPlanItem]:
     response = await client.chat.completions.create(
         model=MODEL,
         messages=[
@@ -43,40 +36,73 @@ async def _call_llm_for_chunk(chunk_context: dict, chunk_weeks: list[int]) -> li
             {"role": "user", "content": json.dumps(chunk_context)},
         ],
         response_format={"type": "json_object"},
-        temperature=0.2,
-        max_tokens=800,
+        temperature=0.3,
+        max_tokens=700,
     )
     content = response.choices[0].message.content
     print(f"[TRACING] Raw career plan chunk JSON:\n{content}", flush=True)
     parsed = CareerPlanLLMOutput.model_validate(json.loads(content))
-
-    by_week = {item.week: item for item in parsed.weekly_plan if item.week in chunk_weeks}
-    if len(by_week) < len(chunk_weeks):
-        raise CareerPlanError(
-            f"Chunk {chunk_weeks} only returned {len(by_week)}/{len(chunk_weeks)} weeks "
-            f"(raw content: {content!r})"
-        )
-    return [by_week[w] for w in chunk_weeks]
+    out = {}
+    for item in parsed.daily_plan:
+        item.source = "llm"
+        out[item.day] = item
+    return out
 
 
-async def _generate_chunk(chunk_context: dict, chunk_weeks: list[int]) -> list[WeeklyPlanItem]:
-    print(f"[TRACING] Requesting career plan chunk for weeks {chunk_weeks}...", flush=True)
-    last_error: Exception | None = None
+async def _generate_chunk(
+    context: dict, chunk_days: list[int], full_plan: list[DailyPlanItem]
+) -> list[DailyPlanItem]:
+    """Retries only ask for the days still missing, and any day the model
+    already got right on an earlier attempt is kept — not discarded just
+    because a sibling day in the same chunk failed.
+    """
+    print(f"[TRACING] Requesting career plan chunk for days {chunk_days}...", flush=True)
+
+    resolved: dict[int, DailyPlanItem] = {}
+    remaining = list(chunk_days)
 
     for attempt in range(1, MAX_ATTEMPTS_PER_CHUNK + 1):
-        try:
-            return await _call_llm_for_chunk(chunk_context, chunk_weeks)
-        except Exception as e:
-            last_error = e
-            print(
-                f"[TRACING] Chunk {chunk_weeks} attempt {attempt}/{MAX_ATTEMPTS_PER_CHUNK} failed: {e}",
-                flush=True,
-            )
+        if not remaining:
+            break
 
-    raise CareerPlanError(f"Chunk {chunk_weeks} failed after {MAX_ATTEMPTS_PER_CHUNK} attempts: {last_error}")
+        recent = full_plan[-RECENT_DAYS_DETAIL_WINDOW:]
+        chunk_context = {
+            **context,
+            "assigned_days": remaining,
+            "already_focused_topics": _focused_topics_so_far(full_plan),
+            "recent_days_detail": [
+                {"day": d.day, "focus": d.focus, "rationale": d.rationale} for d in recent
+            ],
+        }
+        try:
+            by_day = await _call_llm_for_chunk(chunk_context)
+        except Exception as e:
+            print(f"[TRACING] Days {remaining} attempt {attempt}/{MAX_ATTEMPTS_PER_CHUNK} errored: {e}", flush=True)
+            continue
+
+        got = {d: by_day[d] for d in remaining if d in by_day}
+        resolved.update(got)
+        remaining = [d for d in remaining if d not in resolved]
+        if remaining:
+            print(f"[TRACING] Attempt {attempt}/{MAX_ATTEMPTS_PER_CHUNK} still missing days {remaining}", flush=True)
+
+    if remaining:
+        print(f"[TRACING] Days {remaining} using deterministic fallback text after all retries failed", flush=True)
+        weak_items = _build_weak_items(context)
+        covered = set(_focused_topics_so_far(full_plan))
+        for i, day_num in enumerate(remaining):
+            topic, rationale = _next_uncovered(weak_items, covered, i)
+            covered.add(topic)
+            resolved[day_num] = DailyPlanItem(day=day_num, focus=[topic], rationale=rationale, source="fallback")
+
+    return [resolved[d] for d in chunk_days]
 
 
 def _build_weak_items(context: dict) -> list[tuple[str, str]]:
+    """Used ONLY as the last-resort safety net if the LLM genuinely fails
+    every retry for a day — never the primary path. The primary path is
+    always the LLM reasoning over the real context above.
+    """
     weak_items: list[tuple[str, str]] = []
 
     blind_spots = context.get("leetcode_blind_spots", {})
@@ -102,54 +128,35 @@ def _build_weak_items(context: dict) -> list[tuple[str, str]]:
     return weak_items
 
 
-def _fallback_chunk(
-    weak_items: list[tuple[str, str]], chunk_weeks: list[int], cursor: int
-) -> tuple[list[WeeklyPlanItem], int]:
-    items = []
-    for week_num in chunk_weeks:
-        topic, rationale = weak_items[cursor % len(weak_items)]
-        items.append(WeeklyPlanItem(week=week_num, focus=[topic], rationale=rationale))
-        cursor += 1
-    return items, cursor
+def _next_uncovered(weak_items: list[tuple[str, str]], covered: set[str], offset: int) -> tuple[str, str]:
+    n = len(weak_items)
+    for i in range(n):
+        topic, rationale = weak_items[(offset + i) % n]
+        if topic not in covered:
+            return topic, rationale
+    return weak_items[offset % n]
 
 
 async def generate_career_plan(context: dict) -> tuple[CareerPlanLLMOutput, bool]:
-    """Builds the full weekly plan across several small LLM calls
-    (CHUNK_SIZE weeks each). Every chunk receives the FULL skill/evidence
-    context — nothing trimmed there — but the "already planned" history
-    passed back to the model is deliberately kept small and flat (only
-    the last PREVIOUS_WEEKS_CONTEXT_WINDOW weeks, focus only) so prompt
-    size stays roughly constant across chunks instead of growing every
-    call, which is what caused later chunks to collapse before.
+    """Builds the full day-by-day plan across several small LLM calls.
+    The LLM decides every day's topic/focus/rationale itself — nothing
+    is pre-assigned in code. Chunking exists purely to keep each call's
+    generation burden small enough for a local model to handle reliably;
+    it does not constrain what the model is allowed to choose.
     """
-    weeks_available = context["weeks_available"]
-    chunks = _chunk_weeks(weeks_available)
-    weak_items = _build_weak_items(context)
+    days_available = context["days_available"]
+    chunks = _chunk_days(days_available)
 
-    full_plan: list[WeeklyPlanItem] = []
-    fallback_cursor = 0
-    any_degraded = False
-
+    full_plan: list[DailyPlanItem] = []
     for chunk in chunks:
-        recent_weeks = full_plan[-PREVIOUS_WEEKS_CONTEXT_WINDOW:]
-        chunk_context = {
-            **context,
-            "chunk_weeks": chunk,
-            "previously_planned_weeks": [
-                {"week": w.week, "focus": w.focus} for w in recent_weeks
-            ],
-        }
-        try:
-            chunk_items = await _generate_chunk(chunk_context, chunk)
-        except CareerPlanError as e:
-            print(f"[TRACING] Chunk {chunk} degraded, using deterministic fallback: {e}", flush=True)
-            chunk_items, fallback_cursor = _fallback_chunk(weak_items, chunk, fallback_cursor)
-            any_degraded = True
-        full_plan.extend(chunk_items)
+        full_plan.extend(await _generate_chunk(context, chunk, full_plan))
 
-    milestone_check_ins = (
-        [f"End of Week {w}" for w in range(4, weeks_available + 1, 4)]
-        or [f"End of Week {weeks_available}"]
-    )
+    any_degraded = any(item.source == "fallback" for item in full_plan)
 
-    return CareerPlanLLMOutput(weekly_plan=full_plan, milestone_check_ins=milestone_check_ins), any_degraded
+    check_ins = ["Final review day before the interview/deadline"]
+    if days_available >= 5:
+        check_ins = [f"Day {d} check-in" for d in range(3, days_available + 1, 3)] + [
+            "Final review day before the interview/deadline"
+        ]
+
+    return CareerPlanLLMOutput(daily_plan=full_plan, check_ins=check_ins), any_degraded

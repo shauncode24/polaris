@@ -18,23 +18,27 @@ class GoalResponse(BaseModel):
     created_at: datetime
 
 
-class WeeklyPlanItem(BaseModel):
-    week: int
+class DailyPlanItem(BaseModel):
+    day: int
     focus: list[str] = []
     rationale: str = ""
+    source: str = "llm"  # "llm" | "fallback" — lets the UI distinguish
+                          # model-reasoned days from the deterministic
+                          # safety-net text used only when the LLM call
+                          # genuinely fails, not as the default path.
 
 
 class CareerPlanLLMOutput(BaseModel):
     """Shape the LLM itself is asked to return — nothing else."""
-    weekly_plan: list[WeeklyPlanItem] = []
-    milestone_check_ins: list[str] = []
+    daily_plan: list[DailyPlanItem] = []
+    check_ins: list[str] = []
 
 
 class CareerPlanResponse(BaseModel):
     plan_id: str
     goal_id: str
-    weeks_available: int
-    weekly_plan: list[WeeklyPlanItem]
-    milestone_check_ins: list[str]
+    days_available: int
+    daily_plan: list[DailyPlanItem]
+    check_ins: list[str]
     generated_at: datetime
     degraded: bool = False

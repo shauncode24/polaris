@@ -66,9 +66,9 @@ async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
         user_id=user.id,
         goal_id=goal.id,
         plan_json={
-            "weekly_plan": [w.model_dump() for w in llm_output.weekly_plan],
-            "milestone_check_ins": llm_output.milestone_check_ins,
-            "weeks_available": context["weeks_available"],
+            "daily_plan": [d.model_dump() for d in llm_output.daily_plan],
+            "check_ins": llm_output.check_ins,
+            "days_available": context["days_available"],
             "degraded": degraded,
         },
         created_at=datetime.now(timezone.utc),
@@ -82,48 +82,9 @@ async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
     return CareerPlanResponse(
         plan_id=str(plan_row.id),
         goal_id=str(goal.id),
-        weeks_available=context["weeks_available"],
-        weekly_plan=llm_output.weekly_plan,
-        milestone_check_ins=llm_output.milestone_check_ins,
-        generated_at=plan_row.created_at,
-        degraded=degraded,
-    )
-
-@router.post("/{goal_id}/plan", response_model=CareerPlanResponse)
-async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
-    user = await get_or_create_default_user(db)
-
-    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user.id))
-    goal = result.scalar_one_or_none()
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
-
-    context = await build_career_plan_context(db, user.id, goal)
-    llm_output, degraded = await generate_career_plan(context)
-
-    plan_row = CareerPlan(
-        user_id=user.id,
-        goal_id=goal.id,
-        plan_json={
-            "weekly_plan": [w.model_dump() for w in llm_output.weekly_plan],
-            "milestone_check_ins": llm_output.milestone_check_ins,
-            "weeks_available": context["weeks_available"],
-            "degraded": degraded,
-        },
-        created_at=datetime.now(timezone.utc),
-    )
-    db.add(plan_row)
-    await db.commit()
-    await db.refresh(plan_row)
-
-    print(f"[TRACING] Career plan generated and persisted (plan_id={plan_row.id}, degraded={degraded})", flush=True)
-
-    return CareerPlanResponse(
-        plan_id=str(plan_row.id),
-        goal_id=str(goal.id),
-        weeks_available=context["weeks_available"],
-        weekly_plan=llm_output.weekly_plan,
-        milestone_check_ins=llm_output.milestone_check_ins,
+        days_available=context["days_available"],
+        daily_plan=llm_output.daily_plan,
+        check_ins=llm_output.check_ins,
         generated_at=plan_row.created_at,
         degraded=degraded,
     )
