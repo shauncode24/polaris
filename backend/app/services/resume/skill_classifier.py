@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import client, MODEL
+from app.core.llm import chat_completion, MODEL
 from app.models.structure import SkillAlias
 from app.schemas.skill_classification import SkillClassificationBatch
 
@@ -43,7 +43,7 @@ async def _classify_via_llm(raw_strings: list[str]) -> dict[str, tuple[str | Non
     unfamiliar terms.
     """
     user_content = json.dumps(raw_strings)
-    response = await client.chat.completions.create(
+    response = await chat_completion(
         model=MODEL,
         messages=[
             {"role": "system", "content": CLASSIFICATION_SYSTEM_PROMPT},

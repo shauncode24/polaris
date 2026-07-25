@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import User, Experience, Project, Resume
+from app.models.facts import User, Experience, Project, Education, Resume
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence, ProfileSnapshot
 
@@ -88,6 +88,17 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, filename: str | None
         )
         db.add(row)
         project_rows.append(row)
+
+    education_rows: list[Education] = []
+    for edu in extraction.education:
+        row = Education(
+            user_id=user.id, resume_id=resume_row.id,
+            institution=edu.institution, degree=edu.degree, field_of_study=edu.field_of_study,
+            start_date=None, end_date=None, is_current=edu.is_current, details=edu.details,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(row)
+        education_rows.append(row)
 
     await db.flush()
 
@@ -200,6 +211,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, filename: str | None
         "resume_id": str(resume_row.id),
         "experiences_created": len(experience_rows),
         "projects_created": len(project_rows),
+        "education_created": len(education_rows),
         "skills_processed": len(skill_objs),
         "skills_high_confidence": high_conf,
         "skills_medium_confidence": medium_conf,

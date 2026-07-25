@@ -7,7 +7,7 @@ not this module.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import CompanyNote, Experience, Project
+from app.models.facts import CompanyNote, Education, Experience, Project
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
@@ -35,6 +35,23 @@ async def _get_all_experiences(db: AsyncSession, user_id) -> list[dict]:
             "end_date": e.end_date.isoformat() if e.end_date else None,
             "bullets": e.bullets or [],
             "stack": e.stack or [],
+        }
+        for e in result.scalars().all()
+    ]
+
+
+async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
+    result = await db.execute(select(Education).where(Education.user_id == user_id))
+    return [
+        {
+            "type": "education",
+            "institution": e.institution,
+            "degree": e.degree,
+            "field_of_study": e.field_of_study,
+            "start_date": e.start_date.isoformat() if e.start_date else None,
+            "end_date": e.end_date.isoformat() if e.end_date else None,
+            "is_current": e.is_current,
+            "details": e.details or [],
         }
         for e in result.scalars().all()
     ]
@@ -75,6 +92,7 @@ async def build_interview_context(
 ) -> dict:
     projects = await _get_all_projects(db, user_id)
     experiences = await _get_all_experiences(db, user_id)
+    education = await _get_all_education(db, user_id)
     skills = await _get_all_skills_with_evidence(db)
     company_notes = await _get_company_notes(db, user_id, target_company)
 
@@ -85,6 +103,7 @@ async def build_interview_context(
         "profile": {
             "projects": projects,
             "experiences": experiences,
+            "education": education,
             "skills": skills,
         },
         "company_notes": company_notes,

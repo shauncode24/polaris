@@ -1,6 +1,6 @@
 import json
 
-from app.core.llm import client, MODEL
+from app.core.llm import chat_completion, MODEL
 from app.prompts.jd_interpretation import INTERPRETATION_SYSTEM_PROMPT
 from app.schemas.interpretation import LearningPlanItem, NarrativeAnalysis
 from app.services.jobs.skill_categories import get_curriculum_phase
@@ -67,7 +67,7 @@ def build_narrative_context(
 async def generate_narrative_analysis(context: dict) -> NarrativeAnalysis:
     print("[TRACING] Requesting narrative interpretation from LLM...", flush=True)
     try:
-        response = await client.chat.completions.create(
+        response = await chat_completion(
             model=MODEL,
             messages=[
                 {"role": "system", "content": INTERPRETATION_SYSTEM_PROMPT},

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import client, MODEL
+from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, Project, Resume
 from app.models.inference import ResumeReview
 from app.prompts.resume_review import (
@@ -103,7 +103,7 @@ async def _call_narrative_llm(context: dict) -> LLMNarrativeOutput:
         "ats_flags": context["ats_flags"],
     }
     try:
-        response = await client.chat.completions.create(
+        response = await chat_completion(
             model=MODEL,
             messages=[
                 {"role": "system", "content": RESUME_NARRATIVE_SYSTEM_PROMPT},
@@ -124,7 +124,7 @@ async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewr
         f"[TRACING] Requesting resume bullet rewrites for {len(bullets_batch)} bullets...", flush=True
     )
     try:
-        response = await client.chat.completions.create(
+        response = await chat_completion(
             model=MODEL,
             messages=[
                 {"role": "system", "content": RESUME_REWRITES_SYSTEM_PROMPT},

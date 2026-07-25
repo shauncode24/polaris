@@ -1,6 +1,6 @@
 import json
 
-from app.core.llm import client, MODEL
+from app.core.llm import chat_completion, MODEL
 from app.prompts.career_planner import CAREER_PLANNER_SYSTEM_PROMPT
 from app.schemas.career_plan import CareerPlanLLMOutput, DailyPlanItem
 
@@ -19,7 +19,7 @@ def _focused_topics_so_far(full_plan: list[DailyPlanItem]) -> list[str]:
 
 
 async def _call_llm_for_chunk(chunk_context: dict) -> dict[int, DailyPlanItem]:
-    response = await client.chat.completions.create(
+    response = await chat_completion(
         model=MODEL,
         messages=[
             {"role": "system", "content": CAREER_PLANNER_SYSTEM_PROMPT},

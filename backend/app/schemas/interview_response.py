@@ -14,6 +14,15 @@ class CoachingNote(BaseModel):
     note: str
 
 
+class BlueprintClassification(BaseModel):
+    """Output of the cheap pre-classification pass — picks which single
+    blueprint from the library to hand to the (much more expensive)
+    generation call, instead of sending all ~24 blueprints every time.
+    """
+    blueprint_key: str
+    reason: str = ""
+
+
 class InterviewLLMOutput(BaseModel):
     question_type: str
     blueprint_used: str = ""     # which library key was followed, or "custom: <reason>"

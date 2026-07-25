@@ -1,13 +1,13 @@
 import json
 
-from app.core.llm import client, MODEL
+from app.core.llm import chat_completion, MODEL
 from app.prompts.jd_extraction import JD_SYSTEM_PROMPT
 from app.schemas.skill_gap import ExtractedJDRequirements
 
 
 async def extract_jd_requirements(raw_text: str) -> ExtractedJDRequirements:
     print(f"[TRACING] Extracting JD requirements (text length: {len(raw_text)} chars)...", flush=True)
-    response = await client.chat.completions.create(
+    response = await chat_completion(
         model=MODEL,
         messages=[
             {"role": "system", "content": JD_SYSTEM_PROMPT},

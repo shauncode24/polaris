@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, Boolean
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +46,28 @@ class Project(Base):
     stack: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     repo_url: Mapped[str | None] = mapped_column(String(500))
     impact_metrics: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = created_at_col()
+
+
+class Education(Base):
+    """Facts table (§5.5) — raw, append-only, sourced directly from resume
+    extraction. Was missing entirely from the original schema/pipeline,
+    which is why education never appeared anywhere downstream (Interview
+    Response Agent, Resume Reviewer, etc.) — it was simply never captured,
+    not filtered out.
+    """
+    __tablename__ = "educations"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    resume_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"))
+    institution: Mapped[str] = mapped_column(String(255))
+    degree: Mapped[str | None] = mapped_column(String(255))
+    field_of_study: Mapped[str | None] = mapped_column(String(255))
+    start_date: Mapped[date | None] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False)
+    details: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     created_at: Mapped[datetime] = created_at_col()
 
 

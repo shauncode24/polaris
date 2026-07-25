@@ -1,6 +1,6 @@
 import json
 
-from app.core.llm import client, MODEL
+from app.core.llm import chat_completion, MODEL
 from app.prompts.jd_prioritization import PRIORITIZATION_SYSTEM_PROMPT
 from app.schemas.prioritization import PrioritizationResult
 
@@ -18,7 +18,7 @@ async def prioritize_missing_skills(context: dict) -> PrioritizationResult:
         flush=True,
     )
     try:
-        response = await client.chat.completions.create(
+        response = await chat_completion(
             model=MODEL,
             messages=[
                 {"role": "system", "content": PRIORITIZATION_SYSTEM_PROMPT},
