@@ -1,9 +1,8 @@
-"""Gathers the candidate's ENTIRE real profile as-is — every project,
-every experience, every skill with its confidence/evidence, and any
-company notes on file — and hands it to the LLM untouched. No scoring,
-no filtering, no pre-selection: the model decides what's relevant to a
-given question, not this module. The only "decisions" made here are
-which tables to query, which is I/O, not judgment.
+"""Gathers the candidate's ENTIRE real profile as-is, plus the static
+blueprint library and persona config, and hands all of it to the LLM
+untouched. No scoring, no filtering, no pre-selection of stories or
+blueprints: the model decides what's relevant and which blueprint fits,
+not this module.
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,18 +11,14 @@ from app.models.facts import CompanyNote, Experience, Project
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
+from app.services.interview.blueprints import get_blueprint_library, get_persona
 from app.services.resume.confidence import compute_skill_confidence
 
 
 async def _get_all_projects(db: AsyncSession, user_id) -> list[dict]:
     result = await db.execute(select(Project).where(Project.user_id == user_id))
     return [
-        {
-            "type": "project",
-            "name": p.name,
-            "description": p.description or "",
-            "stack": p.stack or [],
-        }
+        {"type": "project", "name": p.name, "description": p.description or "", "stack": p.stack or []}
         for p in result.scalars().all()
     ]
 
@@ -36,6 +31,8 @@ async def _get_all_experiences(db: AsyncSession, user_id) -> list[dict]:
             "label": f"{e.role} at {e.company}",
             "role": e.role,
             "company": e.company,
+            "start_date": e.start_date.isoformat() if e.start_date else None,
+            "end_date": e.end_date.isoformat() if e.end_date else None,
             "bullets": e.bullets or [],
             "stack": e.stack or [],
         }
@@ -49,9 +46,7 @@ async def _get_all_skills_with_evidence(db: AsyncSession) -> list[dict]:
 
     out = []
     for skill in skills:
-        evidence_result = await db.execute(
-            select(SkillEvidence).where(SkillEvidence.skill_id == skill.id)
-        )
+        evidence_result = await db.execute(select(SkillEvidence).where(SkillEvidence.skill_id == skill.id))
         evidence_rows = list(evidence_result.scalars().all())
         if not evidence_rows:
             continue
@@ -66,14 +61,9 @@ async def _get_company_notes(db: AsyncSession, user_id, target_company: str | No
     if not target_company:
         return []
     result = await db.execute(
-        select(CompanyNote)
-        .where(CompanyNote.user_id == user_id)
-        .where(CompanyNote.company.ilike(target_company))
+        select(CompanyNote).where(CompanyNote.user_id == user_id).where(CompanyNote.company.ilike(target_company))
     )
-    return [
-        {"company": n.company, "notes": n.pasted_content}
-        for n in result.scalars().all()
-    ]
+    return [{"company": n.company, "notes": n.pasted_content} for n in result.scalars().all()]
 
 
 async def build_interview_context(
@@ -98,4 +88,6 @@ async def build_interview_context(
             "skills": skills,
         },
         "company_notes": company_notes,
+        "blueprint_library": get_blueprint_library(),
+        "persona": get_persona(),
     }

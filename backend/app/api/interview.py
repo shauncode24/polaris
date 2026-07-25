@@ -1,3 +1,4 @@
+from openai.resources.evals.runs import output_items
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -44,16 +45,17 @@ async def ask_interview_question(payload: InterviewAskRequest, db=Depends(get_db
     print(f"[TRACING] Interview response persisted (id={response_row.id})", flush=True)
 
     return InterviewResponseOutput(
-        response_id=str(response_row.id),
-        question=payload.question,
-        question_type=output.question_type,
-        answer=output.answer,
-        answer_short=output.answer_short,
-        stories_used=output.stories_used,
-        competencies=output.competencies,
-        follow_up_questions=output.follow_up_questions,
-        coaching=output.coaching,
-        insufficient_context=output.insufficient_context,
-        context_note=output.context_note,
-        created_at=response_row.created_at,
-    )
+            response_id=str(response_row.id),
+            question=payload.question,
+            question_type=output.question_type,
+            blueprint_used=output.blueprint_used,
+            answer=output.answer,
+            answer_short=output.answer_short,
+            stories_used=output.stories_used,
+            competencies=output.competencies,
+            follow_up_questions=output.follow_up_questions,
+            coaching=output.coaching,
+            insufficient_context=output.insufficient_context,
+            context_note=output.context_note,
+            created_at=response_row.created_at,
+        )

@@ -44,7 +44,9 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
             )
             content = response.choices[0].message.content
             print(f"[TRACING] Raw interview response JSON:\n{content}", flush=True)
-            return InterviewLLMOutput.model_validate(json.loads(content))
+            parsed = InterviewLLMOutput.model_validate(json.loads(content))
+            print(f"[TRACING] Blueprint used: {parsed.blueprint_used}", flush=True)
+            return parsed
         except Exception as e:
             print(f"[TRACING] Attempt {attempt}/{MAX_ATTEMPTS} failed to parse: {e}", flush=True)
             last_error = e
