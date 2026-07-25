@@ -15,17 +15,7 @@ def _chunk_days(days_available: int, chunk_size: int = CHUNK_SIZE) -> list[list[
 
 
 def _focused_topics_so_far(full_plan: list[DailyPlanItem]) -> list[str]:
-    """Every focus item used anywhere in the plan so far — passed to the
-    model as ADVISORY context only. Nothing here forces the model's next
-    choice; it's information to reason with, same as any other fact in
-    the context (confidence scores, evidence). The model decides.
-    """
-    seen: list[str] = []
-    for item in full_plan:
-        for f in item.focus:
-            if f not in seen:
-                seen.append(f)
-    return seen
+    return [item.theme for item in full_plan if item.theme]
 
 
 async def _call_llm_for_chunk(chunk_context: dict) -> dict[int, DailyPlanItem]:
@@ -36,8 +26,8 @@ async def _call_llm_for_chunk(chunk_context: dict) -> dict[int, DailyPlanItem]:
             {"role": "user", "content": json.dumps(chunk_context)},
         ],
         response_format={"type": "json_object"},
-        temperature=0.3,
-        max_tokens=700,
+        temperature=0.4,
+        max_tokens=1200,
     )
     content = response.choices[0].message.content
     print(f"[TRACING] Raw career plan chunk JSON:\n{content}", flush=True)
@@ -52,9 +42,10 @@ async def _call_llm_for_chunk(chunk_context: dict) -> dict[int, DailyPlanItem]:
 async def _generate_chunk(
     context: dict, chunk_days: list[int], full_plan: list[DailyPlanItem]
 ) -> list[DailyPlanItem]:
-    """Retries only ask for the days still missing, and any day the model
-    already got right on an earlier attempt is kept — not discarded just
-    because a sibling day in the same chunk failed.
+    """No content-policing here — this only retries on genuine failures
+    (bad JSON, missing days, a raised exception). The LLM's creative
+    choices about sequencing, task specificity, or which skill_signals
+    to act on are never second-guessed or rejected by code.
     """
     print(f"[TRACING] Requesting career plan chunk for days {chunk_days}...", flush=True)
 
@@ -71,7 +62,11 @@ async def _generate_chunk(
             "assigned_days": remaining,
             "already_focused_topics": _focused_topics_so_far(full_plan),
             "recent_days_detail": [
-                {"day": d.day, "focus": d.focus, "rationale": d.rationale} for d in recent
+                {
+                    "day": d.day, "theme": d.theme, "tasks": d.tasks,
+                    "deliverable": d.deliverable, "rationale": d.rationale,
+                }
+                for d in recent
             ],
         }
         try:
@@ -91,19 +86,32 @@ async def _generate_chunk(
         weak_items = _build_weak_items(context)
         covered = set(_focused_topics_so_far(full_plan))
         for i, day_num in enumerate(remaining):
-            topic, rationale = _next_uncovered(weak_items, covered, i)
-            covered.add(topic)
-            resolved[day_num] = DailyPlanItem(day=day_num, focus=[topic], rationale=rationale, source="fallback")
+            skill, rationale = _next_uncovered(weak_items, covered, i)
+            covered.add(skill)
+            resolved[day_num] = DailyPlanItem(
+                day=day_num,
+                theme=f"Strengthen {skill}",
+                tasks=[f"Review {skill} fundamentals and identify one concrete gap to close today"],
+                deliverable=f"A short written note on what you learned about {skill}",
+                estimated_time="1-2 hours",
+                rationale=rationale,
+                source="fallback",
+            )
 
     return [resolved[d] for d in chunk_days]
 
 
 def _build_weak_items(context: dict) -> list[tuple[str, str]]:
-    """Used ONLY as the last-resort safety net if the LLM genuinely fails
-    every retry for a day — never the primary path. The primary path is
-    always the LLM reasoning over the real context above.
+    """Last-resort safety net only, used when the LLM call fails every
+    retry — never the primary path. Built from skill_signals (lowest
+    confidence first) since that's still the best available ordering
+    when there's no creative reasoning to fall back on.
     """
     weak_items: list[tuple[str, str]] = []
+
+    for sig in context.get("skill_signals", []):
+        reason = "; ".join(sig.get("reasons", [])) or f"confidence {sig['confidence']:.2f}"
+        weak_items.append((sig["skill"], f"{sig['skill'].title()}: {reason}"))
 
     blind_spots = context.get("leetcode_blind_spots", {})
     for bs_type, label in (
@@ -112,12 +120,6 @@ def _build_weak_items(context: dict) -> list[tuple[str, str]]:
     ):
         for topic in blind_spots.get(bs_type, []):
             weak_items.append((topic, f"{topic} has 0 solved LeetCode problems — a {label}."))
-
-    for s in context.get("skills_by_confidence", []):
-        weak_items.append((
-            s["skill"],
-            f"{s['skill'].title()} confidence is {s['confidence']:.2f} — low verified evidence.",
-        ))
 
     if not weak_items:
         weak_items = [(
@@ -131,19 +133,13 @@ def _build_weak_items(context: dict) -> list[tuple[str, str]]:
 def _next_uncovered(weak_items: list[tuple[str, str]], covered: set[str], offset: int) -> tuple[str, str]:
     n = len(weak_items)
     for i in range(n):
-        topic, rationale = weak_items[(offset + i) % n]
-        if topic not in covered:
-            return topic, rationale
+        skill, rationale = weak_items[(offset + i) % n]
+        if skill not in covered:
+            return skill, rationale
     return weak_items[offset % n]
 
 
 async def generate_career_plan(context: dict) -> tuple[CareerPlanLLMOutput, bool]:
-    """Builds the full day-by-day plan across several small LLM calls.
-    The LLM decides every day's topic/focus/rationale itself — nothing
-    is pre-assigned in code. Chunking exists purely to keep each call's
-    generation burden small enough for a local model to handle reliably;
-    it does not constrain what the model is allowed to choose.
-    """
     days_available = context["days_available"]
     chunks = _chunk_days(days_available)
 
@@ -152,11 +148,4 @@ async def generate_career_plan(context: dict) -> tuple[CareerPlanLLMOutput, bool
         full_plan.extend(await _generate_chunk(context, chunk, full_plan))
 
     any_degraded = any(item.source == "fallback" for item in full_plan)
-
-    check_ins = ["Final review day before the interview/deadline"]
-    if days_available >= 5:
-        check_ins = [f"Day {d} check-in" for d in range(3, days_available + 1, 3)] + [
-            "Final review day before the interview/deadline"
-        ]
-
-    return CareerPlanLLMOutput(daily_plan=full_plan, check_ins=check_ins), any_degraded
+    return CareerPlanLLMOutput(daily_plan=full_plan), any_degraded

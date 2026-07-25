@@ -20,18 +20,24 @@ class GoalResponse(BaseModel):
 
 class DailyPlanItem(BaseModel):
     day: int
-    focus: list[str] = []
+    theme: str = ""
+    tasks: list[str] = []
+    deliverable: str = ""
+    estimated_time: str = ""
     rationale: str = ""
-    source: str = "llm"  # "llm" | "fallback" — lets the UI distinguish
-                          # model-reasoned days from the deterministic
-                          # safety-net text used only when the LLM call
-                          # genuinely fails, not as the default path.
+    source: str = "llm"  # "llm" | "fallback"
 
 
 class CareerPlanLLMOutput(BaseModel):
-    """Shape the LLM itself is asked to return — nothing else."""
+    """Shape the LLM itself is asked to return."""
     daily_plan: list[DailyPlanItem] = []
-    check_ins: list[str] = []
+
+
+class SkillSignal(BaseModel):
+    skill: str
+    confidence: float
+    is_strong: bool
+    reasons: list[str] = []
 
 
 class CareerPlanResponse(BaseModel):
@@ -42,3 +48,4 @@ class CareerPlanResponse(BaseModel):
     check_ins: list[str]
     generated_at: datetime
     degraded: bool = False
+    skill_signals: list[SkillSignal] = []  # advisory input, shown for transparency only

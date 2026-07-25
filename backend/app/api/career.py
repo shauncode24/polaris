@@ -7,12 +7,20 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.models.goals import Goal
 from app.models.inference import CareerPlan
-from app.schemas.career_plan import CareerPlanResponse, GoalCreateRequest, GoalResponse
+from app.schemas.career_plan import CareerPlanResponse, GoalCreateRequest, GoalResponse, SkillSignal
 from app.services.career_planner.context_builder import build_career_plan_context
 from app.services.career_planner.plan_generation import generate_career_plan
 from app.services.user_helpers import get_or_create_default_user
 
 router = APIRouter(prefix="/goals", tags=["goals"])
+
+
+def _build_check_ins(days_available: int) -> list[str]:
+    if days_available < 5:
+        return ["Final review day before the interview/deadline"]
+    return [f"Day {d} check-in" for d in range(3, days_available + 1, 3)] + [
+        "Final review day before the interview/deadline"
+    ]
 
 
 @router.post("", response_model=GoalResponse)
@@ -61,14 +69,16 @@ async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
 
     context = await build_career_plan_context(db, user.id, goal)
     llm_output, degraded = await generate_career_plan(context)
+    check_ins = _build_check_ins(context["days_available"])
 
     plan_row = CareerPlan(
         user_id=user.id,
         goal_id=goal.id,
         plan_json={
             "daily_plan": [d.model_dump() for d in llm_output.daily_plan],
-            "check_ins": llm_output.check_ins,
+            "check_ins": check_ins,
             "days_available": context["days_available"],
+            "skill_signals": context["skill_signals"],
             "degraded": degraded,
         },
         created_at=datetime.now(timezone.utc),
@@ -84,7 +94,8 @@ async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
         goal_id=str(goal.id),
         days_available=context["days_available"],
         daily_plan=llm_output.daily_plan,
-        check_ins=llm_output.check_ins,
+        check_ins=check_ins,
         generated_at=plan_row.created_at,
         degraded=degraded,
+        skill_signals=[SkillSignal(**s) for s in context["skill_signals"]],
     )
