@@ -72,7 +72,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, filename: str | None
     experience_rows: list[Experience] = []
     for exp in extraction.experiences:
         row = Experience(
-            user_id=user.id, role=exp.role, company=exp.company,
+            user_id=user.id, resume_id=resume_row.id, role=exp.role, company=exp.company,
             start_date=None, end_date=None, stack=exp.stack, bullets=exp.bullets,
             created_at=datetime.now(timezone.utc),
         )
@@ -82,7 +82,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, filename: str | None
     project_rows: list[Project] = []
     for proj in extraction.projects:
         row = Project(
-            user_id=user.id, name=proj.name, description=proj.description,
+            user_id=user.id, resume_id=resume_row.id, name=proj.name, description=proj.description,
             stack=proj.stack, repo_url=None, impact_metrics=None,
             created_at=datetime.now(timezone.utc),
         )

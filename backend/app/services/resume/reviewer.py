@@ -7,14 +7,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import client, MODEL
 from app.models.facts import Experience, Project, Resume
 from app.models.inference import ResumeReview
-from app.prompts.resume_review import RESUME_REVIEW_SYSTEM_PROMPT
+from app.prompts.resume_review import (
+    RESUME_REVIEW_SYSTEM_PROMPT,
+    RESUME_NARRATIVE_SYSTEM_PROMPT,
+    RESUME_REWRITES_SYSTEM_PROMPT,
+)
 from app.schemas.resume_review import (
     ATSFlag,
     BulletIssue,
     BulletReview,
     LLMReviewOutput,
+    LLMNarrativeOutput,
+    LLMRewritesOutput,
     ResumeReviewReport,
     ResumeReviewStats,
+    BulletRewriteSuggestion,
 )
 from app.services.resume.ats_checks import run_ats_checks
 from app.services.resume.bullet_analysis import analyze_bullet
@@ -84,48 +91,54 @@ def _compute_score(flagged_count: int, unit_count: int, ats_flags: list[dict]) -
     return round(max(0.0, min(100.0, score)), 1)
 
 
-async def _call_review_llm(context: dict) -> LLMReviewOutput:
+async def _call_narrative_llm(context: dict) -> LLMNarrativeOutput:
     print(
-        f"[TRACING] Requesting resume review narrative for "
-        f"{len(context['flagged_bullets'])} flagged bullets...", flush=True
+        f"[TRACING] Requesting resume review narrative...", flush=True
     )
+    # We pass context containing the first 15 flagged bullets
+    # plus the total count to keep the narrative prompt token count reasonable.
+    light_context = {
+        "total_bullets": context["total_bullets"],
+        "flagged_bullets": context["flagged_bullets"][:15],
+        "ats_flags": context["ats_flags"],
+    }
     try:
         response = await client.chat.completions.create(
             model=MODEL,
             messages=[
-                {"role": "system", "content": RESUME_REVIEW_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(context)},
+                {"role": "system", "content": RESUME_NARRATIVE_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(light_context)},
             ],
             response_format={"type": "json_object"},
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw resume review JSON:\n{content}", flush=True)
-        return LLMReviewOutput.model_validate(json.loads(content))
+        print(f"[TRACING] Raw resume narrative JSON:\n{content}", flush=True)
+        return LLMNarrativeOutput.model_validate(json.loads(content))
     except Exception as e:
-        raise ReviewGenerationError(f"Resume review LLM call failed: {e}") from e
+        raise ReviewGenerationError(f"Resume review narrative LLM call failed: {e}") from e
 
 
-def _fallback_review(context: dict) -> LLMReviewOutput:
-    """Deterministic fallback, same idea as jobs/interpretation.py's
-    fallback_narrative — every field still grounded in real facts, just
-    without LLM-polished prose or rewrites.
-    """
-    flagged = context["flagged_bullets"]
-    top_fixes = [
-        f"Bullet '{b['bullet_id']}' ({b['source_label']}): {b['issues'][0]['detail']}"
-        for b in flagged[:4]
-    ]
-    return LLMReviewOutput(
-        summary=(
-            f"{len(flagged)} of {context['total_bullets']} bullets were flagged for missing metrics, "
-            f"weak openers, or passive voice. Automated rewrite suggestions are unavailable right now — "
-            f"review the flagged bullets below manually."
-        ),
-        strengths=[],
-        top_priority_fixes=top_fixes,
-        rewrites=[],
+async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewriteSuggestion]:
+    print(
+        f"[TRACING] Requesting resume bullet rewrites for {len(bullets_batch)} bullets...", flush=True
     )
+    try:
+        response = await client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": RESUME_REWRITES_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(bullets_batch)},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+        content = response.choices[0].message.content
+        print(f"[TRACING] Raw resume rewrites batch JSON:\n{content}", flush=True)
+        parsed = LLMRewritesOutput.model_validate(json.loads(content))
+        return parsed.rewrites
+    except Exception as e:
+        raise ReviewGenerationError(f"Resume review rewrites LLM call failed: {e}") from e
 
 
 async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewReport:
@@ -135,10 +148,14 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
             "No uploaded resume found for this user — upload a resume via /resume/upload first."
         )
 
-    exp_result = await db.execute(select(Experience).where(Experience.user_id == user_id))
+    exp_result = await db.execute(
+        select(Experience).where(Experience.user_id == user_id, Experience.resume_id == resume.id)
+    )
     experiences = list(exp_result.scalars().all())
 
-    proj_result = await db.execute(select(Project).where(Project.user_id == user_id))
+    proj_result = await db.execute(
+        select(Project).where(Project.user_id == user_id, Project.resume_id == resume.id)
+    )
     projects = list(proj_result.scalars().all())
 
     units = _build_review_units(experiences, projects)
@@ -183,22 +200,49 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
     }
 
     degraded = False
+    narrative = None
+    rewrites: list[BulletRewriteSuggestion] = []
+
     if flagged_for_llm:
+        # 1. Generate Narrative
         try:
-            llm_output = await _call_review_llm(context)
+            narrative = await _call_narrative_llm(context)
         except ReviewGenerationError as e:
-            print(f"[TRACING] Resume review degraded, using fallback: {e}", flush=True)
-            llm_output = _fallback_review(context)
+            print(f"[TRACING] Resume review narrative degraded, using fallback: {e}", flush=True)
+            narrative = LLMNarrativeOutput(
+                summary=(
+                    f"{len(flagged_for_llm)} of {len(units)} bullets were flagged for missing metrics, "
+                    f"weak openers, or passive voice. Narrative review is unavailable right now."
+                ),
+                strengths=[],
+                top_priority_fixes=[
+                    f"Bullet '{b['bullet_id']}' ({b['source_label']}): {b['issues'][0]['detail']}"
+                    for b in flagged_for_llm[:4]
+                ]
+            )
             degraded = True
+
+        # 2. Generate Rewrites in batches of 15
+        batch_size = 15
+        for i in range(0, len(flagged_for_llm), batch_size):
+            batch = flagged_for_llm[i : i + batch_size]
+            try:
+                batch_rewrites = await _call_rewrites_llm_batch(batch)
+                rewrites.extend(batch_rewrites)
+            except ReviewGenerationError as e:
+                print(f"[TRACING] Bullet rewrites batch failed: {e}", flush=True)
+                degraded = True
+                continue
     else:
-        llm_output = LLMReviewOutput(
+        narrative = LLMNarrativeOutput(
             summary="No bullet-level issues were detected — nice work. Review the ATS flags below.",
-            strengths=[], top_priority_fixes=[], rewrites=[],
+            strengths=[],
+            top_priority_fixes=[],
         )
 
     # Merge LLM rewrites back onto the deterministic bullet list — never
     # trust the LLM's bullet_id list blindly (same rule as gap_analysis.py).
-    rewrite_by_id = {r.bullet_id: r for r in llm_output.rewrites}
+    rewrite_by_id = {r.bullet_id: r for r in rewrites}
     for br in bullet_reviews:
         match = rewrite_by_id.get(br.bullet_id)
         if match:
@@ -217,9 +261,9 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
 
     report = ResumeReviewReport(
         overall_score=score,
-        summary=llm_output.summary,
-        strengths=llm_output.strengths,
-        top_priority_fixes=llm_output.top_priority_fixes,
+        summary=narrative.summary,
+        strengths=narrative.strengths,
+        top_priority_fixes=narrative.top_priority_fixes,
         bullet_reviews=bullet_reviews,
         ats_flags=[ATSFlag(**f) for f in ats_flags],
         stats=stats,
