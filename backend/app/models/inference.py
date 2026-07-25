@@ -55,3 +55,20 @@ class ResumeReview(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+class CareerPlan(Base):
+    """Derived, recomputable roadmap output (§5.5 'inference') — one row
+    per plan generation, tied to the Goal it was generated for. The Goal
+    and the skill evidence behind it are the source of truth; this table
+    is a cache of one particular LLM reasoning pass over that truth, safe
+    to regenerate any time the prompt or context-building logic changes.
+    """
+    __tablename__ = "career_plans"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    goal_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("goals.id"), index=True)
+    plan_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

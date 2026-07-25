@@ -12,40 +12,7 @@ from app.services.jobs.prioritization import PrioritizationError, prioritize_mis
 from app.services.jobs.skill_categories import get_curriculum_phase, get_curriculum_rank
 from app.services.resume.confidence import compute_skill_confidence
 from app.services.resume.review import classify_match
-
-
-async def _build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvidence]) -> list[str]:
-    """SkillEvidence rows only store a weight + a source_id — the human-
-    readable detail ("Cortex Route", "Backend Intern at X") lives on the
-    Project/Experience row itself, so we join back to build a readable
-    evidence trail instead of a bare list of weights.
-    """
-    project_ids = [e.source_id for e in evidence_rows if e.source_type == "project" and e.source_id]
-    experience_ids = [e.source_id for e in evidence_rows if e.source_type == "experience" and e.source_id]
-
-    projects: dict = {}
-    if project_ids:
-        result = await db.execute(select(Project).where(Project.id.in_(project_ids)))
-        projects = {p.id: p for p in result.scalars().all()}
-
-    experiences: dict = {}
-    if experience_ids:
-        result = await db.execute(select(Experience).where(Experience.id.in_(experience_ids)))
-        experiences = {e.id: e for e in result.scalars().all()}
-
-    details: list[str] = []
-    for e in evidence_rows:
-        if e.source_type == "project" and e.source_id in projects:
-            details.append(f"Project: {projects[e.source_id].name}")
-        elif e.source_type == "experience" and e.source_id in experiences:
-            exp = experiences[e.source_id]
-            details.append(f"Experience: {exp.role} at {exp.company}")
-        elif e.source_type == "leetcode_tag":
-            details.append("LeetCode practice history")
-        elif e.source_type == "certificate":
-            details.append("Certificate")
-    return list(dict.fromkeys(details))
-
+from app.services.evidence import build_evidence_details
 
 async def _historical_skill_frequency(db: AsyncSession, user_id) -> Counter:
     """How often each canonical skill has shown up as a requirement across
@@ -150,7 +117,7 @@ async def analyze_skill_gap(
             )
             continue
 
-        evidence_details = await _build_evidence_details(db, evidence_rows)
+        evidence_details = await build_evidence_details(db, evidence_rows)
 
         if bucket == "partial":
             if len(evidence_details) == 1:
