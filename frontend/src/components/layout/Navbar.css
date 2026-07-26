@@ -1,0 +1,47 @@
+.navbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.navbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 16px;
+}
+
+.navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.navbar__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: var(--text-on-ink);
+}
+
+.navbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.navbar__login {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.navbar__login:hover { color: var(--ink); }

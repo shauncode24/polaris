@@ -1,0 +1,29 @@
+.closing-cta {
+  padding-block: 72px 56px;
+  border-top: 1px solid var(--border);
+}
+
+.closing-cta__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  text-align: center;
+}
+
+.closing-cta__title {
+  font-size: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.closing-cta__title-script {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .closing-cta__title { font-size: 26px; }
+}
