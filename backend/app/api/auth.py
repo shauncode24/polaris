@@ -53,7 +53,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return UserResponse(
             id=str(current_user.id),
             first_name=current_user.first_name or current_user.name,
-            last_name=current_user.last_name,
+              last_name=current_user.last_name,
             email=current_user.email,
             avatar_url=current_user.avatar_url,
             auth_provider=current_user.auth_provider,

@@ -22,7 +22,7 @@ function LoginForm() {
     setSubmitting(true)
     try {
       await login({ email, password })
-      navigate('/home')
+      navigate('/build-profile')
     } catch (err) {
       setError(err.message || 'Could not log in. Please check your credentials and try again.')
     } finally {
