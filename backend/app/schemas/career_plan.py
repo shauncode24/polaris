@@ -7,6 +7,7 @@ class GoalCreateRequest(BaseModel):
     title: str
     deadline: date | None = None
     priority: str | None = None
+    job_description_id: str | None = None
 
 
 class GoalResponse(BaseModel):
@@ -16,6 +17,7 @@ class GoalResponse(BaseModel):
     priority: str | None = None
     status_pct: float
     created_at: datetime
+    job_description_id: str | None = None
 
 
 class DailyPlanItem(BaseModel):
@@ -41,6 +43,14 @@ class TopicSignal(BaseModel):
     confidence: float | None = None
     reasons: list[str] = []
 
+class TargetJobSummary(BaseModel):
+    role: str | None = None
+    company: str | None = None
+    overall_match_percentage: float | None = None
+    overall_match_label: str | None = None
+    missing_skills: list[str] = []
+    have_skills: list[str] = []
+
 
 class CareerPlanResponse(BaseModel):
     plan_id: str
@@ -52,3 +62,4 @@ class CareerPlanResponse(BaseModel):
     generated_at: datetime
     degraded: bool = False
     topic_signals: list[TopicSignal] = []
+    target_job: TargetJobSummary | None = None

@@ -43,19 +43,52 @@ async def _get_skills_by_confidence(db: AsyncSession) -> list[dict]:
     return out
 
 
-async def _get_latest_jd_missing_skills(db: AsyncSession, user_id) -> set[str]:
-    result = await db.execute(
-        select(JobDescription.analysis_result)
-        .where(JobDescription.user_id == user_id)
-        .where(JobDescription.analysis_result.isnot(None))
-        .order_by(JobDescription.created_at.desc())
-        .limit(1)
-    )
-    row = result.scalar_one_or_none()
-    if not row:
-        return set()
-    missing = (row.get("report") or {}).get("missing", [])
-    return {m["skill"] for m in missing if isinstance(m, dict) and "skill" in m}
+async def _get_job_description_context(db: AsyncSession, user_id, job_description_id) -> dict | None:
+    """Full JD + gap-analysis context for the SPECIFIC job this goal was
+    created from, so the planner grounds itself in that job's actual
+    role/company and actual missing skills — not whichever JD happens to
+    be most recently analyzed for this user. Falls back to the user's
+    most recent analyzed JD only for goals that weren't tied to one
+    (e.g. manually-entered goals with no "Analyzed job" selection).
+    """
+    if job_description_id is not None:
+        result = await db.execute(
+            select(JobDescription)
+            .where(JobDescription.id == job_description_id)
+            .where(JobDescription.user_id == user_id)
+        )
+    else:
+        result = await db.execute(
+            select(JobDescription)
+            .where(JobDescription.user_id == user_id)
+            .where(JobDescription.analysis_result.isnot(None))
+            .order_by(JobDescription.created_at.desc())
+            .limit(1)
+        )
+    jd = result.scalar_one_or_none()
+    if jd is None or not isinstance(jd.analysis_result, dict):
+        return None
+
+    report = jd.analysis_result.get("report", {})
+    overall = jd.analysis_result.get("overall_match", {})
+    extracted = jd.extracted_requirements or {}
+
+    return {
+        "role": jd.role,
+        "company": jd.company,
+        "required_skills": extracted.get("raw_required", []),
+        "implicit_skills": extracted.get("raw_implicit", []),
+        "architecture_topics": extracted.get("architecture_topics", []),
+        "nice_to_have": extracted.get("raw_nice_to_have", []),
+        "overall_match_percentage": overall.get("percentage"),
+        "overall_match_label": overall.get("label"),
+        "missing_skills": [
+            {"skill": m.get("skill"), "reason": m.get("reason"), "estimated_weeks": m.get("estimated_weeks")}
+            for m in report.get("missing", [])
+        ],
+        "have_skills": [h.get("skill") for h in report.get("have", [])],
+        "partial_skills": [p.get("skill") for p in report.get("partial", [])],
+    }
 
 
 async def _get_latest_ats_flags(db: AsyncSession, user_id) -> tuple[set[str], list[str]]:
@@ -135,7 +168,8 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
     curriculum_topics = get_curriculum_topics(relevant_domains)
 
     skills_by_confidence = await _get_skills_by_confidence(db)
-    jd_missing_skills = await _get_latest_jd_missing_skills(db, user_id)
+    target_job = await _get_job_description_context(db, user_id, goal.job_description_id)
+    jd_missing_skills = {m["skill"] for m in (target_job["missing_skills"] if target_job else []) if m.get("skill")}
     ats_missing_keywords, resume_top_fixes = await _get_latest_ats_flags(db, user_id)
     leetcode = await _get_latest_leetcode_insights(db, user_id)
 
@@ -161,6 +195,7 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
         "relevant_domains": relevant_domains,
         # The scoped curriculum pool — ADVISORY. Coverage/order are hints,
         # not instructions. The LLM decides real priority and sequencing.
+        "target_job": target_job,
         "topic_signals": topic_signals,
         "resume_review_top_fixes": resume_top_fixes,
         # Kept for grounding cross-cutting tasks (e.g. "use your existing

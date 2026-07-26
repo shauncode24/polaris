@@ -1,0 +1,80 @@
+.goal-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.goal-panel__tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-pill);
+  width: fit-content;
+}
+.goal-panel__tab {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.goal-panel__tab--active { background: var(--ink); color: var(--text-on-ink); }
+
+.goal-panel__form { display: flex; flex-direction: column; gap: 14px; }
+
+.goal-panel__mode-toggle { display: inline-flex; gap: 8px; }
+.goal-panel__mode-btn {
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.goal-panel__mode-btn--active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); }
+
+.goal-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+}
+.goal-panel__field input,
+.goal-panel__field select {
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 14px;
+}
+.goal-panel__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.goal-panel__optional { color: var(--text-soft); font-weight: 400; }
+.goal-panel__hint { font-size: 13px; color: var(--text-soft); }
+.goal-panel__hint a { color: var(--accent); font-weight: 600; }
+
+.goal-panel__error {
+  font-size: 13px;
+  color: #c0392b;
+  background: rgba(224, 85, 79, 0.1);
+  border: 1px solid rgba(224, 85, 79, 0.25);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 560px) {
+  .goal-panel__row { grid-template-columns: 1fr; }
+}

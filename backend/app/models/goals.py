@@ -14,6 +14,7 @@ class Goal(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    job_description_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("job_descriptions.id"))
     title: Mapped[str] = mapped_column(String(500))
     deadline: Mapped[date | None] = mapped_column(Date)
     priority: Mapped[str | None] = mapped_column(String(50))

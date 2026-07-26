@@ -1,0 +1,72 @@
+.daily-plan { display: flex; flex-direction: column; gap: 16px; }
+
+.daily-plan__today {
+  padding: 22px 24px;
+  background: var(--ink);
+  color: var(--text-on-ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.daily-plan__today h2 { color: var(--text-on-ink); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; }
+.daily-plan__today-theme { font-size: 20px; font-weight: 600; }
+.daily-plan__today-tasks { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; font-size: 14px; opacity: 0.92; }
+.daily-plan__today-meta { display: flex; gap: 16px; font-size: 13px; opacity: 0.85; }
+
+.daily-plan__heading { font-size: 16px; }
+
+.daily-plan__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.day-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.day-card--today { border-color: var(--accent); }
+
+.day-card__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.day-card__day { font-size: 12px; font-weight: 700; color: var(--text-soft); flex-shrink: 0; }
+.day-card__theme { flex: 1; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.day-card__type {
+  font-size: 11px;
+  text-transform: capitalize;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+}
+.day-card__chevron { font-size: 16px; color: var(--text-soft); width: 16px; text-align: center; }
+
+.day-card__body {
+  padding: 0 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.day-card__tasks { padding-left: 18px; font-size: 13.5px; color: var(--text); display: flex; flex-direction: column; gap: 5px; }
+.day-card__meta { display: flex; gap: 16px; font-size: 12.5px; color: var(--text-soft); }
+.day-card__rationale { font-size: 12.5px; color: var(--text-soft); font-style: italic; }
+.day-card__fallback-note { font-size: 11.5px; color: var(--text-soft); }
+
+.daily-plan__checkins {
+  padding: 16px 20px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.daily-plan__checkins h3 { font-size: 14px; margin-bottom: 8px; }
+.daily-plan__checkins ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); }
+.daily-plan__checkins li::before { content: '○ '; color: var(--text-soft); }

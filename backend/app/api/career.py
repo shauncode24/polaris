@@ -4,14 +4,18 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.models.goals import Goal
 from app.models.inference import CareerPlan
-from app.schemas.career_plan import CareerPlanResponse, GoalCreateRequest, GoalResponse, TopicSignal
+from app.models.facts import JobDescription
+from app.schemas.career_plan import (
+    CareerPlanResponse, GoalCreateRequest, GoalResponse, TopicSignal, TargetJobSummary,
+)
 from app.services.career_planner.context_builder import build_career_plan_context
 from app.services.career_planner.plan_generation import generate_career_plan
 from app.api.deps import get_current_user
 from app.models.facts import User
+from uuid import UUID as UUIDType
 
 router = APIRouter(prefix="/goals", tags=["goals"])
 
@@ -27,8 +31,24 @@ def _build_check_ins(days_available: int) -> list[str]:
 @router.post("", response_model=GoalResponse)
 async def create_goal(payload: GoalCreateRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
     user = current_user
+
+    job_description_id = None
+    if payload.job_description_id:
+        try:
+            candidate_id = UUIDType(payload.job_description_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid job_description_id.")
+        jd_result = await db.execute(
+            select(JobDescription).where(JobDescription.id == candidate_id, JobDescription.user_id == user.id)
+        )
+        jd = jd_result.scalar_one_or_none()
+        if jd is None:
+            raise HTTPException(status_code=404, detail="Analyzed job not found.")
+        job_description_id = candidate_id
+
     goal = Goal(
         user_id=user.id,
+        job_description_id=job_description_id,
         title=payload.title,
         deadline=payload.deadline,
         priority=payload.priority,
@@ -41,6 +61,7 @@ async def create_goal(payload: GoalCreateRequest, current_user: User = Depends(g
     return GoalResponse(
         id=str(goal.id), title=goal.title, deadline=goal.deadline,
         priority=goal.priority, status_pct=goal.status_pct, created_at=goal.created_at,
+        job_description_id=str(goal.job_description_id) if goal.job_description_id else None,
     )
 
 
@@ -54,6 +75,7 @@ async def list_goals(current_user: User = Depends(get_current_user), db=Depends(
         GoalResponse(
             id=str(g.id), title=g.title, deadline=g.deadline,
             priority=g.priority, status_pct=g.status_pct, created_at=g.created_at,
+            job_description_id=str(g.job_description_id) if g.job_description_id else None,
         )
         for g in result.scalars().all()
     ]
@@ -69,8 +91,23 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
         raise HTTPException(status_code=404, detail="Goal not found")
 
     context = await build_career_plan_context(db, user.id, goal)
+    await db.close()  # Release the connection back to the pool before starting slow LLM calls
+    
     llm_output, degraded = await generate_career_plan(context)
     check_ins = _build_check_ins(context["days_available"])
+
+    target_job_ctx = context.get("target_job")
+    target_job_summary = (
+        TargetJobSummary(
+            role=target_job_ctx.get("role"),
+            company=target_job_ctx.get("company"),
+            overall_match_percentage=target_job_ctx.get("overall_match_percentage"),
+            overall_match_label=target_job_ctx.get("overall_match_label"),
+            missing_skills=[m["skill"] for m in target_job_ctx.get("missing_skills", []) if m.get("skill")],
+            have_skills=target_job_ctx.get("have_skills", []),
+        )
+        if target_job_ctx else None
+    )
 
     plan_row = CareerPlan(
         user_id=user.id,
@@ -80,13 +117,15 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
             "check_ins": check_ins,
             "days_available": context["days_available"],
             "topic_signals": context["topic_signals"],
+            "target_job": target_job_summary.model_dump() if target_job_summary else None,
             "degraded": degraded,
         },
         created_at=datetime.now(timezone.utc),
     )
-    db.add(plan_row)
-    await db.commit()
-    await db.refresh(plan_row)
+    async with AsyncSessionLocal() as write_db:
+        write_db.add(plan_row)
+        await write_db.commit()
+        await write_db.refresh(plan_row)
 
     print(f"[TRACING] Career plan generated and persisted (plan_id={plan_row.id}, degraded={degraded})", flush=True)
 
@@ -99,4 +138,5 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
         generated_at=plan_row.created_at,
         degraded=degraded,
         topic_signals=[TopicSignal(**t) for t in context["topic_signals"]],
+        target_job=target_job_summary,
     )

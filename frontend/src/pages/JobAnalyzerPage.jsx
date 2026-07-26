@@ -7,6 +7,8 @@ import JobDescriptionForm from '../components/jobs/JobDescriptionForm'
 import JobAnalysisResults from '../components/jobs/JobAnalysisResults'
 import JobAnalysisHistory from '../components/jobs/JobAnalysisHistory'
 import './JobAnalyzerPage.css'
+import { Link } from 'react-router-dom'
+import Button from '../components/common/Button'
 
 const STAGES = [
   'Reading job description',
@@ -147,6 +149,16 @@ function JobAnalyzerPage() {
         )}
 
         {results && !resultsLoading && <JobAnalysisResults data={results} />}
+
+        {results && !resultsLoading && (
+          <Button
+            as={Link}
+            to={selectedId ? `/career-planner?jobId=${selectedId}` : '/career-planner'}
+            variant="primary"
+          >
+            Generate Career Roadmap from this analysis →
+          </Button>
+        )}
       </main>
     </div>
   )

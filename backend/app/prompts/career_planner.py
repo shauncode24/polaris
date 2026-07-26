@@ -11,6 +11,15 @@ blocks, not the coarse skill/domain names.
 
 You will receive:
 - "goal": their stated goal (title, deadline, priority)
+- "target_job": the SPECIFIC job this goal was generated for, if any — real role, company,
+  required/implicit skills, architecture topics, nice-to-haves, and (most importantly)
+  "missing_skills" (each with a "reason" and "estimated_weeks" already computed deterministically
+  from a real skill-gap analysis against THIS job) plus "have_skills"/"partial_skills" already
+  verified in their profile. When "target_job" is present, treat its "missing_skills" as the
+  PRIMARY signal for what this plan should prioritize — it's a real, job-specific gap report, more
+  authoritative than the generic "topic_signals" coverage estimates below. When "target_job" is
+  null (a manually-entered goal with no specific job attached), rely on "topic_signals" and
+  "profile_skills_summary" as before.
 - "relevant_domains": the domain(s) this goal maps to (e.g. "machine_learning", "dsa"). Topics outside
   these domains are OUT OF SCOPE — do not introduce a topic from an unrelated domain (e.g. don't add
   frontend/JavaScript topics to a machine-learning plan) just because it happens to be in their
