@@ -41,5 +41,11 @@ class Settings:
         self.github_username = os.environ.get("GITHUB_USERNAME", "")
         self.leetcode_username = os.environ.get("LEETCODE_USERNAME", "")
 
+        # --- Auth ---
+        self.jwt_secret = os.environ.get("JWT_SECRET", "dev-secret-change-me")
+        self.jwt_algorithm = "HS256"
+        self.jwt_expire_minutes = int(os.environ.get("JWT_EXPIRE_MINUTES", "10080"))  # 7 days
+        self.google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+        self.frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
 
 settings = Settings()

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import Badge from '../common/Badge'
 import Button from '../common/Button'
 import { IconArrowRight } from '../icons/Icons'
@@ -20,10 +21,10 @@ function Hero() {
         </p>
 
         <div className="hero__actions">
-          <Button as="a" href="#how-it-works" variant="primary" icon={<IconArrowRight size={16} />}>
+          <Button as={Link} to="/signup" variant="primary" icon={<IconArrowRight size={16} />}>
             Enter Polaris
           </Button>
-          <Button as="a" href="#login" variant="outline">
+          <Button as={Link} to="/login" variant="outline">
             Login
           </Button>
         </div>

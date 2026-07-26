@@ -14,6 +14,13 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = uuid_pk()
     name: Mapped[str] = mapped_column(String(255))
+    first_name: Mapped[str | None] = mapped_column(String(255))
+    last_name: Mapped[str | None] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    google_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
+    auth_provider: Mapped[str] = mapped_column(String(20), default="local")
     target_roles: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     target_companies: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     location_pref: Mapped[str | None] = mapped_column(String(255))

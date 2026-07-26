@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import Button from '../common/Button'
 import { IconArrowRight } from '../icons/Icons'
 import './ClosingCta.css'
@@ -11,7 +12,7 @@ function ClosingCta() {
           <span className="closing-cta__title-script">One AI coach.</span>
         </h2>
 
-        <Button as="a" href="#top" variant="primary" icon={<IconArrowRight size={16} />}>
+        <Button as={Link} to="/signup" variant="primary" icon={<IconArrowRight size={16} />}>
           Enter Polaris
         </Button>
       </div>

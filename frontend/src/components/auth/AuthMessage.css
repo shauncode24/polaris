@@ -1,0 +1,11 @@
+.auth-message { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }
+.auth-message--error {
+  background: rgba(224, 85, 79, 0.12);
+  color: #c0392b;
+  border: 1px solid rgba(224, 85, 79, 0.3);
+}
+.auth-message--success {
+  background: rgba(34, 192, 125, 0.12);
+  color: #1a8f5e;
+  border: 1px solid rgba(34, 192, 125, 0.3);
+}
