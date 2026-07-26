@@ -27,6 +27,9 @@ function HomePage() {
             <Button as={Link} to="/build-profile" variant="outline">
               {hasAnyProfileData ? 'Sync more data' : 'Build your profile'}
             </Button>
+            <Button as={Link} to="/jobs" variant="primary">
+              Analyze a Job
+            </Button>
           </div>
 
           {hasAnyProfileData ? (

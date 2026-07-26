@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import HomePage from './pages/HomePage'
 import BuildProfilePage from './pages/BuildProfilePage'
+import JobAnalyzerPage from './pages/JobAnalyzerPage'
 
 function App() {
   return (
@@ -32,6 +33,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <HomePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/jobs"
+                element={
+                  <ProtectedRoute>
+                    <JobAnalyzerPage />
                   </ProtectedRoute>
                 }
               />

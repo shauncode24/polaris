@@ -1,0 +1,96 @@
+.jd-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.jd-form__mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-pill);
+  width: fit-content;
+}
+.jd-form__mode-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.jd-form__mode-btn--active { background: var(--ink); color: var(--text-on-ink); }
+
+.jd-form__textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: inherit;
+  resize: vertical;
+}
+.jd-form__textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.jd-form__dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+.jd-form__dropzone:hover { border-color: var(--accent); background: var(--accent-soft); }
+.jd-form__browse { color: var(--accent); font-weight: 600; text-decoration: underline; }
+
+.jd-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.jd-form__row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+.jd-form__row input {
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 14px;
+}
+.jd-form__optional { color: var(--text-soft); font-weight: 400; }
+
+.jd-form__error {
+  font-size: 13px;
+  color: #c0392b;
+  background: rgba(224, 85, 79, 0.1);
+  border: 1px solid rgba(224, 85, 79, 0.25);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 560px) {
+  .jd-form__row { grid-template-columns: 1fr; }
+}

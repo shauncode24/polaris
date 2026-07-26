@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+from io import BytesIO
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 
 from app.core.database import get_db
@@ -15,7 +16,12 @@ from app.services.jobs.interpretation import (
     generate_narrative_analysis,
 )
 from app.services.jobs.jd_extraction import extract_jd_requirements
-from app.services.jobs.skill_categories import compute_category_breakdown, compute_overall_match, compute_peer_benchmarks
+from app.services.jobs.skill_categories import (
+    compute_category_breakdown,
+    compute_overall_match,
+    compute_peer_benchmarks,
+)
+from app.services.resume.pdf_parser import extract_text_from_pdf
 from app.services.resume.skill_classifier import resolve_skills
 from app.api.deps import get_current_user
 from app.models.facts import User
@@ -36,12 +42,20 @@ async def _fetch_profile_context(db, user_id, max_projects: int = 6) -> list[dic
     ]
 
 
-@router.post("/analyze", response_model=SkillGapAnalysisResponse)
-async def analyze_job_description(payload: JDPasteRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
-    print(f"[TRACING] Received JD paste request, length={len(payload.raw_text)}", flush=True)
-    user = current_user
+async def _run_job_analysis(
+    raw_text: str,
+    company: str | None,
+    role: str | None,
+    user: User,
+    db,
+) -> SkillGapAnalysisResponse:
+    """Shared pipeline for both the text-paste and PDF-upload entry points.
+    Everything from extraction through persistence lives here exactly once
+    so the two endpoints can never drift out of sync with each other.
+    """
+    print(f"[TRACING] Received JD analysis request, length={len(raw_text)}", flush=True)
 
-    extraction = await extract_jd_requirements(payload.raw_text)
+    extraction = await extract_jd_requirements(raw_text)
     print(
         f"[TRACING] JD extraction found {len(extraction.required_skills)} required, "
         f"{len(extraction.implicit_skills)} implicit, {len(extraction.nice_to_have)} nice-to-have, "
@@ -68,14 +82,14 @@ async def analyze_job_description(payload: JDPasteRequest, current_user: User = 
                 canonical_skills[canonical] = category
                 canonical_order.append(canonical)
 
-    role = payload.role or extraction.role
-    company = payload.company or extraction.company
+    resolved_role = role or extraction.role
+    resolved_company = company or extraction.company
 
     job_description = JobDescription(
         user_id=user.id,
-        company=company,
-        role=role,
-        raw_text=payload.raw_text,
+        company=resolved_company,
+        role=resolved_role,
+        raw_text=raw_text,
         extracted_requirements={
             "raw_required": extraction.required_skills,
             "raw_implicit": extraction.implicit_skills,
@@ -90,7 +104,8 @@ async def analyze_job_description(payload: JDPasteRequest, current_user: User = 
     await db.commit()
 
     report = await analyze_skill_gap(
-        db, user.id, canonical_skills, extraction.architecture_topics, role=role, company=company,
+        db, user.id, canonical_skills, extraction.architecture_topics,
+        role=resolved_role, company=resolved_company,
     )
     print(
         f"[TRACING] Gap analysis complete: {len(report.have)} have, {len(report.partial)} partial, "
@@ -103,8 +118,8 @@ async def analyze_job_description(payload: JDPasteRequest, current_user: User = 
     profile_context = await _fetch_profile_context(db, user.id)
 
     context = build_narrative_context(
-        role=role,
-        company=company,
+        role=resolved_role,
+        company=resolved_company,
         have=report.have,
         partial=report.partial,
         missing=report.missing,
@@ -136,3 +151,27 @@ async def analyze_job_description(payload: JDPasteRequest, current_user: User = 
     print("[TRACING] Skill gap analysis + narrative persisted to job_descriptions.", flush=True)
 
     return response
+
+
+@router.post("/analyze", response_model=SkillGapAnalysisResponse)
+async def analyze_job_description(
+    payload: JDPasteRequest,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    return await _run_job_analysis(payload.raw_text, payload.company, payload.role, current_user, db)
+
+
+@router.post("/analyze-pdf", response_model=SkillGapAnalysisResponse)
+async def analyze_job_description_pdf(
+    file: UploadFile = File(...),
+    company: str | None = Form(None),
+    role: str | None = Form(None),
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    raw_bytes = await file.read()
+    raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
+    if not raw_text.strip():
+        raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
+    return await _run_job_analysis(raw_text, company, role, current_user, db)
