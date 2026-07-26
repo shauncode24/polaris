@@ -4,6 +4,9 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 
+from uuid import UUID
+from pydantic import BaseModel
+
 from app.core.database import get_db
 from app.models.facts import JobDescription, Project
 from app.schemas.interpretation import CategoryScore, OverallMatch, SkillGapAnalysisResponse
@@ -175,3 +178,57 @@ async def analyze_job_description_pdf(
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
     return await _run_job_analysis(raw_text, company, role, current_user, db)
+
+class JobAnalysisSummary(BaseModel):
+    id: str
+    company: str | None = None
+    role: str | None = None
+    created_at: datetime
+    overall_match_percentage: float | None = None
+    overall_match_label: str | None = None
+
+
+@router.get("", response_model=list[JobAnalysisSummary])
+async def list_job_analyses(current_user: User = Depends(get_current_user), db=Depends(get_db)):
+    """Every past job analysis for this user, most recent first — only
+    ones that actually finished analysis (analysis_result populated).
+    Lightweight: pulls just the overall_match summary out of the stored
+    JSON, not the full report, so the history list stays cheap to load.
+    """
+    result = await db.execute(
+        select(JobDescription)
+        .where(JobDescription.user_id == current_user.id)
+        .where(JobDescription.analysis_result.isnot(None))
+        .order_by(JobDescription.created_at.desc())
+    )
+    rows = result.scalars().all()
+
+    summaries = []
+    for jd in rows:
+        overall = (jd.analysis_result or {}).get("overall_match", {})
+        summaries.append(
+            JobAnalysisSummary(
+                id=str(jd.id),
+                company=jd.company,
+                role=jd.role,
+                created_at=jd.created_at,
+                overall_match_percentage=overall.get("percentage"),
+                overall_match_label=overall.get("label"),
+            )
+        )
+    return summaries
+
+
+@router.get("/{job_id}", response_model=SkillGapAnalysisResponse)
+async def get_job_analysis(
+    job_id: UUID, current_user: User = Depends(get_current_user), db=Depends(get_db)
+):
+    result = await db.execute(
+        select(JobDescription).where(
+            JobDescription.id == job_id, JobDescription.user_id == current_user.id
+        )
+    )
+    jd = result.scalar_one_or_none()
+    if jd is None or jd.analysis_result is None:
+        raise HTTPException(status_code=404, detail="Job analysis not found")
+    return SkillGapAnalysisResponse.model_validate(jd.analysis_result)

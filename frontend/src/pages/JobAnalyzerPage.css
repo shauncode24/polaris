@@ -43,6 +43,11 @@
   border-radius: var(--radius-sm);
 }
 
+.job-analyzer-page__loading-results {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
 @media (max-width: 640px) {
   .job-analyzer-page__header { padding: 16px 20px; }
 }

@@ -40,3 +40,15 @@ export function analyzeJobPdf(token, file, { company, role } = {}) {
     body: formData,
   }).then(handle)
 }
+
+export function listJobAnalyses(token) {
+  return fetch(`${API_BASE_URL}/jobs`, {
+    headers: { ...authHeaders(token) },
+  }).then(handle)
+}
+
+export function getJobAnalysis(token, jobId) {
+  return fetch(`${API_BASE_URL}/jobs/${jobId}`, {
+    headers: { ...authHeaders(token) },
+  }).then(handle)
+}
