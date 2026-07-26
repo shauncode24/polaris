@@ -1,29 +1,24 @@
 from fastapi import APIRouter, HTTPException, UploadFile, Depends
+from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.models.facts import User
 from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
-from app.services.user_helpers import get_or_create_default_user
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 
 
 @router.post("/upload")
-async def upload_resume(file: UploadFile, db=Depends(get_db)):
-    print(f"[TRACING] Received upload request for file: {file.filename}", flush=True)
+async def upload_resume(file: UploadFile, current_user: User = Depends(get_current_user), db=Depends(get_db)):
     raw_bytes = await file.read()
-    print(f"[TRACING] Read {len(raw_bytes)} bytes from file.", flush=True)
-    result = await ingest_resume(raw_bytes, db, filename=file.filename)
-    print(f"[TRACING] Ingestion pipeline finished successfully.", flush=True)
+    result = await ingest_resume(raw_bytes, db, current_user, filename=file.filename)
     return result
 
 
 @router.post("/review")
-async def review_resume(db=Depends(get_db)):
-    print("[TRACING] Received resume review request.", flush=True)
-    user = await get_or_create_default_user(db)
+async def review_resume(current_user: User = Depends(get_current_user), db=Depends(get_db)):
     try:
-        report = await generate_resume_review(db, user.id)
+        report = await generate_resume_review(db, current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    print("[TRACING] Resume review generated successfully.", flush=True)
     return report

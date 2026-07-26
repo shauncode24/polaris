@@ -11,15 +11,16 @@ from app.services.interview.response_generation import (
     InterviewGenerationError,
     generate_interview_response,
 )
-from app.services.user_helpers import get_or_create_default_user
+from app.api.deps import get_current_user
+from app.models.facts import User
 
 router = APIRouter(prefix="/interview", tags=["interview"])
 
 
 @router.post("/ask", response_model=InterviewResponseOutput)
-async def ask_interview_question(payload: InterviewAskRequest, db=Depends(get_db)):
+async def ask_interview_question(payload: InterviewAskRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
     print(f"[TRACING] Received interview question: {payload.question!r}", flush=True)
-    user = await get_or_create_default_user(db)
+    user = current_user
 
     context = await build_interview_context(
         db, user.id, payload.question, payload.target_role, payload.target_company,

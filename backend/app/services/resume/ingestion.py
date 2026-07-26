@@ -23,16 +23,6 @@ def _mentions_skill(text: str, raw_name: str) -> bool:
     return re.search(pattern, text.lower()) is not None
 
 
-async def _get_or_create_default_user(db: AsyncSession) -> User:
-    result = await db.execute(select(User).limit(1))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(name="default", target_roles=[], target_companies=[])
-        db.add(user)
-        await db.flush()
-    return user
-
-
 async def _get_or_create_skill(db: AsyncSession, canonical_name: str, display_name: str) -> Skill:
     stmt = (
         pg_insert(Skill)
@@ -52,20 +42,19 @@ async def _get_or_create_skill(db: AsyncSession, canonical_name: str, display_na
     return Skill(id=skill_id, name=display_name, canonical_name=canonical_name)
 
 
-async def ingest_resume(raw_bytes: bytes, db: AsyncSession, filename: str | None = None) -> dict:
+async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str | None = None) -> dict:
     raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
     if not raw_text.strip():
         raise ValueError("No extractable text found in PDF")
 
     extraction = await extract_resume_data(raw_text)
-    user = await _get_or_create_default_user(db)
+    # user is now passed in directly — no more default-user lookup
 
-    # Persist the raw text as its own fact (Phase 5 needs it for
-    # ATS-style checks — see docs/development notes on §5.5).
     resume_row = Resume(
         user_id=user.id, raw_text=raw_text, filename=filename,
         created_at=datetime.now(timezone.utc),
     )
+    
     db.add(resume_row)
     await db.flush()
 

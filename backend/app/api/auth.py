@@ -1,3 +1,4 @@
+from sqlalchemy.sql.functions import current_user
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_current_user
@@ -50,10 +51,12 @@ async def google_auth(payload: GoogleAuthRequest, db=Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
     return UserResponse(
-        id=str(current_user.id),
-        first_name=current_user.first_name or current_user.name,
-        last_name=current_user.last_name,
-        email=current_user.email,
-        avatar_url=current_user.avatar_url,
-        auth_provider=current_user.auth_provider,
-    )
+            id=str(current_user.id),
+            first_name=current_user.first_name or current_user.name,
+            last_name=current_user.last_name,
+            email=current_user.email,
+            avatar_url=current_user.avatar_url,
+            auth_provider=current_user.auth_provider,
+            github_username=current_user.github_username,
+            leetcode_username=current_user.leetcode_username,
+        )

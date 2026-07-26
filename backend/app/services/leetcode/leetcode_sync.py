@@ -10,7 +10,7 @@ from app.services.resume.confidence import WEIGHTS
 from app.services.leetcode.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
 from app.services.leetcode.leetcode_insights import build_leetcode_insights
 from app.services.resume.skill_classifier import resolve_skills
-from app.services.user_helpers import get_or_create_default_user, get_or_create_skill
+from app.services.user_helpers import get_or_create_skill
 
 
 async def _get_previous_tag_counts(db: AsyncSession, user_id) -> dict[str, int]:
@@ -53,12 +53,11 @@ async def _get_previous_leetcode_stats(db: AsyncSession, user_id) -> dict | None
 
 async def _persist_leetcode_data(
     db: AsyncSession,
+    user,
     tag_counts: dict[str, int],
     note: str,
     extra_stats: dict | None = None,
 ) -> dict:
-    user = await get_or_create_default_user(db)
-
     previous_tag_counts = await _get_previous_tag_counts(db, user.id)
     existing_evidence_skill_ids = await _get_existing_evidence_skill_ids(db)
     previous_stats = await _get_previous_leetcode_stats(db, user.id)
@@ -155,18 +154,18 @@ async def _persist_leetcode_data(
     }
 
 
-async def sync_leetcode(db: AsyncSession, username: str) -> dict:
+async def sync_leetcode(db: AsyncSession, user, username: str) -> dict:
     print(f"[TRACING] Starting LeetCode sync for {username}...", flush=True)
     profile = await fetch_leetcode_profile(username)
     print(f"[TRACING] LeetCode sync fetched {len(profile['tag_counts'])} tags.", flush=True)
     extra_stats = {k: v for k, v in profile.items() if k != "tag_counts"}
-    result = await _persist_leetcode_data(db, profile["tag_counts"], note="leetcode sync", extra_stats=extra_stats)
+    result = await _persist_leetcode_data(db, user, profile["tag_counts"], note="leetcode sync", extra_stats=extra_stats)
     print("[TRACING] LeetCode sync complete.", flush=True)
     return result
 
 
-async def sync_leetcode_manual(db: AsyncSession, tag_counts: dict[str, int]) -> dict:
+async def sync_leetcode_manual(db: AsyncSession, user, tag_counts: dict[str, int]) -> dict:
     print(f"[TRACING] Persisting manual LeetCode submission ({len(tag_counts)} tags)...", flush=True)
-    result = await _persist_leetcode_data(db, tag_counts, note="leetcode manual submission")
+    result = await _persist_leetcode_data(db, user, tag_counts, note="leetcode manual submission")
     print("[TRACING] Manual LeetCode submission persisted.", flush=True)
     return result

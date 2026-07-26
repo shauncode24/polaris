@@ -25,6 +25,9 @@ class User(Base):
     target_companies: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     location_pref: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = created_at_col()
+    github_username: Mapped[str | None] = mapped_column(String(255))
+    github_token: Mapped[str | None] = mapped_column(String(255))
+    leetcode_username: Mapped[str | None] = mapped_column(String(255))
 
 
 class Experience(Base):

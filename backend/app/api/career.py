@@ -10,7 +10,8 @@ from app.models.inference import CareerPlan
 from app.schemas.career_plan import CareerPlanResponse, GoalCreateRequest, GoalResponse, TopicSignal
 from app.services.career_planner.context_builder import build_career_plan_context
 from app.services.career_planner.plan_generation import generate_career_plan
-from app.services.user_helpers import get_or_create_default_user
+from app.api.deps import get_current_user
+from app.models.facts import User
 
 router = APIRouter(prefix="/goals", tags=["goals"])
 
@@ -24,8 +25,8 @@ def _build_check_ins(days_available: int) -> list[str]:
 
 
 @router.post("", response_model=GoalResponse)
-async def create_goal(payload: GoalCreateRequest, db=Depends(get_db)):
-    user = await get_or_create_default_user(db)
+async def create_goal(payload: GoalCreateRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
+    user = current_user
     goal = Goal(
         user_id=user.id,
         title=payload.title,
@@ -44,8 +45,8 @@ async def create_goal(payload: GoalCreateRequest, db=Depends(get_db)):
 
 
 @router.get("", response_model=list[GoalResponse])
-async def list_goals(db=Depends(get_db)):
-    user = await get_or_create_default_user(db)
+async def list_goals(current_user: User = Depends(get_current_user), db=Depends(get_db)):
+    user = current_user
     result = await db.execute(
         select(Goal).where(Goal.user_id == user.id).order_by(Goal.created_at.desc())
     )
@@ -59,8 +60,8 @@ async def list_goals(db=Depends(get_db)):
 
 
 @router.post("/{goal_id}/plan", response_model=CareerPlanResponse)
-async def generate_plan_for_goal(goal_id: UUID, db=Depends(get_db)):
-    user = await get_or_create_default_user(db)
+async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get_current_user), db=Depends(get_db)):
+    user = current_user
 
     result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user.id))
     goal = result.scalar_one_or_none()

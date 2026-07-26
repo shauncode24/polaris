@@ -36,7 +36,7 @@ function SignupForm() {
     setSubmitting(true)
     try {
       await register({ firstName, lastName, email, password })
-      navigate('/home')
+      navigate('/build-profile')
     } catch (err) {
       setError(err.message || 'Could not create your account. Please try again.')
     } finally {

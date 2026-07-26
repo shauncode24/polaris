@@ -19,7 +19,7 @@ from app.services.github.github_client import (
 from app.services.github.github_insights import build_github_insights
 from app.services.github.github_scoring import score_repository
 from app.services.github.github_taxonomy import categorize_technologies
-from app.services.user_helpers import get_or_create_default_user
+# get_or_create_default_user removed
 
 
 async def _get_previously_synced_repo_names(db: AsyncSession, user_id) -> set[str]:
@@ -44,12 +44,11 @@ def _aggregate_languages(repo_language_map: dict[str, dict]) -> tuple[list[dict]
     return detected, dict(totals)
 
 
-async def sync_github(db: AsyncSession, username: str, token: str) -> dict:
+async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict:
     if not username or not token:
-        raise GithubSyncError("GITHUB_USERNAME and GITHUB_TOKEN must both be set")
+        raise GithubSyncError("GitHub username and token must both be provided")
 
     print(f"[TRACING] Starting GitHub sync for {username}...", flush=True)
-    user = await get_or_create_default_user(db)
     previously_synced = await _get_previously_synced_repo_names(db, user.id)
 
     repo_language_map: dict[str, dict] = {}

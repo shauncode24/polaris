@@ -31,6 +31,8 @@ class UserResponse(BaseModel):
     email: str | None = None
     avatar_url: str | None = None
     auth_provider: str
+    github_username: str | None = None
+    leetcode_username: str | None = None
 
 
 class AuthResponse(BaseModel):

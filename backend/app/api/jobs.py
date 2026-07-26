@@ -17,7 +17,8 @@ from app.services.jobs.interpretation import (
 from app.services.jobs.jd_extraction import extract_jd_requirements
 from app.services.jobs.skill_categories import compute_category_breakdown, compute_overall_match, compute_peer_benchmarks
 from app.services.resume.skill_classifier import resolve_skills
-from app.services.user_helpers import get_or_create_default_user
+from app.api.deps import get_current_user
+from app.models.facts import User
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -36,9 +37,9 @@ async def _fetch_profile_context(db, user_id, max_projects: int = 6) -> list[dic
 
 
 @router.post("/analyze", response_model=SkillGapAnalysisResponse)
-async def analyze_job_description(payload: JDPasteRequest, db=Depends(get_db)):
+async def analyze_job_description(payload: JDPasteRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
     print(f"[TRACING] Received JD paste request, length={len(payload.raw_text)}", flush=True)
-    user = await get_or_create_default_user(db)
+    user = current_user
 
     extraction = await extract_jd_requirements(payload.raw_text)
     print(
