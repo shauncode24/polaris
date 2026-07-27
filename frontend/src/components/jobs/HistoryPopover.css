@@ -1,0 +1,46 @@
+.history-popover { position: relative; }
+
+.history-popover__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.history-popover__trigger:hover { border-color: var(--accent); color: var(--accent); }
+
+.history-popover__count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.history-popover__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-popover__panel-header h4 { font-size: 13.5px; }
+.history-popover__panel-header p { font-size: 11.5px; color: var(--text-soft); margin-top: 2px; }

@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { IconCompass } from '../components/icons/Icons'
-import ThemeToggle from '../components/auth/ThemeToggle'
+import Sidebar from '../components/layout/Sidebar'
+import TopBar from '../components/layout/TopBar'
 import { analyzeJobText, analyzeJobPdf, listJobAnalyses, getJobAnalysis } from '../api/jobs'
 import JobDescriptionForm from '../components/jobs/JobDescriptionForm'
 import JobAnalysisResults from '../components/jobs/JobAnalysisResults'
-import JobAnalysisHistory from '../components/jobs/JobAnalysisHistory'
+import PastAnalysesPanel from '../components/jobs/PastAnalysesPanel'
+import HistoryPopover from '../components/jobs/HistoryPopover'
+import AnalyzingProgress from '../components/jobs/AnalyzingProgress'
 import './JobAnalyzerPage.css'
-import { Link } from 'react-router-dom'
-import Button from '../components/common/Button'
 
 const STAGES = [
   'Reading job description',
@@ -24,6 +24,7 @@ function JobAnalyzerPage() {
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [selectedId, setSelectedId] = useState(null)
+  const [currentMeta, setCurrentMeta] = useState(null) // { role, company }
 
   const [loading, setLoading] = useState(false)
   const [resultsLoading, setResultsLoading] = useState(false)
@@ -31,9 +32,6 @@ function JobAnalyzerPage() {
   const [results, setResults] = useState(null)
   const [stageIndex, setStageIndex] = useState(0)
 
-  // On arrival: fetch every past analysis for this user, and load the
-  // most recent one's full report so the page never opens empty if
-  // work has already been done.
   useEffect(() => {
     let cancelled = false
 
@@ -44,7 +42,7 @@ function JobAnalyzerPage() {
         if (cancelled) return
         setHistory(items)
         if (items.length > 0) {
-          await selectAnalysis(items[0].id, { skipHistoryReload: true })
+          await selectAnalysis(items[0].id, items)
         }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Could not load your past analyses.')
@@ -54,19 +52,19 @@ function JobAnalyzerPage() {
     }
 
     loadHistory()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  async function selectAnalysis(jobId) {
+  async function selectAnalysis(jobId, sourceList = history) {
     setSelectedId(jobId)
     setResultsLoading(true)
     setError('')
     try {
       const data = await getJobAnalysis(token, jobId)
       setResults(data)
+      const meta = sourceList.find((h) => h.id === jobId)
+      setCurrentMeta(meta ? { role: meta.role, company: meta.company } : null)
     } catch (err) {
       setError(err.message || 'Could not load this analysis.')
     } finally {
@@ -90,13 +88,16 @@ function JobAnalyzerPage() {
           ? await analyzeJobText(token, { rawText: text, company, role })
           : await analyzeJobPdf(token, file, { company, role })
       setResults(data)
-      setSelectedId(null) // freshly-run analysis isn't in the history list's ids yet
+      setCurrentMeta({ role: role || null, company: company || null })
+      setSelectedId(null)
 
-      // Refresh history in the background so the new run appears at the top.
       try {
         const items = await listJobAnalyses(token)
         setHistory(items)
-        if (items.length > 0) setSelectedId(items[0].id)
+        if (items.length > 0) {
+          setSelectedId(items[0].id)
+          setCurrentMeta({ role: items[0].role, company: items[0].company })
+        }
       } catch {
         // Non-fatal — the result is already shown even if the list refresh fails.
       }
@@ -108,58 +109,72 @@ function JobAnalyzerPage() {
     }
   }
 
+  function handleNewAnalysis() {
+    setResults(null)
+    setSelectedId(null)
+    setCurrentMeta(null)
+    setError('')
+  }
+
+  const roleLabel = currentMeta?.company
+    ? `${currentMeta.role || 'this role'} at ${currentMeta.company}`
+    : currentMeta?.role
+
   return (
-    <div className="job-analyzer-page">
-      <header className="job-analyzer-page__header">
-        <span className="job-analyzer-page__brand">
-          <IconCompass size={18} /> Polaris
-        </span>
-        <ThemeToggle />
-      </header>
-
-      <main className="job-analyzer-page__main">
-        <h1>Analyze a Job Opportunity</h1>
-        <p className="job-analyzer-page__lead">
-          Paste or upload a job description to see how well your current profile matches the role.
-        </p>
-
-        <JobDescriptionForm onSubmit={handleSubmit} loading={loading} />
-
-        {loading && (
-          <ul className="job-analyzer-page__stages">
-            {STAGES.map((stage, i) => (
-              <li key={stage} className={i <= stageIndex ? 'is-active' : ''}>
-                {i < stageIndex ? '✓' : '…'} {stage}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {error && <p className="job-analyzer-page__error">{error}</p>}
-
-        <JobAnalysisHistory
-          items={history}
-          selectedId={selectedId}
-          onSelect={selectAnalysis}
-          loading={historyLoading}
+    <div className="job-analyzer-layout">
+      <Sidebar />
+      <div className="job-analyzer-main">
+        <TopBar
+          section="Analyze"
+          page="Skill Gap Analyzer"
+          hideSearch
+          hideNotifications
+          actions={
+            results ? (
+              <>
+                <HistoryPopover items={history} selectedId={selectedId} onSelect={selectAnalysis} loading={historyLoading} />
+                <button type="button" className="job-analyzer-new-btn" onClick={handleNewAnalysis}>
+                  + New analysis
+                </button>
+              </>
+            ) : null
+          }
         />
 
-        {resultsLoading && !loading && (
-          <p className="job-analyzer-page__loading-results">Loading analysis…</p>
-        )}
+        <div className="job-analyzer-content">
+          {!results && (
+            <>
+              <div className="job-analyzer-intro">
+                <h1>Skill Gap Analyzer</h1>
+                <p>Paste a job description to see how you match.</p>
+              </div>
 
-        {results && !resultsLoading && <JobAnalysisResults data={results} />}
+              <div className="job-analyzer-columns">
+                <PastAnalysesPanel items={history} selectedId={selectedId} onSelect={selectAnalysis} loading={historyLoading} />
 
-        {results && !resultsLoading && (
-          <Button
-            as={Link}
-            to={selectedId ? `/career-planner?jobId=${selectedId}` : '/career-planner'}
-            variant="primary"
-          >
-            Generate Career Roadmap from this analysis →
-          </Button>
-        )}
-      </main>
+                {loading ? (
+                  <AnalyzingProgress stages={STAGES} activeIndex={stageIndex} />
+                ) : (
+                  <JobDescriptionForm onSubmit={handleSubmit} loading={loading} />
+                )}
+              </div>
+
+              {error && <p className="job-analyzer-error">{error}</p>}
+            </>
+          )}
+
+          {results && (
+            <>
+              {resultsLoading ? (
+                <p className="job-analyzer-loading-results">Loading analysis…</p>
+              ) : (
+                <JobAnalysisResults data={results} jobId={selectedId} roleLabel={roleLabel} />
+              )}
+              {error && <p className="job-analyzer-error">{error}</p>}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

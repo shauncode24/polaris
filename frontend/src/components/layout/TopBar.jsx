@@ -3,7 +3,14 @@ import ThemeToggle from '../auth/ThemeToggle'
 import { IconSearch, IconBell } from '../icons/DashboardIcons'
 import './TopBar.css'
 
-function TopBar({ section = 'Overview', page = 'Dashboard', notificationCount = 0 }) {
+function TopBar({
+  section = 'Overview',
+  page = 'Dashboard',
+  notificationCount = 0,
+  hideSearch = false,
+  hideNotifications = false,
+  actions = null,
+}) {
   const { user } = useAuth()
   const initials = ((user?.first_name?.[0] || '') + (user?.last_name?.[0] || '')).toUpperCase() || '?'
 
@@ -15,15 +22,21 @@ function TopBar({ section = 'Overview', page = 'Dashboard', notificationCount = 
       </div>
 
       <div className="topbar__actions">
-        <label className="topbar__search">
-          <IconSearch size={15} />
-          <input type="text" placeholder="Search your workspace…" />
-        </label>
+        {actions}
 
-        <button type="button" className="topbar__icon-btn" aria-label="Notifications">
-          <IconBell size={17} />
-          {notificationCount > 0 && <span className="topbar__badge">{notificationCount}</span>}
-        </button>
+        {!hideSearch && (
+          <label className="topbar__search">
+            <IconSearch size={15} />
+            <input type="text" placeholder="Search your workspace…" />
+          </label>
+        )}
+
+        {!hideNotifications && (
+          <button type="button" className="topbar__icon-btn" aria-label="Notifications">
+            <IconBell size={17} />
+            {notificationCount > 0 && <span className="topbar__badge">{notificationCount}</span>}
+          </button>
+        )}
 
         <ThemeToggle />
 
