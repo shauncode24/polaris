@@ -48,6 +48,19 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
         raise ValueError("No extractable text found in PDF")
 
     extraction = await extract_resume_data(raw_text)
+    # Filter out empty or invalid items resulting from LLM extraction noise
+    extraction.experiences = [
+        e for e in extraction.experiences 
+        if e.role and e.role.strip() and e.company and e.company.strip()
+    ]
+    extraction.projects = [
+        p for p in extraction.projects 
+        if p.name and p.name.strip()
+    ]
+    extraction.education = [
+        edu for edu in extraction.education 
+        if edu.institution and edu.institution.strip()
+    ]
     # user is now passed in directly — no more default-user lookup
 
     resume_row = Resume(

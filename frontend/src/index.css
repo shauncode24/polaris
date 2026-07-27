@@ -37,6 +37,15 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+
+  --success: #22c07d;
+  --success-soft: rgba(34, 192, 125, 0.12);
+  --warning: #e6b32f;
+  --warning-soft: rgba(230, 179, 47, 0.14);
+  --danger: #e0554f;
+  --danger-soft: rgba(224, 85, 79, 0.1);
+
+  --input-bg: var(--surface-soft);
 }
 
 *,
@@ -113,6 +122,13 @@ img, svg { display: block; max-width: 100%; }
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 12px 30px -12px rgba(0, 0, 0, 0.6);
+  
+  --success: #3ddc97;
+  --success-soft: rgba(61, 220, 151, 0.14);
+  --warning: #e6b32f;
+  --warning-soft: rgba(230, 179, 47, 0.16);
+  --danger: #ef6b64;
+  --danger-soft: rgba(239, 107, 100, 0.14);
 }
 
 body { transition: background-color 0.2s ease, color 0.2s ease; }

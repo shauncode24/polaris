@@ -1,0 +1,57 @@
+.welcome-step { padding-top: 56px; }
+
+.welcome-step__diagram { padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 32px; }
+.welcome-step__sources { display: flex; gap: 20px; }
+.welcome-step__source {
+  width: 130px;
+  padding: 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  position: relative;
+}
+.welcome-step__source::after {
+  content: '';
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+.welcome-step__source-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.welcome-step__source-title { font-weight: 600; color: var(--ink); font-size: 13.5px; }
+.welcome-step__source-sub { font-size: 11.5px; color: var(--text-soft); }
+
+.welcome-step__profile-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.welcome-step__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 28px;
+}
+.welcome-step__time-note { font-size: 13.5px; color: var(--text-soft); }

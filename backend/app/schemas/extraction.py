@@ -2,8 +2,8 @@ from pydantic import BaseModel
 
 
 class ExtractedExperience(BaseModel):
-    role: str
-    company: str
+    role: str | None = None
+    company: str | None = None
     start_date: str | None = None
     end_date: str | None = None
     stack: list[str] = []
@@ -11,13 +11,13 @@ class ExtractedExperience(BaseModel):
 
 
 class ExtractedProject(BaseModel):
-    name: str
+    name: str | None = None
     description: str | None = None
     stack: list[str] = []
 
 
 class ExtractedEducation(BaseModel):
-    institution: str
+    institution: str | None = None
     degree: str | None = None
     field_of_study: str | None = None
     start_date: str | None = None
