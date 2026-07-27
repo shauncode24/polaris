@@ -1,0 +1,50 @@
+.completion-card { display: flex; flex-direction: column; gap: 16px; }
+
+.completion-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.completion-card__title-row { display: flex; align-items: center; gap: 10px; }
+.completion-card__title-row h3 { font-size: 16px; }
+.completion-card__pct-badge {
+  font-size: 12px; font-weight: 700;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.completion-card__lead { font-size: 13.5px; color: var(--text-soft); margin-top: 4px; max-width: 480px; }
+
+.completion-card__continue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--ink);
+  color: var(--text-on-ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.completion-card__continue:hover { background: var(--ink-soft); }
+
+.completion-card__bar { height: 8px; border-radius: var(--radius-pill); background: var(--surface-soft); overflow: hidden; }
+.completion-card__bar-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
+
+.completion-card__checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.completion-card__step { display: flex; align-items: center; gap: 8px; }
+.completion-card__step-mark {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+.completion-card__step-mark.is-done { background: var(--success); border-color: var(--success); }
+.completion-card__step-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
+.completion-card__step-sub { display: block; font-size: 11.5px; color: var(--text-soft); }

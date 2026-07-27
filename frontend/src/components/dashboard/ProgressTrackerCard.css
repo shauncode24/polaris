@@ -1,0 +1,32 @@
+.progress-tracker__hint { font-size: 12.5px; color: var(--text-soft); }
+
+.progress-tracker__chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 90px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+.progress-tracker__bar {
+  flex: 1;
+  min-height: 6px;
+  border-radius: 5px 5px 0 0;
+  background: var(--accent-soft);
+}
+
+.progress-tracker__note { font-size: 12.5px; color: var(--text-soft); }
+
+.progress-tracker__link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.progress-tracker__link:hover { color: var(--accent-strong); }

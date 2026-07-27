@@ -1,0 +1,21 @@
+.info-card { display: flex; flex-direction: column; gap: 14px; }
+
+.info-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.info-card__title-group { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.info-card__title { font-size: 15.5px; }
+
+.info-card__icon {
+  width: 30px; height: 30px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.info-card__icon--accent { background: var(--accent-soft); color: var(--accent-strong); }
+
+.info-card__body { display: flex; flex-direction: column; gap: 12px; }

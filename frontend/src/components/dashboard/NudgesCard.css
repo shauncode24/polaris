@@ -1,0 +1,27 @@
+.nudges-card__count {
+  font-size: 11px; font-weight: 700;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.nudges-card__item {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+.nudges-card__item-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.nudges-card__item-body { font-size: 12px; color: var(--text-soft); margin-top: 3px; }
+.nudges-card__item-cta {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.nudges-card__item-cta:hover { color: var(--accent-strong); }

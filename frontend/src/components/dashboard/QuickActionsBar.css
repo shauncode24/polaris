@@ -1,0 +1,17 @@
+.quick-actions { display: flex; flex-direction: column; gap: 14px; }
+.quick-actions__title { font-size: 15px; }
+.quick-actions__grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.quick-actions__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.quick-actions__item:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }

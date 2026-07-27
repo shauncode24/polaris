@@ -6,7 +6,7 @@ import ProtectedRoute from './components/auth/routing/ProtectedRoute'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
-import HomePage from './pages/HomePage'
+import DashboardPage from './pages/DashboardPage'
 import BuildProfilePage from './pages/BuildProfilePage'
 import JobAnalyzerPage from './pages/JobAnalyzerPage'
 import CareerPlannerPage from './pages/CareerPlannerPage'
@@ -22,46 +22,11 @@ function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
-              <Route
-                path="/build-profile"
-                element={
-                  <ProtectedRoute>
-                    <BuildProfilePage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/home"
-                element={
-                  <ProtectedRoute>
-                    <HomePage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/jobs"
-                element={
-                  <ProtectedRoute>
-                    <JobAnalyzerPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/career-planner"
-                element={
-                  <ProtectedRoute>
-                    <CareerPlannerPage />
-                  </ProtectedRoute>
-                }
-              />
-            <Route
-                path="/interview"
-                element={
-                  <ProtectedRoute>
-                    <InterviewPrepPage />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/build-profile" element={<ProtectedRoute><BuildProfilePage /></ProtectedRoute>} />
+              <Route path="/home" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+              <Route path="/jobs" element={<ProtectedRoute><JobAnalyzerPage /></ProtectedRoute>} />
+              <Route path="/career-planner" element={<ProtectedRoute><CareerPlannerPage /></ProtectedRoute>} />
+              <Route path="/interview" element={<ProtectedRoute><InterviewPrepPage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </ProfileDataProvider>

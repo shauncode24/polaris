@@ -22,12 +22,12 @@
 }
 
 .btn--primary {
-  background: var(--ink);
-  color: var(--text-on-ink);
+  background: var(--accent);
+  color: var(--text-on-accent);
   box-shadow: var(--shadow-sm);
 }
 .btn--primary:hover {
-  background: var(--ink-soft);
+  background: var(--accent-strong);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
