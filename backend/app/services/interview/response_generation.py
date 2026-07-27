@@ -72,6 +72,26 @@ async def classify_blueprint(question: str) -> str:
 
 
 async def generate_interview_response(context: dict) -> InterviewLLMOutput:
+    profile = context.get("profile", {})
+    has_projects = bool(profile.get("projects"))
+    has_experiences = bool(profile.get("experiences"))
+    has_education = bool(profile.get("education"))
+
+    if not (has_projects or has_experiences or has_education):
+        print("[TRACING] Candidate profile is completely empty. Returning insufficient context.", flush=True)
+        return InterviewLLMOutput(
+            question_type="insufficient_context",
+            blueprint_used="",
+            competencies=[],
+            stories_used=[],
+            answer="",
+            answer_short="",
+            follow_up_questions=[],
+            coaching=[],
+            insufficient_context=True,
+            context_note="Your profile is empty. Please upload a resume or add experiences/projects to get custom tailored answers."
+        )
+
     blueprint_key = await classify_blueprint(context["question"])
 
     # Only the ONE selected blueprint goes to the generation call — this

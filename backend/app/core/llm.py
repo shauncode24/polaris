@@ -50,17 +50,24 @@ async def chat_completion(*args, **kwargs):
         or "host.docker.internal" in base_url_str
     )
 
+    prefilled_json = False
     has_json_format = False
     if "response_format" in kwargs:
         has_json_format = True
         if is_ollama:
-            # Strip response_format for Ollama/local models to prevent empty JSON output {}
-            kwargs.pop("response_format", None)
+            messages = kwargs.get("messages", [])
+            if messages and messages[-1].get("role") != "assistant":
+                kwargs["messages"] = list(messages) + [{"role": "assistant", "content": "{"}]
+                prefilled_json = True
 
     response = await client.chat.completions.create(*args, **kwargs)
 
     if has_json_format:
         content = response.choices[0].message.content
+        if prefilled_json and content:
+            content = content.strip()
+            if not content.startswith("{") and not content.startswith("["):
+                content = "{" + content
         cleaned = clean_json_content(content)
         response.choices[0].message.content = cleaned
 

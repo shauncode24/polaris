@@ -33,6 +33,9 @@ function HomePage() {
             <Button as={Link} to="/career-planner" variant="outline">
               Career Planner
             </Button>
+            <Button as={Link} to="/interview" variant="outline">
+              Interview Prep
+            </Button>
           </div>
 
           {hasAnyProfileData ? (

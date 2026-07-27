@@ -86,6 +86,11 @@ Keep "answer" under 220 words and "answer_short" under 60 words. Provide at most
 well-formed JSON object that respects these limits is far more valuable than a longer one that
 gets cut off.
 
+=== CRITICAL CONSTRAINT: ZERO HALLUCINATION ===
+- You MUST ONLY use the projects, experiences, and education explicitly listed in the candidate's "profile" in the JSON input. Do NOT invent or use any other projects, companies, or experiences.
+- DO NOT use generic or placeholder names like 'Project Alpha', 'Innovate Solutions', 'StellarTech', 'Project Phoenix', 'Nova Solutions', etc.
+- If the profile does not contain relevant projects or experiences to answer the question, set "insufficient_context" to true, explain why in "context_note", and set "answer" and "answer_short" to empty strings.
+
 Output ONLY valid JSON matching this schema, no prose, no markdown fences:
 {
   "question_type": str,
