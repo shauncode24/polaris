@@ -1,3 +1,4 @@
+/* frontend/src/components/layout/Sidebar.css */
 .sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
@@ -8,7 +9,12 @@
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  overflow-y: auto;
+  overflow: hidden; /* Prevent global scrollbar */
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar--resizing {
+  transition: none !important;
 }
 
 .sidebar__brand-row {
@@ -30,27 +36,28 @@
 }
 .sidebar__collapse:hover { color: var(--ink); }
 
-.sidebar__goal-cta {
-  margin: 0 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--accent-soft);
-  cursor: pointer;
-  text-align: left;
+.sidebar__nav {
+  flex: 1;
+  padding: 4px 10px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
-.sidebar__goal-cta-icon {
-  width: 28px; height: 28px; border-radius: 8px;
-  background: var(--surface); color: var(--accent);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.sidebar__goal-cta-title { display: block; font-size: 13px; font-weight: 700; color: var(--ink); }
-.sidebar__goal-cta-sub { display: block; font-size: 11.5px; color: var(--text-soft); }
 
-.sidebar__nav { flex: 1; padding: 4px 10px 10px; }
+/* Subtle scrollbar without arrows */
+.sidebar__nav::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar__nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar__nav::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-pill);
+}
+.sidebar__nav::-webkit-scrollbar-thumb:hover {
+  background: var(--text-soft);
+}
+
 .sidebar__group { margin-bottom: 14px; }
 .sidebar__group-label {
   padding: 6px 8px 4px;
@@ -59,7 +66,28 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* chevron to the right */
+  cursor: pointer;
+  user-select: none;
 }
+.sidebar__group-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-soft);
+  transition: transform 0.2s ease;
+}
+.sidebar__group--collapsed .sidebar__group-chevron {
+  transform: rotate(-90deg); /* point right */
+}
+.sidebar__group--collapsed .sidebar__group-items {
+  display: none;
+}
+
 .sidebar__group-items { display: flex; flex-direction: column; gap: 1px; }
 
 .sidebar__item {
@@ -132,3 +160,69 @@
 }
 .sidebar__user-name { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
 .sidebar__user-sub { display: block; font-size: 11px; color: var(--text-soft); }
+
+/* Extensible resize handle - outside scrollable area */
+.sidebar__resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+.sidebar__resize-handle:hover,
+.sidebar__resize-handle:active {
+  background: var(--accent);
+}
+
+/* Collapsed state styles */
+.sidebar--collapsed {
+  width: 72px !important;
+  align-items: center;
+}
+.sidebar--collapsed .sidebar__brand-row {
+  justify-content: center;
+  padding: 18px 0 14px;
+  width: 100%;
+}
+.sidebar--collapsed .sidebar__brand-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.sidebar--collapsed .sidebar__nav {
+  padding: 10px 4px;
+  width: 100%;
+  overflow-y: hidden; /* No scrollbar at all when collapsed */
+}
+.sidebar--collapsed .sidebar__group {
+  margin-bottom: 8px;
+}
+.sidebar--collapsed .sidebar__group-label {
+  display: none;
+}
+.sidebar--collapsed .sidebar__item {
+  justify-content: center;
+  padding: 10px 0;
+  width: 100%;
+}
+.sidebar--collapsed .sidebar__footer {
+  align-items: center;
+  width: 100%;
+  padding: 10px 4px 16px;
+}
+.sidebar--collapsed .sidebar__footer-link {
+  justify-content: center;
+  padding: 10px 0;
+  width: 100%;
+}
+.sidebar--collapsed .sidebar__user {
+  justify-content: center;
+  padding: 10px 0;
+  width: 100%;
+}

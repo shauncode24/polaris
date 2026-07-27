@@ -86,8 +86,10 @@ function GoalSetupPanel({
 
   return (
     <div className="goal-panel">
-      <h2 className="goal-panel__heading">Choose what you're working toward</h2>
-      <p className="goal-panel__subheading">A focused goal becomes a day-by-day plan you can act on.</p>
+      <div className="goal-panel__header">
+        <h2 className="goal-panel__heading">Choose what you're working toward</h2>
+        <p className="goal-panel__subheading">A focused goal becomes a day-by-day plan you can act on.</p>
+      </div>
 
       <div className="goal-panel__tabs" role="tablist">
         <button
@@ -144,6 +146,7 @@ function GoalSetupPanel({
                     </option>
                   ))}
                 </select>
+                <span className="goal-panel__field-hint">Your roadmap will prioritize this job's actual missing skills.</span>
               </label>
             )
           ) : (
