@@ -1,0 +1,83 @@
+/* frontend/src/components/career/GoalManagementPanel.css */
+.goal-mgmt {
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.goal-mgmt__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.goal-mgmt__header h2 { font-size: 17px; }
+.goal-mgmt__header p { font-size: 13px; color: var(--text-soft); margin-top: 2px; }
+
+.goal-mgmt__empty { font-size: 13px; color: var(--text-soft); }
+
+.goal-mgmt__list { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.goal-mgmt__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.goal-mgmt__row-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.goal-mgmt__row-title-line { display: flex; align-items: center; gap: 10px; }
+.goal-mgmt__row-title { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+
+.goal-mgmt__badge { font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: var(--radius-pill); }
+.goal-mgmt__badge--active { background: var(--success-soft); color: var(--success); }
+
+.goal-mgmt__row-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-soft); flex-wrap: wrap; }
+.goal-mgmt__priority { font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: var(--radius-pill); }
+.goal-mgmt__priority--high { background: var(--danger-soft); color: var(--danger); }
+.goal-mgmt__priority--medium { background: var(--warning-soft); color: #a2760f; }
+.goal-mgmt__priority--low { background: var(--success-soft); color: var(--success); }
+
+.goal-mgmt__row-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.goal-mgmt__view { background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
+.goal-mgmt__view:hover { color: var(--accent-strong); }
+
+.goal-mgmt__icon-btn {
+  width: 30px; height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.goal-mgmt__icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+.goal-mgmt__icon-btn--danger:hover { border-color: var(--danger); color: var(--danger); }
+
+.goal-mgmt__edit-form { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.goal-mgmt__edit-form input,
+.goal-mgmt__edit-form select {
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+.goal-mgmt__edit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.goal-mgmt__edit-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.goal-mgmt__cancel { background: none; border: none; color: var(--text-soft); font-size: 12.5px; cursor: pointer; }
+.goal-mgmt__confirm {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.goal-mgmt__confirm:disabled { opacity: 0.5; cursor: not-allowed; }

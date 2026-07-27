@@ -1,3 +1,4 @@
+// frontend/src/api/interview.js
 import { API_BASE_URL } from './client'
 
 async function handle(response) {
@@ -23,5 +24,11 @@ export function askInterviewQuestion(token, { question, targetRole, targetCompan
       target_role: targetRole || null,
       target_company: targetCompany || null,
     }),
+  }).then(handle)
+}
+
+export function listInterviewSessions(token) {
+  return fetch(`${API_BASE_URL}/interview/sessions`, {
+    headers: authHeaders(token),
   }).then(handle)
 }

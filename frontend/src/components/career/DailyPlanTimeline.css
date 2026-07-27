@@ -1,21 +1,35 @@
+/* frontend/src/components/career/DailyPlanTimeline.css */
 .daily-plan { display: flex; flex-direction: column; gap: 16px; }
+.daily-plan__section-title { font-size: 17px; }
+.daily-plan__section-lead { font-size: 13px; color: var(--text-soft); margin-top: 2px; }
 
-.daily-plan__today {
+.daily-plan__today-card {
   padding: 22px 24px;
-  background: var(--ink);
-  color: var(--text-on-ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 20px;
+  align-items: start;
+}
+.daily-plan__today-tag { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.03em; }
+.daily-plan__today-theme { font-size: 19px; font-weight: 700; color: var(--ink); margin-top: 4px; }
+.daily-plan__today-tasks { margin-top: 10px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text); }
+
+.daily-plan__today-side {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
-.daily-plan__today h2 { color: var(--text-on-ink); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.75; }
-.daily-plan__today-theme { font-size: 20px; font-weight: 600; }
-.daily-plan__today-tasks { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; font-size: 14px; opacity: 0.92; }
-.daily-plan__today-meta { display: flex; gap: 16px; font-size: 13px; opacity: 0.85; }
-
-.daily-plan__heading { font-size: 16px; }
+.daily-plan__today-side-label { font-size: 11px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.03em; }
+.daily-plan__today-side-value { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.daily-plan__today-side-time { font-size: 11.5px; color: var(--text-soft); margin-top: 6px; }
 
 .daily-plan__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 
@@ -29,44 +43,51 @@
 
 .day-card__header {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: 32px 1fr 2fr auto auto;
   align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
+  gap: 14px;
+  padding: 14px 16px;
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
 }
-.day-card__day { font-size: 12px; font-weight: 700; color: var(--text-soft); flex-shrink: 0; }
-.day-card__theme { flex: 1; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.day-card__index {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  flex-shrink: 0;
+}
+.day-card__index--today { background: var(--accent); color: #fff; }
+
+.day-card__meta-top { display: flex; flex-direction: column; gap: 2px; }
 .day-card__type {
   font-size: 11px;
   text-transform: capitalize;
   color: var(--accent-strong);
   background: var(--accent-soft);
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: var(--radius-pill);
+  width: fit-content;
 }
-.day-card__chevron { font-size: 16px; color: var(--text-soft); width: 16px; text-align: center; }
+.day-card__when { font-size: 11px; color: var(--text-soft); }
 
-.day-card__body {
-  padding: 0 16px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+.day-card__theme { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.day-card__time { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
+.day-card__chevron { font-size: 14px; color: var(--text-soft); width: 16px; text-align: center; }
+
+.day-card__body { padding: 0 16px 16px 62px; display: flex; flex-direction: column; gap: 10px; }
 .day-card__tasks { padding-left: 18px; font-size: 13.5px; color: var(--text); display: flex; flex-direction: column; gap: 5px; }
 .day-card__meta { display: flex; gap: 16px; font-size: 12.5px; color: var(--text-soft); }
 .day-card__rationale { font-size: 12.5px; color: var(--text-soft); font-style: italic; }
 .day-card__fallback-note { font-size: 11.5px; color: var(--text-soft); }
 
-.daily-plan__checkins {
-  padding: 16px 20px;
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+@media (max-width: 720px) {
+  .daily-plan__today-card { grid-template-columns: 1fr; }
+  .day-card__header { grid-template-columns: 28px 1fr auto; }
+  .day-card__meta-top, .day-card__time { display: none; }
 }
-.daily-plan__checkins h3 { font-size: 14px; margin-bottom: 8px; }
-.daily-plan__checkins ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); }
-.daily-plan__checkins li::before { content: '○ '; color: var(--text-soft); }

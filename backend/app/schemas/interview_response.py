@@ -1,3 +1,4 @@
+# backend/app/schemas/interview_response.py
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -49,4 +50,15 @@ class InterviewResponseOutput(BaseModel):
     coaching: list[CoachingNote] = []
     insufficient_context: bool = False
     context_note: str = ""
+    target_role: str | None = None
+    target_company: str | None = None
     created_at: datetime | None = None
+
+
+class InterviewSessionSummary(BaseModel):
+    id: str
+    question: str
+    question_type: str
+    target_role: str | None = None
+    target_company: str | None = None
+    created_at: datetime

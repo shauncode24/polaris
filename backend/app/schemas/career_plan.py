@@ -1,3 +1,4 @@
+# backend/app/schemas/career_plan.py
 from datetime import date, datetime
 
 from pydantic import BaseModel
@@ -8,6 +9,12 @@ class GoalCreateRequest(BaseModel):
     deadline: date | None = None
     priority: str | None = None
     job_description_id: str | None = None
+
+
+class GoalUpdateRequest(BaseModel):
+    title: str | None = None
+    deadline: date | None = None
+    priority: str | None = None
 
 
 class GoalResponse(BaseModel):

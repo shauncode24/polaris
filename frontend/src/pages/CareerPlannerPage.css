@@ -1,29 +1,35 @@
-.career-planner-page { min-height: 100svh; background: var(--bg); }
+/* frontend/src/pages/CareerPlannerPage.css */
+.career-planner-page { display: flex; min-height: 100svh; background: var(--bg); }
+.career-planner-page__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
-.career-planner-page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 32px;
-  border-bottom: 1px solid var(--border);
+.career-planner-page__new-goal {
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--ink);
+  color: var(--text-on-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
 }
-.career-planner-page__brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink); }
+.career-planner-page__new-goal:hover { background: var(--ink-soft); }
 
-.career-planner-page__main {
-  max-width: 860px;
+.career-planner-page__content {
+  max-width: 900px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: 28px 24px 80px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
 }
-.career-planner-page__main h1 { font-size: 28px; }
-.career-planner-page__lead { color: var(--text); font-size: 15px; line-height: 1.6; margin-top: -12px; }
+.career-planner-page__intro h1 { font-size: 27px; }
+.career-planner-page__intro p { color: var(--text); font-size: 14.5px; margin-top: 4px; }
 
 .career-planner-page__error {
   font-size: 13px;
-  color: #c0392b;
-  background: rgba(224, 85, 79, 0.1);
+  color: var(--danger);
+  background: var(--danger-soft);
   border: 1px solid rgba(224, 85, 79, 0.25);
   padding: 10px 14px;
   border-radius: var(--radius-sm);

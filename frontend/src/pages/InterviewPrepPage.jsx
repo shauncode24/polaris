@@ -1,28 +1,45 @@
-import { useEffect, useRef, useState } from 'react'
+// frontend/src/pages/InterviewPrepPage.jsx
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { IconCompass } from '../components/icons/Icons'
-import ThemeToggle from '../components/auth/ThemeToggle'
-import { askInterviewQuestion } from '../api/interview'
-import InterviewSetupBar from '../components/interview/InterviewSetupBar'
-import ChatMessage from '../components/interview/ChatMessage'
-import ChatInput from '../components/interview/ChatInput'
-import InterviewSidebar from '../components/interview/InterviewSidebar'
+import Sidebar from '../components/layout/Sidebar'
+import BreadcrumbBar from '../components/layout/BreadcrumbBar'
+import { listJobAnalyses } from '../api/jobs'
+import { askInterviewQuestion, listInterviewSessions } from '../api/interview'
+import { listCompanyNotes, createCompanyNote } from '../api/companyNotes'
+import TargetInterviewBar from '../components/interview/TargetInterviewBar'
+import LivePracticeCard from '../components/interview/LivePracticeCard'
+import PastSessionsPanel from '../components/interview/PastSessionsPanel'
+import CompanyNotesPanel from '../components/interview/CompanyNotesPanel'
 import './InterviewPrepPage.css'
 
-const STARTER_QUESTIONS = [
-  'Tell me about yourself',
-  'Why should we hire you?',
-  'What is your biggest weakness?',
-  'Tell me about a project you are proud of',
-  'Why this role?',
-  'Tell me about a challenge you faced',
+const OPENER_QUESTIONS = [
+  'Tell me about a service or project you owned end-to-end. What changed because you were responsible for it?',
+  'Walk me through a recent piece of work you are proud of, and why it mattered.',
+  'Tell me about yourself.',
 ]
+
+let idCounter = 0
+function nextId(prefix) {
+  idCounter += 1
+  return `${prefix}-${idCounter}`
+}
 
 function InterviewPrepPage() {
   const { token } = useAuth()
+
+  const [jobs, setJobs] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [activeSessionId, setActiveSessionId] = useState(null)
+
   const [targetRole, setTargetRole] = useState('')
   const [targetCompany, setTargetCompany] = useState('')
+
+  const [companyNotes, setCompanyNotes] = useState([])
+  const [notesLoading, setNotesLoading] = useState(false)
+
   const [messages, setMessages] = useState([])
+  const [currentQuestion, setCurrentQuestion] = useState('')
   const [pending, setPending] = useState(false)
   const bottomRef = useRef(null)
 
@@ -30,116 +47,178 @@ function InterviewPrepPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, pending])
 
-  async function handleAsk(question) {
-    const trimmed = question.trim()
-    if (!trimmed || pending) return
+  useEffect(() => {
+    let cancelled = false
+    listJobAnalyses(token)
+      .then((items) => {
+        if (cancelled) return
+        setJobs(items)
+        if (items.length > 0 && !targetRole) {
+          setTargetRole(items[0].role || '')
+          setTargetCompany(items[0].company || '')
+        }
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', question: trimmed }])
+  function refreshSessions() {
+    setSessionsLoading(true)
+    listInterviewSessions(token)
+      .then(setSessions)
+      .catch(() => {})
+      .finally(() => setSessionsLoading(false))
+  }
+
+  useEffect(() => {
+    refreshSessions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
+
+  useEffect(() => {
+    if (!targetCompany) {
+      setCompanyNotes([])
+      return
+    }
+    let cancelled = false
+    setNotesLoading(true)
+    listCompanyNotes(token, targetCompany)
+      .then((items) => { if (!cancelled) setCompanyNotes(items) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setNotesLoading(false) })
+    return () => { cancelled = true }
+  }, [token, targetCompany])
+
+  const opener = useMemo(() => {
+    if (targetRole) {
+      return `Tell me about a service or project you owned end-to-end at a ${targetRole} level. What changed because you were responsible for it?`
+    }
+    return OPENER_QUESTIONS[0]
+  }, [targetRole])
+
+  function startSession(intro) {
+    setMessages([
+      { id: nextId('coach'), role: 'coach-prompt', text: opener, intro },
+    ])
+    setCurrentQuestion(opener)
+  }
+
+  useEffect(() => {
+    if (messages.length === 0) startSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handleNewSession() {
+    startSession()
+  }
+
+  function askFollowUp(question) {
+    setMessages((prev) => [...prev, { id: nextId('coach'), role: 'coach-prompt', text: question }])
+    setCurrentQuestion(question)
+  }
+
+  async function handleSubmitAnswer(answerText) {
+    const questionAsked = currentQuestion || opener
+
+    setMessages((prev) => [...prev, { id: nextId('user'), role: 'user', text: answerText }])
     setPending(true)
 
     try {
       const data = await askInterviewQuestion(token, {
-        question: trimmed,
-        targetRole: targetRole.trim(),
-        targetCompany: targetCompany.trim(),
+        question: questionAsked,
+        targetRole,
+        targetCompany,
       })
       setMessages((prev) => [
         ...prev,
-        { id: data.response_id || `a-${Date.now()}`, role: 'assistant', data },
+        { id: data.response_id || nextId('assistant'), role: 'assistant', data: { ...data, onFollowUp: askFollowUp } },
       ])
+      refreshSessions()
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { id: `err-${Date.now()}`, role: 'error', message: err.message || 'Something went wrong generating that answer.' },
+        { id: nextId('error'), role: 'error', message: err.message || 'Something went wrong generating coaching for that answer.' },
       ])
     } finally {
       setPending(false)
     }
   }
 
-  const questionsAsked = messages.filter((m) => m.role === 'user').length
+  function handleSelectJob(job) {
+    setTargetRole(job.role || '')
+    setTargetCompany(job.company || '')
+  }
 
-  const storiesUsed = new Set()
-  const competencies = new Set()
-  messages.forEach((m) => {
-    if (m.role === 'assistant') {
-      ;(m.data.stories_used || []).forEach((s) => storiesUsed.add(s))
-      ;(m.data.competencies || []).forEach((c) => competencies.add(c))
-    }
-  })
+  function handleManualTarget(role, company) {
+    setTargetRole(role)
+    setTargetCompany(company)
+  }
 
-  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
-  const followUps = !pending ? lastAssistant?.data?.follow_up_questions || [] : []
+  async function handleAddCompanyNote(content) {
+    const note = await createCompanyNote(token, { company: targetCompany, content })
+    setCompanyNotes((prev) => [note, ...prev])
+  }
+
+  function handleSelectSession(session) {
+    setActiveSessionId(session.id)
+    if (session.target_role) setTargetRole(session.target_role)
+    if (session.target_company !== undefined) setTargetCompany(session.target_company || '')
+  }
 
   return (
     <div className="interview-page">
-      <header className="interview-page__header">
-        <span className="interview-page__brand">
-          <IconCompass size={18} /> Polaris
-        </span>
-        <ThemeToggle />
-      </header>
+      <Sidebar />
+      <div className="interview-page__main">
+        <BreadcrumbBar
+          section="Interview Prep"
+          page="Interview Response Agent"
+          actions={
+            <button type="button" className="interview-page__new-session" onClick={handleNewSession}>
+              ↻ New session
+            </button>
+          }
+        />
 
-      <div className="interview-page__body">
-        <main className="interview-page__main">
+        <div className="interview-page__content">
           <div className="interview-page__intro">
-            <h1>Interview Prep</h1>
-            <p>Ask an interview question and get a coached answer built from your real resume, projects, and skills.</p>
+            <h1>Interview Response Agent</h1>
+            <p>Practice your answer, then get grounded coaching on the parts that matter.</p>
           </div>
 
-          <InterviewSetupBar
+          <TargetInterviewBar
             targetRole={targetRole}
             targetCompany={targetCompany}
-            onChangeRole={setTargetRole}
-            onChangeCompany={setTargetCompany}
+            jobs={jobs}
+            onSelectJob={handleSelectJob}
+            onManualChange={handleManualTarget}
           />
 
-          <div className="interview-page__conversation">
-            {messages.length === 0 && (
-              <div className="interview-page__welcome">
-                <p>👋 Ready when you are. Pick a question below, or type your own.</p>
-                <div className="interview-page__chips">
-                  {STARTER_QUESTIONS.map((q) => (
-                    <button key={q} type="button" className="chip" onClick={() => handleAsk(q)}>
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="interview-page__columns">
+            <LivePracticeCard
+              targetRole={targetRole}
+              targetCompany={targetCompany}
+              messages={messages}
+              pending={pending}
+              onSubmitAnswer={handleSubmitAnswer}
+              bottomRef={bottomRef}
+            />
 
-            {messages.map((m) => (
-              <ChatMessage key={m.id} message={m} />
-            ))}
-
-            {pending && <div className="interview-page__typing">Thinking through your profile…</div>}
-
-            <div ref={bottomRef} />
-          </div>
-
-          {followUps.length > 0 && (
-            <div className="interview-page__followups">
-              <span>Continue with:</span>
-              <div className="interview-page__chips">
-                {followUps.map((q) => (
-                  <button key={q} type="button" className="chip" onClick={() => handleAsk(q)}>
-                    {q}
-                  </button>
-                ))}
-              </div>
+            <div className="interview-page__side">
+              <PastSessionsPanel
+                sessions={sessions}
+                loading={sessionsLoading}
+                activeId={activeSessionId}
+                onSelect={handleSelectSession}
+              />
+              <CompanyNotesPanel
+                company={targetCompany}
+                notes={companyNotes}
+                loading={notesLoading}
+                onAdd={handleAddCompanyNote}
+              />
             </div>
-          )}
-
-          <ChatInput onSubmit={handleAsk} disabled={pending} />
-        </main>
-
-        <InterviewSidebar
-          targetRole={targetRole}
-          targetCompany={targetCompany}
-          questionsAsked={questionsAsked}
-          storiesUsed={[...storiesUsed]}
-          competencies={[...competencies]}
-        />
+          </div>
+        </div>
       </div>
     </div>
   )

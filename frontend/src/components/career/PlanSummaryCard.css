@@ -1,5 +1,6 @@
+/* frontend/src/components/career/PlanSummaryCard.css */
 .plan-summary {
-  padding: 20px;
+  padding: 22px 24px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -18,10 +19,25 @@
   border-radius: var(--radius-sm);
 }
 
-.plan-summary__header h2 { font-size: 20px; }
-.plan-summary__meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--text-soft); margin-top: 6px; }
+.plan-summary__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.plan-summary__title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.plan-summary__title-row h2 { font-size: 19px; }
 
-.plan-summary__domains {
+.plan-summary__priority {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+}
+.plan-summary__priority--high { background: var(--danger-soft); color: var(--danger); }
+.plan-summary__priority--medium { background: var(--warning-soft); color: #a2760f; }
+.plan-summary__priority--low { background: var(--success-soft); color: var(--success); }
+
+.plan-summary__meta { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-soft); white-space: nowrap; }
+.plan-summary__meta span { display: inline-flex; align-items: center; gap: 6px; }
+.plan-summary__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+.plan-summary__tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -29,7 +45,7 @@
   margin: 0;
   padding: 0;
 }
-.plan-summary__domains li {
+.plan-summary__tags li {
   padding: 5px 12px;
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -39,6 +55,9 @@
   text-transform: capitalize;
 }
 
-.plan-summary__why { font-size: 14px; line-height: 1.6; color: var(--text); }
+.plan-summary__desc { font-size: 14px; line-height: 1.6; color: var(--text); }
 
-.plan-summary__actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 4px; border-top: 1px solid var(--border); margin-top: 4px; }
+.plan-summary__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 8px; border-top: 1px solid var(--border); margin-top: 4px; }
+.plan-summary__link { font-size: 13.5px; font-weight: 600; color: var(--accent); }
+.plan-summary__link:hover { color: var(--accent-strong); }
+.plan-summary__soon { font-size: 12.5px; color: var(--text-soft); }

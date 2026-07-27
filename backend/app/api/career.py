@@ -1,3 +1,4 @@
+# backend/app/api/career.py
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -9,7 +10,7 @@ from app.models.goals import Goal
 from app.models.inference import CareerPlan
 from app.models.facts import JobDescription
 from app.schemas.career_plan import (
-    CareerPlanResponse, GoalCreateRequest, GoalResponse, TopicSignal, TargetJobSummary,
+    CareerPlanResponse, GoalCreateRequest, GoalUpdateRequest, GoalResponse, TopicSignal, TargetJobSummary,
 )
 from app.services.career_planner.context_builder import build_career_plan_context
 from app.services.career_planner.plan_generation import generate_career_plan
@@ -26,6 +27,14 @@ def _build_check_ins(days_available: int) -> list[str]:
     return [f"Day {d} check-in" for d in range(3, days_available + 1, 3)] + [
         "Final review day before the interview/deadline"
     ]
+
+
+def _to_goal_response(goal: Goal) -> GoalResponse:
+    return GoalResponse(
+        id=str(goal.id), title=goal.title, deadline=goal.deadline,
+        priority=goal.priority, status_pct=goal.status_pct, created_at=goal.created_at,
+        job_description_id=str(goal.job_description_id) if goal.job_description_id else None,
+    )
 
 
 @router.post("", response_model=GoalResponse)
@@ -58,11 +67,7 @@ async def create_goal(payload: GoalCreateRequest, current_user: User = Depends(g
     await db.commit()
     await db.refresh(goal)
     print(f"[TRACING] Created goal '{goal.title}' (id={goal.id}, deadline={goal.deadline})", flush=True)
-    return GoalResponse(
-        id=str(goal.id), title=goal.title, deadline=goal.deadline,
-        priority=goal.priority, status_pct=goal.status_pct, created_at=goal.created_at,
-        job_description_id=str(goal.job_description_id) if goal.job_description_id else None,
-    )
+    return _to_goal_response(goal)
 
 
 @router.get("", response_model=list[GoalResponse])
@@ -71,14 +76,40 @@ async def list_goals(current_user: User = Depends(get_current_user), db=Depends(
     result = await db.execute(
         select(Goal).where(Goal.user_id == user.id).order_by(Goal.created_at.desc())
     )
-    return [
-        GoalResponse(
-            id=str(g.id), title=g.title, deadline=g.deadline,
-            priority=g.priority, status_pct=g.status_pct, created_at=g.created_at,
-            job_description_id=str(g.job_description_id) if g.job_description_id else None,
-        )
-        for g in result.scalars().all()
-    ]
+    return [_to_goal_response(g) for g in result.scalars().all()]
+
+
+@router.patch("/{goal_id}", response_model=GoalResponse)
+async def update_goal(
+    goal_id: UUID, payload: GoalUpdateRequest,
+    current_user: User = Depends(get_current_user), db=Depends(get_db),
+):
+    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user.id))
+    goal = result.scalar_one_or_none()
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    if payload.title is not None:
+        goal.title = payload.title
+    if payload.deadline is not None:
+        goal.deadline = payload.deadline
+    if payload.priority is not None:
+        goal.priority = payload.priority
+
+    await db.commit()
+    await db.refresh(goal)
+    return _to_goal_response(goal)
+
+
+@router.delete("/{goal_id}")
+async def delete_goal(goal_id: UUID, current_user: User = Depends(get_current_user), db=Depends(get_db)):
+    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user.id))
+    goal = result.scalar_one_or_none()
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    await db.delete(goal)
+    await db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/{goal_id}/plan", response_model=CareerPlanResponse)
@@ -92,7 +123,7 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
 
     context = await build_career_plan_context(db, user.id, goal)
     await db.close()  # Release the connection back to the pool before starting slow LLM calls
-    
+
     llm_output, degraded = await generate_career_plan(context)
     check_ins = _build_check_ins(context["days_available"])
 
@@ -133,6 +164,7 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
         plan_id=str(plan_row.id),
         goal_id=str(goal.id),
         days_available=context["days_available"],
+        relevant_domains=context.get("relevant_domains", []),
         daily_plan=llm_output.daily_plan,
         check_ins=check_ins,
         generated_at=plan_row.created_at,

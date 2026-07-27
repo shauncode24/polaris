@@ -1,13 +1,19 @@
+/* frontend/src/components/career/GoalSetupPanel.css */
 .goal-panel {
+  max-width: 560px;
+  margin: 40px auto 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
+  gap: 6px;
+  padding: 28px 32px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
+
+.goal-panel__heading { font-size: 18px; }
+.goal-panel__subheading { font-size: 13px; color: var(--text-soft); margin-bottom: 14px; }
 
 .goal-panel__tabs {
   display: inline-flex;
@@ -16,6 +22,7 @@
   background: var(--surface-soft);
   border-radius: var(--radius-pill);
   width: fit-content;
+  margin-bottom: 18px;
 }
 .goal-panel__tab {
   padding: 8px 16px;
@@ -68,13 +75,16 @@
 
 .goal-panel__error {
   font-size: 13px;
-  color: #c0392b;
-  background: rgba(224, 85, 79, 0.1);
+  color: var(--danger);
+  background: var(--danger-soft);
   border: 1px solid rgba(224, 85, 79, 0.25);
   padding: 8px 12px;
   border-radius: var(--radius-sm);
 }
 
+.goal-panel__submit-row { display: flex; justify-content: flex-end; margin-top: 4px; }
+
 @media (max-width: 560px) {
   .goal-panel__row { grid-template-columns: 1fr; }
+  .goal-panel { margin: 20px 16px 0; padding: 22px; }
 }

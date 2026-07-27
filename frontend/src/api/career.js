@@ -1,3 +1,4 @@
+// frontend/src/api/career.js
 import { API_BASE_URL } from './client'
 
 async function handle(response) {
@@ -27,6 +28,21 @@ export function createGoal(token, { title, deadline, priority, jobDescriptionId 
 
 export function listGoals(token) {
   return fetch(`${API_BASE_URL}/goals`, { headers: authHeaders(token) }).then(handle)
+}
+
+export function updateGoal(token, goalId, { title, deadline, priority } = {}) {
+  return fetch(`${API_BASE_URL}/goals/${goalId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({ title, deadline: deadline || null, priority: priority || null }),
+  }).then(handle)
+}
+
+export function deleteGoal(token, goalId) {
+  return fetch(`${API_BASE_URL}/goals/${goalId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  }).then(handle)
 }
 
 export function generatePlan(token, goalId) {

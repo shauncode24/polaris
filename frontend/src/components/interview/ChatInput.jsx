@@ -1,7 +1,8 @@
+// frontend/src/components/interview/ChatInput.jsx
 import { useState } from 'react'
 import './ChatInput.css'
 
-function ChatInput({ onSubmit, disabled }) {
+function ChatInput({ onSubmit, disabled, placeholder = 'Write your message...' }) {
   const [value, setValue] = useState('')
 
   function handleSubmit(e) {
@@ -17,7 +18,7 @@ function ChatInput({ onSubmit, disabled }) {
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Ask an interview question, e.g. 'Why do you want to work here?'"
+        placeholder={placeholder}
         disabled={disabled}
       />
       <button type="submit" className="chat-input__send" disabled={disabled || !value.trim()}>
