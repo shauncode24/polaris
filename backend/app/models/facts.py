@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, Boolean
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, Boolean
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -162,5 +162,6 @@ class Resume(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     raw_text: Mapped[str] = mapped_column(Text)
+    raw_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     filename: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = created_at_col()

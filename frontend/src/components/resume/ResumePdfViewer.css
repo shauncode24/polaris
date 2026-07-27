@@ -1,0 +1,81 @@
+/* ResumePdfViewer.css */
+.rpv {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rpv__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rpv__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rpv__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rpv__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-soft);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.rpv__btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.rpv__embed-wrap {
+  position: relative;
+  background: var(--surface-soft);
+}
+
+.rpv__embed {
+  display: block;
+  width: 100%;
+  height: 640px;
+  border: none;
+}
+
+.rpv__no-pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 200px;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+.rpv__no-pdf svg {
+  color: var(--border);
+}
+
+.rpv__no-pdf p {
+  color: var(--text-soft);
+  font-size: 13px;
+}

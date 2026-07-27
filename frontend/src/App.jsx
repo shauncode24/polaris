@@ -12,6 +12,7 @@ import JobAnalyzerPage from './pages/JobAnalyzerPage'
 import CareerPlannerPage from './pages/CareerPlannerPage'
 import InterviewPrepPage from './pages/InterviewPrepPage'
 import ProfilePage from './pages/ProfilePage'
+import ResumePage from './pages/ResumePage'
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
               <Route path="/career-planner" element={<ProtectedRoute><CareerPlannerPage /></ProtectedRoute>} />
               <Route path="/interview" element={<ProtectedRoute><InterviewPrepPage /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="/resume" element={<ProtectedRoute><ResumePage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </ProfileDataProvider>

@@ -64,7 +64,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
     # user is now passed in directly — no more default-user lookup
 
     resume_row = Resume(
-        user_id=user.id, raw_text=raw_text, filename=filename,
+        user_id=user.id, raw_text=raw_text, raw_bytes=raw_bytes, filename=filename,
         created_at=datetime.now(timezone.utc),
     )
     db.add(resume_row)

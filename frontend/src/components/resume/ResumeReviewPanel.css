@@ -1,0 +1,175 @@
+/* ResumeReviewPanel.css */
+.rrp {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rrp__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rrp__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rrp__date {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.rrp__body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rrp__score-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.rrp__score-circle {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+}
+
+.rrp__score-circle.high { background: var(--success); }
+.rrp__score-circle.mid  { background: var(--warning); }
+.rrp__score-circle.low  { background: var(--danger); }
+
+.rrp__score-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.rrp__score-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.rrp__bar-track {
+  height: 5px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.rrp__bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rrp__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.rrp__stat {
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  text-align: center;
+}
+
+.rrp__stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.rrp__stat-lbl {
+  font-size: 10px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.rrp__summary {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  border-left: 3px solid var(--accent-soft);
+  padding-left: 12px;
+}
+
+.rrp__list-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rrp__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rrp__list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.rrp__list-item::before {
+  content: '→';
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.rrp__empty {
+  padding: 24px 18px;
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.rrp__empty-btn {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rrp__empty-btn:hover {
+  background: var(--accent-soft);
+}

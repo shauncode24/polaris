@@ -1,0 +1,65 @@
+/* ResumeSnapshot.css */
+.rsnap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rsnap__header {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rsnap__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rsnap__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+}
+
+.rsnap__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 8px;
+  text-align: center;
+  border-right: 1px solid var(--border);
+  gap: 4px;
+}
+
+.rsnap__stat:last-child {
+  border-right: none;
+}
+
+.rsnap__stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.rsnap__stat-label {
+  font-size: 11px;
+  color: var(--text-soft);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rsnap__stat-icon {
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+@media (max-width: 700px) {
+  .rsnap__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

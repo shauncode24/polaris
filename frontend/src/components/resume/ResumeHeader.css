@@ -1,0 +1,153 @@
+/* ResumeHeader.css */
+
+.rh {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rh__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.rh__file-icon {
+  width: 40px;
+  height: 48px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.rh__file-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.rh__meta {
+  min-width: 0;
+}
+
+.rh__filename {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.rh__sub {
+  font-size: 12px;
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rh__sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.rh__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.rh__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.rh__badge--score {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.rh__badge--score.warn {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.rh__badge--score.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.rh__badge--ats {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.rh__badge--version {
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+}
+
+.rh__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rh__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.rh__btn:hover {
+  background: var(--surface-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.rh__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.rh__btn--primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--text-on-accent);
+}
+
+.rh__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

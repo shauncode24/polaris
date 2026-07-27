@@ -1,0 +1,108 @@
+/* ResumeHealth.css */
+.rh-checks {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rh-checks__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rh-checks__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rh-checks__score {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.rh-checks__score--pass {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.rh-checks__score--fail {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.rh-checks__body {
+  padding: 8px 0;
+}
+
+.rh-checks__all-good {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rh-checks__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rh-checks__item:last-child {
+  border-bottom: none;
+}
+
+.rh-checks__icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.rh-checks__icon--high {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.rh-checks__icon--medium {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.rh-checks__icon--low {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.rh-checks__detail {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.rh-checks__sev {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+  margin-top: 2px;
+}

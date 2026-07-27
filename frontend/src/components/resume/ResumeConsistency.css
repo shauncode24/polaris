@@ -1,0 +1,95 @@
+/* ResumeConsistency.css */
+.rcons {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rcons__header {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rcons__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rcons__body {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rcons__ratio-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rcons__ratio-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  flex-shrink: 0;
+  min-width: 44px;
+}
+
+.rcons__bar-wrap {
+  flex: 1;
+}
+
+.rcons__bar-track {
+  height: 5px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.rcons__bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  transition: width 0.6s ease;
+}
+
+.rcons__bar-label {
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+.rcons__missing-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rcons__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rcons__tag {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid transparent;
+}
+
+.rcons__empty {
+  font-size: 13px;
+  color: var(--success);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
