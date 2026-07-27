@@ -57,7 +57,14 @@ async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
     ]
 
 
-async def _get_all_skills_with_evidence(db: AsyncSession) -> list[dict]:
+async def _get_all_skills_with_evidence(db: AsyncSession, user_id) -> list[dict]:
+    # Get all project IDs and experience IDs for this user to filter evidence
+    proj_result = await db.execute(select(Project.id).where(Project.user_id == user_id))
+    user_proj_ids = {p[0] for p in proj_result.all()}
+
+    exp_result = await db.execute(select(Experience.id).where(Experience.user_id == user_id))
+    user_exp_ids = {e[0] for e in exp_result.all()}
+
     skill_result = await db.execute(select(Skill))
     skills = skill_result.scalars().all()
 
@@ -67,8 +74,25 @@ async def _get_all_skills_with_evidence(db: AsyncSession) -> list[dict]:
         evidence_rows = list(evidence_result.scalars().all())
         if not evidence_rows:
             continue
-        confidence = compute_skill_confidence([e.weight for e in evidence_rows])
-        details = await build_evidence_details(db, evidence_rows)
+
+        # Keep only evidence rows that belong to this user's projects/experiences
+        # or are global/other sources (e.g. leetcode_tag)
+        filtered_rows = []
+        for e in evidence_rows:
+            if e.source_type == "project":
+                if e.source_id in user_proj_ids:
+                    filtered_rows.append(e)
+            elif e.source_type == "experience":
+                if e.source_id in user_exp_ids:
+                    filtered_rows.append(e)
+            else:
+                filtered_rows.append(e)
+
+        if not filtered_rows:
+            continue
+
+        confidence = compute_skill_confidence([e.weight for e in filtered_rows])
+        details = await build_evidence_details(db, filtered_rows)
         out.append({"skill": skill.canonical_name, "confidence": confidence, "evidence": details})
 
     return out
@@ -93,7 +117,7 @@ async def build_interview_context(
     projects = await _get_all_projects(db, user_id)
     experiences = await _get_all_experiences(db, user_id)
     education = await _get_all_education(db, user_id)
-    skills = await _get_all_skills_with_evidence(db)
+    skills = await _get_all_skills_with_evidence(db, user_id)
     company_notes = await _get_company_notes(db, user_id, target_company)
 
     return {

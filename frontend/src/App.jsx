@@ -10,6 +10,7 @@ import HomePage from './pages/HomePage'
 import BuildProfilePage from './pages/BuildProfilePage'
 import JobAnalyzerPage from './pages/JobAnalyzerPage'
 import CareerPlannerPage from './pages/CareerPlannerPage'
+import InterviewPrepPage from './pages/InterviewPrepPage'
 
 function App() {
   return (
@@ -50,6 +51,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <CareerPlannerPage />
+                  </ProtectedRoute>
+                }
+              />
+            <Route
+                path="/interview"
+                element={
+                  <ProtectedRoute>
+                    <InterviewPrepPage />
                   </ProtectedRoute>
                 }
               />
