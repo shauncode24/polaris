@@ -1,51 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 :root {
   color-scheme: light;
 
-  /* Palette — indigo/purple system (Polaris rebrand) */
-  --ink: #14131a;
-  --ink-soft: #2a2836;
-  --accent: #6c4cf0;
-  --accent-strong: #5636d6;
-  --accent-soft: #efe9fe;
-  --dot-live: #22c07d;
+  /* Blue-dominant palette matching the screenshots */
+  --ink: #111827;
+  --ink-soft: #1f2937;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #eff6ff;
+  --dot-live: #16a34a;
 
-  --bg: #f7f7fa;
+  --bg: #f8fafc;
   --surface: #ffffff;
-  --surface-soft: #f2f1f6;
-  --border: #e6e5ec;
+  --surface-soft: #f1f5f9;
+  --border: #e2e8f0;
 
-  --text: #63636f;
-  --text-soft: #96959e;
-  --text-on-ink: #f5f8ff;
+  --text: #4b5563;
+  --text-soft: #9ca3af;
+  --text-on-ink: #f9fafb;
   --text-on-accent: #ffffff;
 
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(20, 19, 26, 0.06);
-  --shadow-md: 0 12px 30px -12px rgba(20, 19, 26, 0.18);
+  --shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.06), 0 1px 2px rgba(17, 24, 39, 0.04);
+  --shadow-md: 0 10px 28px -10px rgba(17, 24, 39, 0.14);
 
-  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
 
   --container-width: 1120px;
-  --sidebar-width: 248px;
+  --sidebar-width: 240px;
 
-  font: 17px/1.55 var(--font-sans);
+  font: 14.5px/1.6 var(--font-sans);
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 
-  --success: #22c07d;
-  --success-soft: rgba(34, 192, 125, 0.12);
-  --warning: #e6b32f;
-  --warning-soft: rgba(230, 179, 47, 0.14);
-  --danger: #e0554f;
-  --danger-soft: rgba(224, 85, 79, 0.1);
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.12);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
 
   --input-bg: var(--surface-soft);
 }
@@ -54,12 +56,12 @@
 
 body { margin: 0; background: var(--bg); }
 
-h1, h2, h3, h4 { margin: 0; color: var(--ink); font-weight: 600; }
+h1, h2, h3, h4 { margin: 0; color: var(--ink); font-weight: 700; letter-spacing: -0.2px; }
 
 p { margin: 0; }
 ul { margin: 0; padding: 0; list-style: none; }
 a { color: inherit; text-decoration: none; }
-button { font: inherit; }
+button { font: inherit; cursor: pointer; }
 img, svg { display: block; max-width: 100%; }
 
 #root { min-height: 100svh; display: flex; flex-direction: column; }
@@ -72,9 +74,9 @@ img, svg { display: block; max-width: 100%; }
 }
 
 .eyebrow {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-soft);
 }
@@ -85,38 +87,39 @@ img, svg { display: block; max-width: 100%; }
 }
 
 @media (max-width: 860px) {
-  :root { font-size: 16px; }
+  :root { font-size: 14px; }
 }
 
+/* ── Dark mode ─────────────────────────────────────────── */
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --ink: #f5f8ff;
-  --ink-soft: #dbe4fb;
-  --accent: #8a72ff;
-  --accent-strong: #a794ff;
-  --accent-soft: #241f45;
-  --dot-live: #3ddc97;
+  --ink: #f1f5f9;
+  --ink-soft: #cbd5e1;
+  --accent: #60a5fa;
+  --accent-strong: #93c5fd;
+  --accent-soft: #1e3a5f;
+  --dot-live: #34d399;
 
-  --bg: #0e0d16;
-  --surface: #16151f;
-  --surface-soft: #1d1c29;
-  --border: #29283a;
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-soft: #1e242d;
+  --border: #2d3441;
 
-  --text: #a9a8b6;
-  --text-soft: #78778a;
-  --text-on-ink: #0e0d16;
+  --text: #94a3b8;
+  --text-soft: #64748b;
+  --text-on-ink: #0d1117;
   --text-on-accent: #ffffff;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 12px 30px -12px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 30px -12px rgba(0, 0, 0, 0.65);
 
-  --success: #3ddc97;
-  --success-soft: rgba(61, 220, 151, 0.14);
-  --warning: #e6b32f;
-  --warning-soft: rgba(230, 179, 47, 0.16);
-  --danger: #ef6b64;
-  --danger-soft: rgba(239, 107, 100, 0.14);
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
 }
 
 body { transition: background-color 0.2s ease, color 0.2s ease; }

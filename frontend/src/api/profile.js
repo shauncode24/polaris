@@ -45,3 +45,9 @@ export function submitLeetcodeManual(token, tagCounts) {
     body: JSON.stringify({ tag_counts: tagCounts }),
   }).then(handle)
 }
+
+export function getProfileData(token) {
+  return fetch(`${API_BASE_URL}/profile/data`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}

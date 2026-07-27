@@ -19,7 +19,7 @@ function useNavGroups() {
     {
       label: 'Profile',
       items: [
-        { key: 'my-profile', label: 'My Profile', icon: IconTarget },
+        { key: 'my-profile', label: 'My Profile', icon: IconTarget, to: '/profile' },
         { key: 'resume', label: 'Resume', icon: IconDocument, to: '/build-profile', badge: results.resume ? 'Synced' : null },
         { key: 'github', label: 'GitHub Sync', icon: IconGithub, to: '/build-profile', badge: results.github ? 'Synced' : null },
         { key: 'leetcode', label: 'LeetCode Sync', icon: IconCode, to: '/build-profile', badge: results.leetcode ? 'Synced' : null },
