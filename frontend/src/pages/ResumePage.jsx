@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getResumeWorkspace, uploadResume, runResumeReview } from '../api/resume'
+import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis } from '../api/resume'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
 import ResumePdfViewer from '../components/resume/ResumePdfViewer'
 import ResumeSnapshot from '../components/resume/ResumeSnapshot'
 import ResumeHealth from '../components/resume/ResumeHealth'
+import ResumeAnalysisPanel from '../components/resume/ResumeAnalysisPanel'
 import ResumeReviewPanel from '../components/resume/ResumeReviewPanel'
 import ResumeVersions from '../components/resume/ResumeVersions'
 import ResumeConsistency from '../components/resume/ResumeConsistency'
@@ -22,6 +23,7 @@ export default function ResumePage() {
   const [loading, setLoading] = useState(true)
   const [uploadLoading, setUploadLoading] = useState(false)
   const [reviewLoading, setReviewLoading] = useState(false)
+  const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [error, setError] = useState(null)
 
   async function loadWorkspace() {
@@ -68,7 +70,27 @@ export default function ResumePage() {
     }
   }
 
+  async function handleRunAnalysis() {
+    setAnalyzeLoading(true)
+    try {
+      await runResumeAnalysis(token)
+      await loadWorkspace()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setAnalyzeLoading(false)
+    }
+  }
+
   const hasResume = workspace?.has_resume
+
+  // Combine engine parsing warnings + structure issues for the Health component if they exist
+  let healthFlags = workspace?.ats_flags || []
+  if (workspace?.latest_analysis?.modules) {
+    const parseWarns = workspace.latest_analysis.modules.parsing?.warnings || []
+    const structIssues = workspace.latest_analysis.modules.structure?.issues || []
+    healthFlags = [...parseWarns, ...structIssues]
+  }
 
   return (
     <div className="resume-layout">
@@ -153,6 +175,8 @@ export default function ResumePage() {
                 onUpload={handleUpload}
                 onReview={handleRunReview}
                 reviewLoading={reviewLoading}
+                onAnalyze={handleRunAnalysis}
+                analyzeLoading={analyzeLoading}
                 uploadInputRef={uploadInputRef}
               />
 
@@ -161,7 +185,12 @@ export default function ResumePage() {
                 <div className="resume-col">
                   <ResumePdfViewer hasPdf={workspace.current_resume?.has_pdf} />
                   <ResumeSnapshot snapshot={workspace.snapshot} />
-                  <ResumeHealth ats_flags={workspace.ats_flags} />
+                  <ResumeHealth ats_flags={healthFlags} />
+                  <ResumeAnalysisPanel
+                    analysis={workspace.latest_analysis}
+                    onRunAnalysis={handleRunAnalysis}
+                    analysisLoading={analyzeLoading}
+                  />
                   <ResumeReviewPanel
                     review={workspace.latest_review}
                     onRunReview={handleRunReview}

@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.models.facts import (
     User, Resume, Experience, Project, Education, Certificate, JobDescription
 )
-from app.models.inference import ResumeReview
+from app.models.inference import ResumeReview, ResumeAnalysis
 from app.models.structure import Skill, SkillAlias
 from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
@@ -35,6 +35,25 @@ async def review_resume(
 ):
     try:
         report = await generate_resume_review(db, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return report
+
+
+@router.post("/analyze")
+async def analyze_resume(
+    job_description_id: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Run the full deterministic Resume Analysis Engine and persist the result."""
+    try:
+        from app.services.resume.analysis.engine import run_analysis
+        report = await run_analysis(
+            db,
+            current_user.id,
+            job_description_id=job_description_id,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return report
@@ -137,7 +156,7 @@ async def get_resume_workspace(
     # ── ATS health flags ────────────────────────────────────────────────────
     ats_flags = run_ats_checks(latest.raw_text)
 
-    # ── Latest review ───────────────────────────────────────────────────────
+    # ── Latest review (LLM) ─────────────────────────────────────────────────
     review_result = await db.execute(
         select(ResumeReview)
         .where(ResumeReview.user_id == uid, ResumeReview.resume_id == latest.id)
@@ -154,8 +173,19 @@ async def get_resume_workspace(
             "summary": rj.get("summary"),
             "strengths": rj.get("strengths", []),
             "top_priority_fixes": rj.get("top_priority_fixes", []),
+            "bullet_reviews": rj.get("bullet_reviews", []),
             "created_at": review_row.created_at.isoformat(),
         }
+
+    # ── Latest deterministic analysis ────────────────────────────────────────
+    analysis_result = await db.execute(
+        select(ResumeAnalysis)
+        .where(ResumeAnalysis.user_id == uid)
+        .order_by(ResumeAnalysis.created_at.desc())
+        .limit(1)
+    )
+    analysis_row = analysis_result.scalar_one_or_none()
+    latest_analysis = analysis_row.analysis_json if analysis_row else None
 
     # ── Version history ─────────────────────────────────────────────────────
     versions = []
@@ -234,6 +264,7 @@ async def get_resume_workspace(
         },
         "ats_flags": ats_flags,
         "latest_review": latest_review,
+        "latest_analysis": latest_analysis,
         "profile_consistency": {
             "profile_skill_count": len(all_profile_skills),
             "resume_skill_count": len(resume_skills),

@@ -39,3 +39,15 @@ export function runResumeReview(token) {
     headers: authHeaders(token),
   }).then(handle)
 }
+
+export function runResumeAnalysis(token, jobDescriptionId = null) {
+  const url = new URL(`${API_BASE_URL}/resume/analyze`)
+  if (jobDescriptionId) {
+    url.searchParams.append('job_description_id', jobDescriptionId)
+  }
+  return fetch(url.toString(), {
+    method: 'POST',
+    headers: authHeaders(token),
+  }).then(handle)
+}
+

@@ -90,3 +90,22 @@ class InterviewResponse(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class ResumeAnalysis(Base):
+    """Deterministic analysis engine output (§5.5 'inference').
+
+    One row per engine run, tied to the specific Resume it analyzed.
+    Pure derived data — safe to regenerate any time an analysis module
+    changes. Separate from ResumeReview (LLM narrative + rewrites) so
+    the two pipelines can evolve independently.
+    """
+    __tablename__ = "resume_analyses"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    resume_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"))
+    analysis_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

@@ -37,7 +37,7 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
     )
   }
 
-  const { overall_score: score, stats, summary, strengths = [], top_priority_fixes = [], created_at } = review
+  const { overall_score: score, stats, summary, strengths = [], top_priority_fixes = [], bullet_reviews = [], created_at } = review
 
   return (
     <div className="rrp">
@@ -109,6 +109,36 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
                 <div key={i} className="rrp__list-item">
                   <span style={{ color: 'var(--warning)', marginTop: 1 }}>!</span>
                   {f}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Bullet Rewrites */}
+        {bullet_reviews && bullet_reviews.filter(br => br.rewrite).length > 0 && (
+          <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+            <div className="rrp__list-title" style={{ color: 'var(--accent)', marginBottom: 12 }}>🤖 AI Bullet Rewrites</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {bullet_reviews.filter(br => br.rewrite).map((br, i) => (
+                <div key={i} style={{ background: 'var(--surface-soft)', padding: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-soft)', textTransform: 'uppercase', marginBottom: 6 }}>
+                    {br.source_label}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12.5 }}>
+                    <div style={{ color: 'var(--text-soft)', textDecoration: 'line-through' }}>
+                      {br.original}
+                    </div>
+                    <div style={{ color: 'var(--ink)', fontWeight: 500 }}>
+                      <span style={{ color: 'var(--success)', marginRight: 4 }}>✦</span>
+                      {br.rewrite}
+                    </div>
+                    {br.rewrite_rationale && (
+                      <div style={{ fontSize: 11.5, color: 'var(--text-soft)', fontStyle: 'italic', marginTop: 4 }}>
+                        Rationale: {br.rewrite_rationale}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

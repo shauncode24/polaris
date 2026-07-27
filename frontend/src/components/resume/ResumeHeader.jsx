@@ -27,9 +27,10 @@ function FileIcon() {
   )
 }
 
-export default function ResumeHeader({ workspace, onUpload, onReview, reviewLoading, uploadInputRef }) {
-  const { current_resume, latest_review, ats_flags = [], versions = [] } = workspace
-  const score = latest_review?.overall_score
+export default function ResumeHeader({ workspace, onUpload, onReview, reviewLoading, onAnalyze, analyzeLoading, uploadInputRef }) {
+  const { current_resume, latest_analysis, latest_review, ats_flags = [], versions = [] } = workspace
+  const analysisScore = latest_analysis?.overall_score
+  const reviewScore = latest_review?.overall_score
   const atsPassed = ats_flags.filter(f => f.severity !== 'low').length === 0
 
   return (
@@ -55,9 +56,14 @@ export default function ResumeHeader({ workspace, onUpload, onReview, reviewLoad
                 {versions[0]?.version || 'v1'} (current)
               </span>
             )}
-            {score != null && (
-              <span className={`rh__badge ${scoreBadgeClass(score)}`}>
-                ★ {score}/100 review score
+            {analysisScore != null && (
+              <span className={`rh__badge ${scoreBadgeClass(analysisScore)}`}>
+                ★ {analysisScore}/100 analysis
+              </span>
+            )}
+            {reviewScore != null && (
+              <span className="rh__badge rh__badge--version">
+                ★ {reviewScore}/100 AI review
               </span>
             )}
             <span className={`rh__badge rh__badge--ats`}
@@ -93,21 +99,29 @@ export default function ResumeHeader({ workspace, onUpload, onReview, reviewLoad
         </button>
         <button
           type="button"
-          className="rh__btn rh__btn--primary"
+          className="rh__btn"
           onClick={onReview}
           disabled={reviewLoading}
         >
-          {reviewLoading ? (
+          {reviewLoading ? 'Reviewing…' : 'AI Review'}
+        </button>
+        <button
+          type="button"
+          className="rh__btn rh__btn--primary"
+          onClick={onAnalyze}
+          disabled={analyzeLoading}
+        >
+          {analyzeLoading ? (
             <>
               <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
-              Reviewing…
+              Analyzing…
             </>
           ) : (
             <>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9" />
               </svg>
-              Run Review
+              Run Analysis
             </>
           )}
         </button>
