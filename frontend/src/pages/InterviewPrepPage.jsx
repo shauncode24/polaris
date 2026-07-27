@@ -39,7 +39,6 @@ function InterviewPrepPage() {
   const [notesLoading, setNotesLoading] = useState(false)
 
   const [messages, setMessages] = useState([])
-  const [currentQuestion, setCurrentQuestion] = useState('')
   const [pending, setPending] = useState(false)
   const bottomRef = useRef(null)
 
@@ -98,9 +97,8 @@ function InterviewPrepPage() {
 
   function startSession(intro) {
     setMessages([
-      { id: nextId('coach'), role: 'coach-prompt', text: opener, intro },
+      { id: nextId('coach'), role: 'coach-prompt', text: 'Ask me a question', intro },
     ])
-    setCurrentQuestion(opener)
   }
 
   useEffect(() => {
@@ -113,19 +111,18 @@ function InterviewPrepPage() {
   }
 
   function askFollowUp(question) {
-    setMessages((prev) => [...prev, { id: nextId('coach'), role: 'coach-prompt', text: question }])
-    setCurrentQuestion(question)
+    handleSubmitAnswer(question)
   }
 
-  async function handleSubmitAnswer(answerText) {
-    const questionAsked = currentQuestion || opener
+  async function handleSubmitAnswer(questionText) {
+    if (!questionText.trim() || pending) return
 
-    setMessages((prev) => [...prev, { id: nextId('user'), role: 'user', text: answerText }])
+    setMessages((prev) => [...prev, { id: nextId('user'), role: 'user', text: questionText }])
     setPending(true)
 
     try {
       const data = await askInterviewQuestion(token, {
-        question: questionAsked,
+        question: questionText,
         targetRole,
         targetCompany,
       })

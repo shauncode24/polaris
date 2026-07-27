@@ -24,7 +24,7 @@ function LivePracticeCard({ targetRole, targetCompany, messages, pending, onSubm
         <div ref={bottomRef} />
       </div>
 
-      <ChatInput onSubmit={onSubmitAnswer} disabled={pending} placeholder="Write your answer as you would say it..." />
+      <ChatInput onSubmit={onSubmitAnswer} disabled={pending} placeholder="Ask an interview question..." />
     </section>
   )
 }

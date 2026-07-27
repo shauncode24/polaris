@@ -75,6 +75,7 @@ async def generate_narrative_analysis(context: dict) -> NarrativeAnalysis:
             ],
             response_format={"type": "json_object"},
             temperature=0.4,
+            max_tokens=3000,
         )
         content = response.choices[0].message.content
         print(f"[TRACING] Raw narrative JSON:\n{content}", flush=True)
