@@ -6,7 +6,7 @@ import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
 import ResumePdfViewer from '../components/resume/ResumePdfViewer'
 import ResumeSnapshot from '../components/resume/ResumeSnapshot'
-import ResumeHealth from '../components/resume/ResumeHealth'
+
 import ResumeAnalysisPanel from '../components/resume/ResumeAnalysisPanel'
 import ResumeReviewPanel from '../components/resume/ResumeReviewPanel'
 import ResumeVersions from '../components/resume/ResumeVersions'
@@ -87,7 +87,7 @@ export default function ResumePage() {
   const hasResume = workspace?.has_resume
 
   // Combine engine parsing warnings + structure issues for the Health component if they exist
-  const healthFlags = workspace?.latest_analysis?.warnings || workspace?.ats_flags || []
+
 
   return (
     <div className="resume-layout">
@@ -185,9 +185,7 @@ export default function ResumePage() {
                   {showPreview && (
                     <ResumePdfViewer hasPdf={workspace.current_resume?.has_pdf} />
                   )}
-                  <CollapsibleSection title="ATS Review" defaultOpen={true} className="rh-checks-collapsible">
-                    <ResumeHealth ats_flags={healthFlags} />
-                  </CollapsibleSection>
+
                   <ResumeAnalysisPanel
                     analysis={workspace.latest_analysis}
                     onRunAnalysis={handleRunAnalysis}

@@ -1,4 +1,5 @@
 import CollapsibleSection from '../common/CollapsibleSection'
+import ResumeHealth from './ResumeHealth'
 import './ResumeAnalysisPanel.css'
 
 function formatDate(iso) {
@@ -42,7 +43,7 @@ export default function ResumeAnalysisPanel({ analysis, onRunAnalysis, analysisL
     )
   }
 
-  const { overall_score: score, grade, label, module_scores, modules = {}, suggestions = [], created_at } = analysis
+  const { overall_score: score, grade, label, module_scores, modules = {}, suggestions = [], warnings = [], created_at } = analysis
 
   // Extract module reports
   const { keywords = {}, evidence = {} } = modules
@@ -89,6 +90,11 @@ export default function ResumeAnalysisPanel({ analysis, onRunAnalysis, analysisL
               })}
             </div>
           </div>
+        </CollapsibleSection>
+
+        {/* ATS Review warnings list */}
+        <CollapsibleSection title="ATS Review" defaultOpen={true} className="rh-checks-collapsible">
+          <ResumeHealth ats_flags={warnings} />
         </CollapsibleSection>
 
         {/* Suggestion action cards */}

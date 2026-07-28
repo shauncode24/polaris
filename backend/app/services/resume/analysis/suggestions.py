@@ -29,21 +29,7 @@ def generate_suggestions(
 
     # ── HIGH ─────────────────────────────────────────────────────────────────
 
-    if not parsing.get("has_email"):
-        suggestions.append(_s(
-            "high", "parsing",
-            "Add your email address",
-            "No email address was detected. This is critical for ATS systems and recruiters.",
-            "Without an email, recruiters cannot contact you and ATS may auto-reject the resume.",
-        ))
 
-    for sec in structure.get("missing_required", []):
-        suggestions.append(_s(
-            "high", "structure",
-            f"Add a '{sec.title()}' section",
-            f"The '{sec.title()}' section is missing — it's required by most ATS systems and expected by every recruiter.",
-            "Missing required sections lower ATS match scores and confuse resume parsers.",
-        ))
 
     density = metrics.get("metric_density", 100)
     no_metric = metrics.get("bullets_without_metrics", 0)
@@ -94,13 +80,7 @@ def generate_suggestions(
             "Active voice communicates ownership and decision-making authority.",
         ))
 
-    for sec in structure.get("missing_recommended", []):
-        suggestions.append(_s(
-            "medium", "structure",
-            f"Add a '{sec.title()}' section",
-            f"A '{sec.title()}' section is strongly recommended but not detected in your resume.",
-            "Completeness signals professionalism and helps recruiters form a fuller picture.",
-        ))
+
 
     coverage = keywords.get("coverage_pct", 100)
     missing_kw = keywords.get("missing", [])
@@ -134,30 +114,7 @@ def generate_suggestions(
 
     # ── LOW ───────────────────────────────────────────────────────────────────
 
-    if not parsing.get("has_phone"):
-        suggestions.append(_s(
-            "low", "parsing",
-            "Add your phone number",
-            "No phone number detected. Some recruiters prefer calling candidates directly.",
-            "Easy to add; increases recruiter reach options.",
-        ))
 
-    if not parsing.get("has_linkedin"):
-        suggestions.append(_s(
-            "low", "parsing",
-            "Add your LinkedIn URL",
-            "No LinkedIn URL detected. Most recruiters verify candidates on LinkedIn before reaching out.",
-            "Easier recruiter validation and professional credibility signal.",
-        ))
-
-    for issue in formatting.get("issues", []):
-        if issue["severity"] == "low":
-            suggestions.append(_s(
-                "low", "formatting",
-                f"Formatting: {issue['detail'][:70]}",
-                issue["detail"],
-                "Consistent formatting improves readability and ATS parsing reliability.",
-            ))
 
     too_long_bullets = content.get("issue_type_counts", {}).get("too_long", 0)
     if too_long_bullets > 0:

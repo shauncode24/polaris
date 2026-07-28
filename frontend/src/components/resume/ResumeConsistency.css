@@ -1,20 +1,14 @@
 /* ResumeConsistency.css */
-.rcons {
+.rcons.csec {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
-.rcons__header {
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.rcons__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
+.rcons .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
 }
 
 .rcons__body {

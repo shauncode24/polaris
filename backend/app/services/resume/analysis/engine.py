@@ -25,6 +25,19 @@ from app.services.resume.analysis.scoring     import compute_overall_score, get_
 from app.services.resume.analysis.suggestions import generate_suggestions
 
 
+EXCLUDED_SKILLS = {
+    "array", "string", "hash table", "sorting", "math", "two pointers",
+    "stack", "greedy", "binary search", "matrix", "monotonic stack",
+    "heap (priority queue)", "divide and conquer", "bit manipulation", "trie",
+    "sliding window", "recursion", "backtracking", "simulation", "merge sort",
+    "quickselect", "bucket sort", "counting", "radix sort", "counting sort",
+    "ordered set", "prefix sum", "hash function", "two-pointers", "heap",
+    "binary tree", "tree", "depth-first search", "breadth-first search", "dfs", "bfs",
+    "graph", "dynamic programming", "memoization", "design",
+    "interactive", "database", "linked list", "doubly-linked list", "combinatorics"
+}
+
+
 def _collect_bullets(experiences: list, projects: list) -> list[str]:
     bullets: list[str] = []
     for exp in experiences:
@@ -146,6 +159,9 @@ async def run_analysis(
             if proj.stack:
                 profile_skills.update(s.lower() for s in proj.stack)
 
+        # Filter out generic/algorithmic Leetcode topics that shouldn't be recommended as resume keywords
+        profile_skills = {s for s in profile_skills if s not in EXCLUDED_SKILLS}
+
     keywords   = analyze_keywords(raw_text, jd_keywords, profile_skills if profile_skills else None)
     evidence   = await analyze_evidence(db, user_id, resume.id)
 
@@ -165,7 +181,11 @@ async def run_analysis(
     label = get_label(overall)
     grade_color = get_grade_color(overall)
 
-    # ── 6. Suggestions ───────────────────────────────────────────────────────
+    # ── 6. AI Role Compatibility ─────────────────────────────────────────────
+    from app.services.resume.analysis.role_fit import compute_role_fit_via_ai
+    role_fit = await compute_role_fit_via_ai(raw_text)
+
+    # ── 7. Suggestions ───────────────────────────────────────────────────────
     suggestions = generate_suggestions(
         structure, parsing, formatting, content, metrics, keywords, evidence
     )
@@ -177,6 +197,7 @@ async def run_analysis(
         "grade_color":    grade_color,
         "module_scores":  module_scores,
         "warnings":       ats_res.get("warnings", []),
+        "role_fit":       role_fit,
         "modules": {
             "structure":  structure,
             "parsing":    parsing,

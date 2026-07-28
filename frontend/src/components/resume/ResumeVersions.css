@@ -1,20 +1,14 @@
 /* ResumeVersions.css */
-.rver {
+.rver.csec {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
-.rver__header {
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.rver__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
+.rver .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
 }
 
 .rver__body {

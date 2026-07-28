@@ -18,6 +18,43 @@ from app.services.resume.confidence import WEIGHTS, compute_skill_confidence
 from app.services.resume.review import flag_for_review, REVIEW_THRESHOLD
 
 
+def extract_skills_from_text(raw_text: str) -> list[str]:
+    """Deterministically extracts skills from the 'SKILLS' section of the resume text."""
+    skills = []
+    lines = raw_text.split("\n")
+    in_skills_section = False
+    
+    for line in lines:
+        stripped = line.strip()
+        lower_line = stripped.lower()
+        
+        # Detect start of skills section
+        if lower_line == "skills" or lower_line.startswith("technical skills") or lower_line.startswith("core skills"):
+            in_skills_section = True
+            continue
+            
+        # Detect end of section (another header)
+        if in_skills_section:
+            if stripped and stripped[0].isupper() and not any(stripped.startswith(prefix) for prefix in ["•", "◦", "*", "-", "Languages:", "Frontend", "Backend", "Database", "AI/ML", "Tools:"]):
+                break
+                
+            # If the line starts with a bullet and contains skills
+            if any(stripped.startswith(bullet) for bullet in ["•", "◦", "*", "-"]):
+                content = re.sub(r"^[•◦*\-\s]+", "", stripped)
+                if ":" in content:
+                    parts = content.split(":", 1)
+                    skills_list = parts[1]
+                else:
+                    skills_list = content
+                
+                for s in re.split(r"[,;]", skills_list):
+                    skill_name = s.strip()
+                    if skill_name:
+                        skills.append(skill_name)
+                        
+    return skills
+
+
 def _mentions_skill(text: str, raw_name: str) -> bool:
     pattern = r"(?<![a-zA-Z0-9])" + re.escape(raw_name.lower()) + r"(?![a-zA-Z0-9])"
     return re.search(pattern, text.lower()) is not None
@@ -103,7 +140,9 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
 
     await db.flush()
 
-    raw_skill_strings: set[str] = set(extraction.skills)
+    # Deterministically extract skills directly from the SKILLS section text to avoid LLM token use/flakiness
+    raw_skills_from_text = extract_skills_from_text(raw_text)
+    raw_skill_strings: set[str] = set(raw_skills_from_text)
     for proj in extraction.projects:
         raw_skill_strings.update(proj.stack)
     for exp in extraction.experiences:
@@ -221,3 +260,132 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
         "flagged_for_review": flagged,
         "snapshot_id": str(snapshot.id),
     }
+
+
+async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume, user_id: UUID):
+    # 1. Fetch experiences and projects
+    exp_result = await db.execute(
+        select(Experience).where(Experience.resume_id == resume.id)
+    )
+    experiences = list(exp_result.scalars().all())
+
+    proj_result = await db.execute(
+        select(Project).where(Project.resume_id == resume.id)
+    )
+    projects = list(proj_result.scalars().all())
+
+    # 2. Extract raw skill strings
+    raw_skill_strings = set(extract_skills_from_text(resume.raw_text))
+    for proj in projects:
+        if proj.stack:
+            raw_skill_strings.update(proj.stack)
+    for exp in experiences:
+        if exp.stack:
+            raw_skill_strings.update(exp.stack)
+
+    if not raw_skill_strings:
+        return
+
+    # 3. Resolve skills using the cache/DB (instant, no LLM)
+    resolved = await resolve_skills(raw_skill_strings, db)
+
+    canonical_to_raw: dict[str, str] = {}
+    for raw, canonical in resolved.items():
+        if canonical is not None:
+            canonical_to_raw[canonical] = raw
+
+    # 4. Get or create skill objects
+    skill_objs: dict[str, Skill] = {}
+    for canonical, raw in canonical_to_raw.items():
+        skill_objs[canonical] = await _get_or_create_skill(db, canonical, raw)
+
+    # 5. Populate ProjectSkill linkages if missing
+    for proj_row in projects:
+        if not proj_row.stack:
+            continue
+        for raw in proj_row.stack:
+            canonical = resolved.get(raw)
+            if canonical is None:
+                continue
+            skill = skill_objs[canonical]
+            link_stmt = (
+                pg_insert(ProjectSkill)
+                .values(project_id=proj_row.id, skill_id=skill.id)
+                .on_conflict_do_nothing()
+            )
+            await db.execute(link_stmt)
+
+    # 6. Clear existing SkillEvidence for this resume's experiences and projects to prevent duplicates
+    exp_ids = [exp.id for exp in experiences]
+    proj_ids = [proj.id for proj in projects]
+    all_source_ids = list(set(exp_ids + proj_ids))
+    
+    if all_source_ids:
+        from sqlalchemy import delete
+        await db.execute(
+            delete(SkillEvidence).where(
+                SkillEvidence.source_id.in_(all_source_ids)
+            )
+        )
+
+    # 7. Re-generate SkillEvidence and skills_json
+    skills_json: dict[str, dict] = {}
+    
+    for canonical, skill in skill_objs.items():
+        evidence_entries: list[dict] = []
+        weights: list[float] = []
+        raw_name = canonical_to_raw[canonical].lower()
+
+        for proj_row in projects:
+            stack_match = any(resolved.get(s) == canonical for s in (proj_row.stack or []))
+            desc_match = bool(proj_row.description) and _mentions_skill(
+                proj_row.description, raw_name
+            )
+            if stack_match or desc_match:
+                weights.append(WEIGHTS["project"])
+                evidence_entries.append({
+                    "source_type": "project",
+                    "source_id": str(proj_row.id),
+                    "detail": proj_row.name,
+                })
+
+        for exp_row in experiences:
+            stack_match = any(resolved.get(s) == canonical for s in (exp_row.stack or []))
+            bullet_hits = [b for b in (exp_row.bullets or []) if _mentions_skill(b, raw_name)]
+
+            if bullet_hits:
+                for bullet in bullet_hits:
+                    weights.append(WEIGHTS["experience"])
+                    evidence_entries.append({
+                        "source_type": "experience",
+                        "source_id": str(exp_row.id),
+                        "detail": bullet,
+                    })
+            elif stack_match:
+                weights.append(WEIGHTS["experience"])
+                evidence_entries.append({
+                    "source_type": "experience",
+                    "source_id": str(exp_row.id),
+                    "detail": f"Listed in stack for {exp_row.role}",
+                })
+
+        confidence = compute_skill_confidence(weights)
+
+        for entry in evidence_entries:
+            db.add(SkillEvidence(
+                skill_id=skill.id,
+                source_type=entry["source_type"],
+                source_id=UUID(entry["source_id"]),
+                weight=WEIGHTS[entry["source_type"]],
+            ))
+
+        skills_json[canonical] = {"confidence": confidence, "evidence": evidence_entries}
+
+    # 8. Create a new ProfileSnapshot
+    snapshot = ProfileSnapshot(
+        user_id=user_id, taken_at=datetime.now(timezone.utc),
+        skills_json=skills_json, note="resume upload",
+    )
+    db.add(snapshot)
+    await db.flush()
+    await db.commit()

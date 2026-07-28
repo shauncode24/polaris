@@ -74,12 +74,7 @@ export default function ResumeHeader({
             </div>
           )}
 
-          {analysisScore != null && (
-            <div className={`rh__stat-item tone-${getScoreTone(analysisScore)}`}>
-              <span className="rh__stat-val">{analysisScore}</span>
-              <span className="rh__stat-lbl">ANALYSIS</span>
-            </div>
-          )}
+
         </div>
       </div>
 

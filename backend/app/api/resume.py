@@ -6,9 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_current_user_from_query
 from app.core.database import get_db
 from app.models.facts import (
-    User, Resume, Experience, Project, Education, Certificate, JobDescription
+    User, Resume, Experience, Project, Education, Certificate, JobDescription,
+    GithubSnapshot, LeetcodeSnapshot
 )
-from app.models.inference import ResumeReview, ResumeAnalysis
+from app.models.inference import ResumeReview, ResumeAnalysis, SkillEvidence
 from app.models.structure import Skill, SkillAlias
 from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
@@ -121,6 +122,25 @@ async def get_resume_workspace(
 
     latest = resumes[0]
 
+    # Deterministically synchronize skills from raw text if missing to avoid LLM token waste
+    ev_check_result = await db.execute(
+        select(func.count(SkillEvidence.id))
+        .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
+        .where(Experience.user_id == uid, Experience.resume_id == latest.id)
+    )
+    if ev_check_result.scalar_one() == 0:
+        from app.services.resume.ingestion import sync_resume_skills_deterministically
+        from sqlalchemy import delete
+        try:
+            await sync_resume_skills_deterministically(db, latest, uid)
+            # Clear cached ResumeAnalysis rows for this user to trigger a fresh analysis run with full skills
+            await db.execute(delete(ResumeAnalysis).where(ResumeAnalysis.user_id == uid))
+            await db.commit()
+        except Exception as e:
+            import traceback
+            print("Deterministic skill sync failed:", flush=True)
+            traceback.print_exc()
+
     # ── Counts (snapshot) ───────────────────────────────────────────────────
     async def count(model, extra_filter=None):
         stmt = select(func.count()).select_from(model).where(model.user_id == uid)
@@ -144,8 +164,6 @@ async def get_resume_workspace(
     # Count skills unique to latest resume using the snapshot approach —
     # use raw_text word count as proxy for "skills" until a better signal exists
     # Real skill count: count Skill rows linked via SkillEvidence → Experience → latest resume
-    from app.models.inference import SkillEvidence
-    from app.models.structure import Skill
     skill_names_result = await db.execute(
         select(func.count(func.distinct(SkillEvidence.skill_id)))
         .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
@@ -162,7 +180,8 @@ async def get_resume_workspace(
     )
     analysis_row = analysis_result.scalar_one_or_none()
     
-    if not analysis_row or "warnings" not in analysis_row.analysis_json:
+    # Trigger synchronous analysis run if missing, old scoring format, or missing AI role fits
+    if not analysis_row or "warnings" not in analysis_row.analysis_json or "role_fit" not in analysis_row.analysis_json:
         from app.services.resume.analysis.engine import run_analysis
         try:
             latest_analysis = await run_analysis(db, uid)
@@ -209,26 +228,80 @@ async def get_resume_workspace(
     versions = list(reversed(versions))  # newest first
 
     # ── Profile consistency ──────────────────────────────────────────────────
-    # All skills the user has in SkillEvidence (from any source)
-    all_skills_result = await db.execute(
-        select(Skill.name)
-        .join(SkillEvidence, SkillEvidence.skill_id == Skill.id)
-        .where(SkillEvidence.source_type.in_(["project", "experience"]))
-        .distinct()
+    # 1. Fetch user's profile skills (GitHub languages, Leetcode, Certificates)
+    profile_skills = set()
+    
+    # GitHub
+    gh_rows = await db.execute(
+        select(GithubSnapshot.languages).where(GithubSnapshot.user_id == uid)
     )
-    all_profile_skills = set(r[0] for r in all_skills_result.fetchall())
+    for row in gh_rows.fetchall():
+        if row[0]:
+            profile_skills.update(k.lower() for k in row[0].keys())
 
-    # Skills linked to latest resume experiences
-    resume_skills_result = await db.execute(
+    # Leetcode
+    lc_ev_rows = await db.execute(
         select(Skill.name)
+        .join(LeetcodeSnapshot, (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name))
+        .where(LeetcodeSnapshot.user_id == uid)
+    )
+    profile_skills.update(r[0].lower() for r in lc_ev_rows.fetchall() if r[0])
+
+    # Certificates
+    cert_ev_rows = await db.execute(
+        select(Certificate.skills).where(Certificate.user_id == uid)
+    )
+    for row in cert_ev_rows.fetchall():
+        if row[0]:
+            profile_skills.update(s.lower() for s in row[0])
+
+    # Exclude generic Leetcode algorithmic skills if needed, or keep all profile skills
+    from app.services.resume.analysis.engine import EXCLUDED_SKILLS
+    profile_skills = {s for s in profile_skills if s not in EXCLUDED_SKILLS}
+
+    # 2. Fetch all skills that are present in the latest resume (experiences, projects, and parsed skills)
+    resume_skills = set()
+    
+    # Skills from experiences
+    exp_skills = await db.execute(
+        select(Skill.canonical_name)
         .join(SkillEvidence, SkillEvidence.skill_id == Skill.id)
         .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
-        .where(Experience.user_id == uid, Experience.resume_id == latest.id)
-        .distinct()
+        .where(Experience.resume_id == latest.id)
     )
-    resume_skills = set(r[0] for r in resume_skills_result.fetchall())
+    resume_skills.update(r[0].lower() for r in exp_skills.fetchall() if r[0])
 
-    missing_from_resume = sorted(all_profile_skills - resume_skills)
+    # Skills from projects
+    proj_skills = await db.execute(
+        select(Skill.canonical_name)
+        .join(SkillEvidence, SkillEvidence.skill_id == Skill.id)
+        .join(Project, (SkillEvidence.source_id == Project.id) & (SkillEvidence.source_type == "project"))
+        .where(Project.resume_id == latest.id)
+    )
+    resume_skills.update(r[0].lower() for r in proj_skills.fetchall() if r[0])
+
+    # Skills from parsed general skills section
+    from app.services.resume.ingestion import extract_skills_from_text
+    from app.services.resume.skill_classifier import resolve_skills
+    parsed_skills = extract_skills_from_text(latest.raw_text)
+    if parsed_skills:
+        resolved_parsed = await resolve_skills(set(parsed_skills), db)
+        resume_skills.update(canonical.lower() for canonical in resolved_parsed.values() if canonical)
+
+    # 3. Compute consistency
+    all_profile_skills = profile_skills | resume_skills
+    display_names = {}
+    if all_profile_skills:
+        skill_rows = await db.execute(
+            select(Skill.canonical_name, Skill.name).where(Skill.canonical_name.in_(list(all_profile_skills)))
+        )
+        for canonical, name in skill_rows.fetchall():
+            display_names[canonical.lower()] = name
+            display_names[name.lower()] = name
+
+    missing_keys = profile_skills - resume_skills
+    missing_from_resume = sorted([display_names.get(k, k.title()) for k in missing_keys])
+
 
     # ── Resume vs jobs ───────────────────────────────────────────────────────
     jobs_result = await db.execute(
@@ -260,7 +333,12 @@ async def get_resume_workspace(
     from app.services.resume.analysis.coverage import analyze_cross_source_coverage
 
     evidence_res = await analyze_evidence(db, uid, latest.id)
-    role_fit = compute_role_fit(evidence_res.get("skills", []))
+    role_fit = None
+    if latest_analysis and isinstance(latest_analysis, dict):
+        role_fit = latest_analysis.get("role_fit")
+    if not role_fit:
+        role_fit = compute_role_fit(evidence_res.get("skills", []))
+
     coverage_gaps = await analyze_cross_source_coverage(db, uid, latest.id)
 
     return {

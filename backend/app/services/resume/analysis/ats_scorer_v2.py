@@ -4,7 +4,7 @@ from app.models.facts import Experience, Project, Education
 
 EMAIL_PATTERN = re.compile(r"[\w.\-]+@[\w.\-]+\.\w+")
 PHONE_PATTERN = re.compile(r"(\+?\d{1,3}[\s.\-]?)?\(?\d{3,4}\)?[\s.\-]?\d{3,4}[\s.\-]?\d{3,4}")
-LINKEDIN_PATTERN = re.compile(r"linkedin\.com/in/[\w\-]+", re.IGNORECASE)
+LINKEDIN_PATTERN = re.compile(r"linkedin\.com/(in/)?[\w\-]+", re.IGNORECASE)
 GITHUB_PATTERN = re.compile(r"github\.com/[\w\-]+", re.IGNORECASE)
 
 _FANCY_BULLET_RE = re.compile(r"[▪▫◦◉●►✓✗✦✧✩✱☛☞▶◆◇★☆]")

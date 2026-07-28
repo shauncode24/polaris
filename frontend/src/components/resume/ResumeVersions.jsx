@@ -1,3 +1,4 @@
+import CollapsibleSection from '../common/CollapsibleSection'
 import './ResumeVersions.css'
 
 function formatDate(iso) {
@@ -8,10 +9,7 @@ function formatDate(iso) {
 
 export default function ResumeVersions({ versions = [] }) {
   return (
-    <div className="rver">
-      <div className="rver__header">
-        <span className="rver__title">Version History</span>
-      </div>
+    <CollapsibleSection title="Version History" defaultOpen={false} className="rver">
       <div className="rver__body">
         {versions.length === 0 ? (
           <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--text-soft)' }}>
@@ -33,6 +31,6 @@ export default function ResumeVersions({ versions = [] }) {
           ))
         )}
       </div>
-    </div>
+    </CollapsibleSection>
   )
 }

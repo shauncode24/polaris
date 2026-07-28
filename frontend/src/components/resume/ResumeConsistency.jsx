@@ -1,3 +1,4 @@
+import CollapsibleSection from '../common/CollapsibleSection'
 import './ResumeConsistency.css'
 
 export default function ResumeConsistency({ profile_consistency }) {
@@ -10,10 +11,7 @@ export default function ResumeConsistency({ profile_consistency }) {
   const allCovered = missing_from_resume.length === 0
 
   return (
-    <div className="rcons">
-      <div className="rcons__header">
-        <span className="rcons__title">Profile Consistency</span>
-      </div>
+    <CollapsibleSection title="Profile Consistency" defaultOpen={false} className="rcons">
       <div className="rcons__body">
         <div className="rcons__ratio-row">
           <div className="rcons__ratio-text">{pct}%</div>
@@ -45,6 +43,6 @@ export default function ResumeConsistency({ profile_consistency }) {
           </>
         )}
       </div>
-    </div>
+    </CollapsibleSection>
   )
 }
