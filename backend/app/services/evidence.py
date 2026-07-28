@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import Experience, Project
 from app.models.inference import SkillEvidence
+from app.models.structure import Skill
+from app.services.resume.confidence import compute_skill_confidence
 
 
 async def build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvidence]) -> list[str]:
@@ -37,3 +39,23 @@ async def build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvid
         elif e.source_type == "certificate":
             details.append("Certificate")
     return list(dict.fromkeys(details))
+
+
+async def get_all_skill_confidences(db: AsyncSession) -> dict[str, float]:
+    """canonical_name -> confidence, for every skill with at least one
+    evidence row. Single-user-mode-safe (see design doc §12) — same
+    unscoped-by-user pattern already used by career_planner/context_builder.py
+    and interview/context_builder.py. This is the shared fact source for
+    bullet-strength scoring, narrative coherence, and tailoring — all three
+    need "how confident are we in this skill" and none of them should
+    recompute it independently.
+    """
+    result = await db.execute(select(Skill))
+    skills = result.scalars().all()
+    out: dict[str, float] = {}
+    for skill in skills:
+        ev = await db.execute(select(SkillEvidence).where(SkillEvidence.skill_id == skill.id))
+        rows = list(ev.scalars().all())
+        if rows:
+            out[skill.canonical_name] = compute_skill_confidence([e.weight for e in rows])
+    return out

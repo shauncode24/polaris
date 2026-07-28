@@ -51,3 +51,20 @@ export function runResumeAnalysis(token, jobDescriptionId = null) {
   }).then(handle)
 }
 
+export function getResumeCoherence(token, targetRole = null) {
+  const url = new URL(`${API_BASE_URL}/resume/coherence`)
+  if (targetRole) url.searchParams.append('target_role', targetRole)
+  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
+}
+
+export function getResumeTailoring(token, jobDescriptionId) {
+  return fetch(`${API_BASE_URL}/resume/tailor/${jobDescriptionId}`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
+export function getResumeEvolution(token) {
+  return fetch(`${API_BASE_URL}/resume/evolution`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}

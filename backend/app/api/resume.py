@@ -15,6 +15,15 @@ from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
 from app.services.resume.ats_checks import run_ats_checks
 
+
+from uuid import UUID
+from app.schemas.resume_coherence import CoherenceReport
+from app.schemas.resume_tailoring import TailoringReport
+from app.schemas.resume_evolution import EvolutionReport
+from app.services.resume.coherence_narrative import generate_coherence_report
+from app.services.resume.tailoring_llm import generate_tailoring_report
+from app.services.resume.evolution import build_evolution_report
+
 router = APIRouter(prefix="/resume", tags=["resume"])
 
 
@@ -369,3 +378,43 @@ async def get_resume_workspace(
         "role_fit": role_fit,
         "coverage_gaps": coverage_gaps,
     }
+
+@router.get("/coherence", response_model=CoherenceReport)
+async def get_resume_coherence(
+    target_role: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Resume).where(Resume.user_id == current_user.id).order_by(Resume.created_at.desc()).limit(1)
+    )
+    resume = result.scalar_one_or_none()
+    if resume is None:
+        raise HTTPException(status_code=400, detail="No uploaded resume found — upload a resume first.")
+    return await generate_coherence_report(db, current_user.id, resume.id, target_role)
+
+
+@router.get("/tailor/{job_description_id}", response_model=TailoringReport)
+async def get_resume_tailoring(
+    job_description_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Resume).where(Resume.user_id == current_user.id).order_by(Resume.created_at.desc()).limit(1)
+    )
+    resume = result.scalar_one_or_none()
+    if resume is None:
+        raise HTTPException(status_code=400, detail="No uploaded resume found — upload a resume first.")
+    try:
+        return await generate_tailoring_report(db, current_user.id, resume.id, job_description_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/evolution", response_model=EvolutionReport)
+async def get_resume_evolution(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await build_evolution_report(db, current_user.id)

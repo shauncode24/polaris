@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis } from '../api/resume'
+import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis, getResumeCoherence, getResumeTailoring, getResumeEvolution } from '../api/resume'
+import { listJobAnalyses } from '../api/jobs'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
@@ -13,6 +14,9 @@ import ResumeVersions from '../components/resume/ResumeVersions'
 import ResumeConsistency from '../components/resume/ResumeConsistency'
 import RoleFitPanel from '../components/resume/RoleFitPanel'
 import CoverageGapsPanel from '../components/resume/CoverageGapsPanel'
+import ResumeEvolution from '../components/resume/ResumeEvolution'
+import ResumeCoherence from '../components/resume/ResumeCoherence'
+import ResumeTailoring from '../components/resume/ResumeTailoring'
 import CollapsibleSection from '../components/common/CollapsibleSection'
 import './ResumePage.css'
 
@@ -28,6 +32,21 @@ export default function ResumePage() {
   const [error, setError] = useState(null)
   const [showPreview, setShowPreview] = useState(false)
 
+  // Evolution
+  const [evolution, setEvolution] = useState(null)
+  const [evolutionLoading, setEvolutionLoading] = useState(false)
+
+  // Coherence
+  const [coherence, setCoherence] = useState(null)
+  const [coherenceLoading, setCoherenceLoading] = useState(false)
+  const [coherenceError, setCoherenceError] = useState(null)
+
+  // Tailoring
+  const [tailoring, setTailoring] = useState(null)
+  const [tailoringLoading, setTailoringLoading] = useState(false)
+  const [tailoringError, setTailoringError] = useState(null)
+  const [jobs, setJobs] = useState([])
+
   async function loadWorkspace() {
     try {
       const data = await getResumeWorkspace(token)
@@ -39,8 +58,29 @@ export default function ResumePage() {
     }
   }
 
+  async function loadEvolution() {
+    setEvolutionLoading(true)
+    try {
+      const data = await getResumeEvolution(token)
+      setEvolution(data)
+    } catch (_) {
+      // Evolution is non-critical — silently ignore
+    } finally {
+      setEvolutionLoading(false)
+    }
+  }
+
+  async function loadJobs() {
+    try {
+      const data = await listJobAnalyses(token)
+      setJobs(Array.isArray(data) ? data : data?.items ?? [])
+    } catch (_) {}
+  }
+
   useEffect(() => {
     loadWorkspace()
+    loadEvolution()
+    loadJobs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
@@ -49,9 +89,9 @@ export default function ResumePage() {
     setUploadLoading(true)
     try {
       await uploadResume(file, token)
-      // Reload workspace after upload
       setLoading(true)
       await loadWorkspace()
+      await loadEvolution()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -63,7 +103,6 @@ export default function ResumePage() {
     setReviewLoading(true)
     try {
       await runResumeReview(token)
-      // Reload workspace to pull the new review
       await loadWorkspace()
     } catch (e) {
       setError(e.message)
@@ -84,10 +123,33 @@ export default function ResumePage() {
     }
   }
 
+  async function handleFetchCoherence(targetRole) {
+    setCoherenceLoading(true)
+    setCoherenceError(null)
+    try {
+      const data = await getResumeCoherence(token, targetRole)
+      setCoherence(data)
+    } catch (e) {
+      setCoherenceError(e.message)
+    } finally {
+      setCoherenceLoading(false)
+    }
+  }
+
+  async function handleFetchTailoring(jobId) {
+    setTailoringLoading(true)
+    setTailoringError(null)
+    try {
+      const data = await getResumeTailoring(token, jobId)
+      setTailoring(data)
+    } catch (e) {
+      setTailoringError(e.message)
+    } finally {
+      setTailoringLoading(false)
+    }
+  }
+
   const hasResume = workspace?.has_resume
-
-  // Combine engine parsing warnings + structure issues for the Health component if they exist
-
 
   return (
     <div className="resume-layout">
@@ -199,6 +261,24 @@ export default function ResumePage() {
                   {workspace.coverage_gaps && (
                     <CoverageGapsPanel coverage={workspace.coverage_gaps} />
                   )}
+
+                  {/* Narrative Coherence — on-demand LLM, left col for full width */}
+                  <ResumeCoherence
+                    token={token}
+                    onFetch={handleFetchCoherence}
+                    data={coherence}
+                    loading={coherenceLoading}
+                    error={coherenceError}
+                  />
+
+                  {/* Resume Tailoring — requires JD selection */}
+                  <ResumeTailoring
+                    jobs={jobs}
+                    onFetch={handleFetchTailoring}
+                    data={tailoring}
+                    loading={tailoringLoading}
+                    error={tailoringError}
+                  />
                 </div>
 
                 {/* Right column */}
@@ -206,6 +286,7 @@ export default function ResumePage() {
                   <ResumeVersions versions={workspace.versions} />
                   <ResumeConsistency profile_consistency={workspace.profile_consistency} />
                   <RoleFitPanel role_fit={workspace.role_fit} />
+                  <ResumeEvolution evolution={evolution} />
                 </div>
               </div>
             </>

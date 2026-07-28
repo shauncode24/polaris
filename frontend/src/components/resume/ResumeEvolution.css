@@ -1,66 +1,107 @@
 /* ResumeEvolution.css */
-.revo {
+.revo.csec {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
-.revo__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-.revo__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.revo__badge {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--surface-soft);
-  color: var(--text-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  padding: 2px 7px;
+.revo .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
 }
 
 .revo__body {
-  padding: 20px 18px;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  gap: 14px;
+}
+
+.revo__summary {
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.5;
+  padding: 12px 14px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+
+.revo__empty {
+  font-size: 13px;
+  color: var(--text-soft);
+  padding: 16px 18px;
   text-align: center;
 }
 
-.revo__icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--surface-soft);
+.revo__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+}
+
+.revo__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.revo__chip {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+}
+
+.revo__chip--gained {
+  background: var(--success-soft, #d1fae5);
+  color: var(--success, #059669);
+}
+
+.revo__chip--lost {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.revo__delta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.revo__delta-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--text-soft);
+  gap: 8px;
+  font-size: 12.5px;
 }
 
-.revo__caption {
-  font-size: 13px;
-  color: var(--text-soft);
-  max-width: 260px;
-  line-height: 1.5;
+.revo__delta-skill {
+  flex: 1;
+  color: var(--ink);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.revo__sub {
-  font-size: 11.5px;
+.revo__delta-val {
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.revo__delta-val--up { color: var(--success, #059669); }
+.revo__delta-val--down { color: var(--danger); }
+
+.revo__meta {
+  font-size: 11px;
   color: var(--text-soft);
-  opacity: 0.7;
+  opacity: 0.75;
 }

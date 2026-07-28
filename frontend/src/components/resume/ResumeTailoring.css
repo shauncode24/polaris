@@ -1,0 +1,219 @@
+/* ResumeTailoring.css */
+.rtail.csec {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rtail .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.rtail__body {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rtail__loading,
+.rtail__error {
+  padding: 20px 18px;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.rtail__error { color: var(--danger); }
+
+.rtail__jd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rtail__jd-select {
+  flex: 1;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  cursor: pointer;
+}
+
+.rtail__jd-select:focus { border-color: var(--accent); }
+
+.rtail__run-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.rtail__run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.rtail__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+
+.rtail__header-meta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rtail__header-sub {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+/* Ranked items */
+.rtail__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rtail__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.rtail__item--lead {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.rtail__item-rank {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-soft);
+  min-width: 16px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rtail__item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rtail__item-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rtail__item-type {
+  font-size: 11px;
+  color: var(--text-soft);
+  text-transform: capitalize;
+}
+
+.rtail__item-score {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+.rtail__item-lead-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-pill);
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.rtail__item-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.rtail__skill-chip {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+}
+
+/* Rationale */
+.rtail__rationale {
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.6;
+  background: var(--surface-soft);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+
+/* Bullet action lists */
+.rtail__bullet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rtail__bullet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.rtail__bullet-id {
+  font-size: 10px;
+  color: var(--text-soft);
+  font-family: monospace;
+}
+
+.rtail__degraded {
+  font-size: 11px;
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rtail__empty {
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+  padding: 12px 0;
+}

@@ -1,0 +1,234 @@
+/* ResumeCoherence.css */
+.rcoh.csec {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rcoh .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.rcoh__body {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rcoh__loading,
+.rcoh__error {
+  padding: 20px 18px;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.rcoh__error {
+  color: var(--danger);
+}
+
+.rcoh__argued-role {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rcoh__argued-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+.rcoh__argued-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.rcoh__positioning {
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.6;
+  background: var(--surface-soft);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+
+.rcoh__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+
+/* Category distribution bar chart */
+.rcoh__dist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rcoh__dist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rcoh__dist-name {
+  font-size: 12px;
+  color: var(--ink);
+  width: 140px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rcoh__dist-track {
+  flex: 1;
+  height: 5px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.rcoh__dist-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  transition: width 0.5s ease;
+}
+
+.rcoh__dist-pct {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-soft);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* List items: strengths, weaknesses */
+.rcoh__list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rcoh__list-item {
+  font-size: 12.5px;
+  color: var(--ink);
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  line-height: 1.5;
+}
+
+.rcoh__list-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.rcoh__list-dot--warn {
+  background: var(--warning);
+}
+
+/* Off-narrative bullets table */
+.rcoh__offtable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rcoh__offrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.rcoh__offlabel {
+  flex: 1;
+  color: var(--ink);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rcoh__offcats {
+  font-size: 11px;
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+.rcoh__recommendation {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.rcoh__degraded {
+  font-size: 11px;
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Role input row */
+.rcoh__role-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rcoh__role-input {
+  flex: 1;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+}
+
+.rcoh__role-input:focus {
+  border-color: var(--accent);
+}
+
+.rcoh__role-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.rcoh__role-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

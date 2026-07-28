@@ -1,0 +1,135 @@
+import json
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.llm import chat_completion, MODEL
+from app.models.facts import Experience, JobDescription, Project
+from app.prompts.resume_tailoring import TAILORING_SYSTEM_PROMPT
+from app.schemas.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
+from app.services.evidence import get_all_skill_confidences
+from app.services.resume.coherence_narrative import build_bullets_with_strength
+from app.services.resume.skill_classifier import resolve_skills
+from app.services.resume.tailoring_ranking import rank_items_for_jd
+
+MAX_BULLETS_IN_PROMPT = 40
+
+
+class TailoringGenerationError(Exception):
+    """Raised when the tailoring LLM call fails or returns something we
+    can't validate. Same graceful-degradation pattern as
+    PrioritizationError/InterpretationError elsewhere in this codebase.
+    """
+
+
+async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_description_id) -> TailoringReport:
+    jd_result = await db.execute(
+        select(JobDescription).where(JobDescription.id == job_description_id, JobDescription.user_id == user_id)
+    )
+    jd = jd_result.scalar_one_or_none()
+    if jd is None or not jd.extracted_requirements:
+        raise ValueError("Job description not found or not yet analyzed.")
+
+    raw_required = set(jd.extracted_requirements.get("raw_required", []))
+    raw_implicit = set(jd.extracted_requirements.get("raw_implicit", []))
+    raw_nice = set(jd.extracted_requirements.get("raw_nice_to_have", []))
+
+    resolved_required = await resolve_skills(raw_required, db) if raw_required else {}
+    resolved_implicit = await resolve_skills(raw_implicit, db) if raw_implicit else {}
+    resolved_nice = await resolve_skills(raw_nice, db) if raw_nice else {}
+
+    canonical_skills: dict[str, str] = {}
+    for raw, canonical in resolved_required.items():
+        if canonical:
+            canonical_skills.setdefault(canonical, "required")
+    for raw, canonical in resolved_implicit.items():
+        if canonical:
+            canonical_skills.setdefault(canonical, "implicit")
+    for raw, canonical in resolved_nice.items():
+        if canonical:
+            canonical_skills.setdefault(canonical, "nice_to_have")
+
+    exp_result = await db.execute(
+        select(Experience).where(Experience.user_id == user_id, Experience.resume_id == resume_id)
+    )
+    experiences = list(exp_result.scalars().all())
+    proj_result = await db.execute(
+        select(Project).where(Project.user_id == user_id, Project.resume_id == resume_id)
+    )
+    projects = list(proj_result.scalars().all())
+
+    raw_stack: set[str] = set()
+    for e in experiences:
+        raw_stack.update(e.stack or [])
+    for p in projects:
+        raw_stack.update(p.stack or [])
+    resolved_stack = await resolve_skills(raw_stack, db) if raw_stack else {}
+
+    items = []
+    for e in experiences:
+        canonicals = [resolved_stack.get(s) for s in (e.stack or []) if resolved_stack.get(s)]
+        items.append({
+            "id": str(e.id), "type": "experience",
+            "label": f"{e.role} at {e.company}", "canonical_stack": canonicals,
+        })
+    for p in projects:
+        canonicals = [resolved_stack.get(s) for s in (p.stack or []) if resolved_stack.get(s)]
+        items.append({"id": str(p.id), "type": "project", "label": p.name, "canonical_stack": canonicals})
+
+    ranked = rank_items_for_jd(items, canonical_skills)
+
+    skill_confidence = await get_all_skill_confidences(db)
+    bullets = await build_bullets_with_strength(db, user_id, resume_id, skill_confidence)
+    bullets_sorted = sorted(bullets, key=lambda b: b["strength"]["score"], reverse=True)
+    bullets_for_prompt = [
+        {
+            "bullet_id": b["bullet_id"], "source_label": b["source_label"], "text": b["text"],
+            "strength_score": b["strength"]["score"],
+            "matched_jd_skills": sorted({c for c in b["canonical_stack"] if c in canonical_skills}),
+        }
+        for b in bullets_sorted[:MAX_BULLETS_IN_PROMPT]
+    ]
+
+    context = {
+        "role": jd.role, "company": jd.company,
+        "required_skills": sorted(raw_required), "implicit_skills": sorted(raw_implicit),
+        "nice_to_have": sorted(raw_nice),
+        "ranked_items": ranked, "bullets": bullets_for_prompt,
+    }
+
+    degraded = False
+    try:
+        print("[TRACING] Requesting resume tailoring recommendations from LLM...", flush=True)
+        response = await chat_completion(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": TAILORING_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(context)},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+        content = response.choices[0].message.content
+        print(f"[TRACING] Raw tailoring JSON:\n{content}", flush=True)
+        llm_output = TailoringLLMOutput.model_validate(json.loads(content))
+    except Exception as e:
+        print(f"[TRACING] Tailoring generation degraded, using fallback: {e}", flush=True)
+        llm_output = TailoringLLMOutput(
+            lead_items=[r["id"] for r in ranked[:2]],
+            cut_bullets=[b["bullet_id"] for b in bullets_for_prompt if b["strength_score"] < 40][:3],
+            emphasize_bullets=[b["bullet_id"] for b in bullets_for_prompt if b["matched_jd_skills"]][:3],
+            rationale="Narrative tailoring is temporarily unavailable — this is a deterministic fallback based on relevance ranking alone.",
+        )
+        degraded = True
+
+    real_item_ids = {r["id"] for r in ranked}
+    real_bullet_ids = {b["bullet_id"] for b in bullets_for_prompt}
+    llm_output.lead_items = [i for i in llm_output.lead_items if i in real_item_ids]
+    llm_output.cut_bullets = [b for b in llm_output.cut_bullets if b in real_bullet_ids]
+    llm_output.emphasize_bullets = [b for b in llm_output.emphasize_bullets if b in real_bullet_ids]
+
+    return TailoringReport(
+        role=jd.role, company=jd.company,
+        ranked_items=[RankedItem(**r) for r in ranked],
+        llm=llm_output, analysis_degraded=degraded,
+    )
