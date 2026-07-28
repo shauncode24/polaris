@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis } from '../api/resume'
+import { listJobAnalyses } from '../api/jobs'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
@@ -11,8 +12,8 @@ import ResumeAnalysisPanel from '../components/resume/ResumeAnalysisPanel'
 import ResumeReviewPanel from '../components/resume/ResumeReviewPanel'
 import ResumeVersions from '../components/resume/ResumeVersions'
 import ResumeConsistency from '../components/resume/ResumeConsistency'
-import ResumeVsJobs from '../components/resume/ResumeVsJobs'
-import ResumeEvolution from '../components/resume/ResumeEvolution'
+import RoleFitPanel from '../components/resume/RoleFitPanel'
+import CoverageGapsPanel from '../components/resume/CoverageGapsPanel'
 import './ResumePage.css'
 
 export default function ResumePage() {
@@ -25,6 +26,9 @@ export default function ResumePage() {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [error, setError] = useState(null)
+  
+  const [jobs, setJobs] = useState([])
+  const [selectedJobId, setSelectedJobId] = useState('')
 
   async function loadWorkspace() {
     try {
@@ -39,6 +43,15 @@ export default function ResumePage() {
 
   useEffect(() => {
     loadWorkspace()
+    
+    // Fetch job descriptions for target JD analysis
+    if (token) {
+      listJobAnalyses(token)
+        .then(data => {
+          setJobs(data || [])
+        })
+        .catch(console.error)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
@@ -70,10 +83,10 @@ export default function ResumePage() {
     }
   }
 
-  async function handleRunAnalysis() {
+  async function handleRunAnalysis(jobId = null) {
     setAnalyzeLoading(true)
     try {
-      await runResumeAnalysis(token)
+      await runResumeAnalysis(token, jobId)
       await loadWorkspace()
     } catch (e) {
       setError(e.message)
@@ -178,6 +191,9 @@ export default function ResumePage() {
                 onAnalyze={handleRunAnalysis}
                 analyzeLoading={analyzeLoading}
                 uploadInputRef={uploadInputRef}
+                jobs={jobs}
+                selectedJobId={selectedJobId}
+                setSelectedJobId={setSelectedJobId}
               />
 
               <div className="resume-columns">
@@ -196,14 +212,16 @@ export default function ResumePage() {
                     onRunReview={handleRunReview}
                     reviewLoading={reviewLoading}
                   />
+                  {workspace.coverage_gaps && (
+                    <CoverageGapsPanel coverage={workspace.coverage_gaps} />
+                  )}
                 </div>
 
                 {/* Right column */}
                 <div className="resume-col">
                   <ResumeVersions versions={workspace.versions} />
                   <ResumeConsistency profile_consistency={workspace.profile_consistency} />
-                  <ResumeVsJobs resume_vs_jobs={workspace.resume_vs_jobs} />
-                  <ResumeEvolution />
+                  <RoleFitPanel role_fit={workspace.role_fit} />
                 </div>
               </div>
             </>

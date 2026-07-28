@@ -1,0 +1,78 @@
+/* CoverageGapsPanel.css */
+.cgap.csec {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.cgap .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.cgap__badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.cgap__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.cgap__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.cgap__row:last-child {
+  border-bottom: none;
+}
+
+.cgap__skill {
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.cgap__source {
+  font-size: 10.5px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.cgap__cta {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cgap__cta:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.cgap__empty {
+  padding: 20px 18px;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+}

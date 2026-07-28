@@ -1,27 +1,21 @@
-/* ResumeVsJobs.css */
-.rvj {
+/* RoleFitPanel.css */
+.rfp.csec {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
-.rvj__header {
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--border);
+.rfp .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
 }
 
-.rvj__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.rvj__body {
+.rfp__body {
   padding: 8px 0;
 }
 
-.rvj__item {
+.rfp__item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -29,16 +23,16 @@
   border-bottom: 1px solid var(--border);
 }
 
-.rvj__item:last-child {
+.rfp__item:last-child {
   border-bottom: none;
 }
 
-.rvj__info {
+.rfp__info {
   flex: 1;
   min-width: 0;
 }
 
-.rvj__role {
+.rfp__role {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
@@ -47,13 +41,7 @@
   text-overflow: ellipsis;
 }
 
-.rvj__company {
-  font-size: 11.5px;
-  color: var(--text-soft);
-  margin-top: 1px;
-}
-
-.rvj__pct {
+.rfp__pct {
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
@@ -61,11 +49,11 @@
   text-align: right;
 }
 
-.rvj__pct--high { color: var(--success); }
-.rvj__pct--mid  { color: var(--warning); }
-.rvj__pct--low  { color: var(--danger); }
+.rfp__pct--high { color: var(--success); }
+.rfp__pct--mid  { color: var(--warning); }
+.rfp__pct--low  { color: var(--danger); }
 
-.rvj__empty {
+.rfp__empty {
   padding: 20px 18px;
   font-size: 13px;
   color: var(--text-soft);

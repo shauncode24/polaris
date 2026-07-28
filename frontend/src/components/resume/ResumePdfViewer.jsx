@@ -1,5 +1,6 @@
 import { useAuth } from '../../contexts/AuthContext'
 import { getResumeDownloadUrl } from '../../api/resume'
+import CollapsibleSection from '../common/CollapsibleSection'
 import './ResumePdfViewer.css'
 
 export default function ResumePdfViewer({ hasPdf }) {
@@ -12,27 +13,24 @@ export default function ResumePdfViewer({ hasPdf }) {
     ? `${getResumeDownloadUrl()}?token=${encodeURIComponent(token || '')}`
     : null
 
-  return (
-    <div className="rpv">
-      <div className="rpv__header">
-        <span className="rpv__title">Resume Preview</span>
-        {hasPdf && (
-          <div className="rpv__actions">
-            <a
-              href={pdfUrl}
-              download
-              className="rpv__btn"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 4v12M7.5 14.5L12 19l4.5-4.5" />
-                <path d="M4 19v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
-              </svg>
-              Download
-            </a>
-          </div>
-        )}
-      </div>
+  const actions = hasPdf ? (
+    <div className="rpv__actions">
+      <a
+        href={pdfUrl}
+        download
+        className="rpv__btn"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 4v12M7.5 14.5L12 19l4.5-4.5" />
+          <path d="M4 19v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
+        </svg>
+        Download
+      </a>
+    </div>
+  ) : null
 
+  return (
+    <CollapsibleSection title="Resume Preview" defaultOpen={false} actions={actions} className="rpv">
       <div className="rpv__embed-wrap">
         {hasPdf ? (
           <embed
@@ -54,6 +52,6 @@ export default function ResumePdfViewer({ hasPdf }) {
           </div>
         )}
       </div>
-    </div>
+    </CollapsibleSection>
   )
 }

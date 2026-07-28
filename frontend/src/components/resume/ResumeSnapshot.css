@@ -63,3 +63,16 @@
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+.rsnap.csec {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rsnap .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+

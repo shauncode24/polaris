@@ -27,7 +27,18 @@ function FileIcon() {
   )
 }
 
-export default function ResumeHeader({ workspace, onUpload, onReview, reviewLoading, onAnalyze, analyzeLoading, uploadInputRef }) {
+export default function ResumeHeader({
+  workspace,
+  onUpload,
+  onReview,
+  reviewLoading,
+  onAnalyze,
+  analyzeLoading,
+  uploadInputRef,
+  jobs = [],
+  selectedJobId,
+  setSelectedJobId,
+}) {
   const { current_resume, latest_analysis, latest_review, ats_flags = [], versions = [] } = workspace
   const analysisScore = latest_analysis?.overall_score
   const reviewScore = latest_review?.overall_score
@@ -105,10 +116,36 @@ export default function ResumeHeader({ workspace, onUpload, onReview, reviewLoad
         >
           {reviewLoading ? 'Reviewing…' : 'AI Review'}
         </button>
+
+        {jobs.length > 0 && (
+          <select
+            className="rh__job-select"
+            value={selectedJobId || ''}
+            onChange={(e) => setSelectedJobId(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--ink)',
+              fontSize: '12.5px',
+              fontWeight: 500,
+              maxWidth: '200px'
+            }}
+          >
+            <option value="">-- Generic Analysis --</option>
+            {jobs.map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.role} at {j.company || 'Unknown'}
+              </option>
+            ))}
+          </select>
+        )}
+
         <button
           type="button"
           className="rh__btn rh__btn--primary"
-          onClick={onAnalyze}
+          onClick={() => onAnalyze(selectedJobId)}
           disabled={analyzeLoading}
         >
           {analyzeLoading ? (

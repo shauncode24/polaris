@@ -79,3 +79,16 @@
   color: var(--text-soft);
   font-size: 13px;
 }
+
+.rpv.csec {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rpv .csec__body {
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+

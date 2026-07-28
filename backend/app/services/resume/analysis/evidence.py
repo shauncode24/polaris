@@ -10,7 +10,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import Experience, Project, GithubSnapshot
+from app.models.facts import Experience, Project, GithubSnapshot, LeetcodeSnapshot, Certificate
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence
 
@@ -50,11 +50,32 @@ async def analyze_evidence(
         }
 
     # ── Fetch skill evidence linked to those sources ────────────────────────
+    # 1. Experience & Project evidence for this resume
     ev_rows = await db.execute(
         select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
         .where(SkillEvidence.source_id.in_([uuid.UUID(sid) for sid in all_source_ids]))
     )
-    evidence_list = ev_rows.fetchall()
+    evidence_list = list(ev_rows.fetchall())
+
+    # 2. Leetcode evidence for this user
+    lc_ev_rows = await db.execute(
+        select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
+        .join(Skill, SkillEvidence.skill_id == Skill.id)
+        .join(
+            LeetcodeSnapshot,
+            (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name)
+        )
+        .where(LeetcodeSnapshot.user_id == user_id, SkillEvidence.source_type == "leetcode_tag")
+    )
+    evidence_list.extend(lc_ev_rows.fetchall())
+
+    # 3. Certificate evidence for this user
+    cert_ev_rows = await db.execute(
+        select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
+        .join(Certificate, SkillEvidence.source_id == Certificate.id)
+        .where(Certificate.user_id == user_id, SkillEvidence.source_type == "certificate")
+    )
+    evidence_list.extend(cert_ev_rows.fetchall())
 
     # ── Fetch skill display names ───────────────────────────────────────────
     skill_ids = {row[0] for row in evidence_list}
@@ -83,6 +104,8 @@ async def analyze_evidence(
                     "canonical": canonical,
                     "in_experience": False,
                     "in_project": True,
+                    "in_leetcode": False,
+                    "in_certificate": False,
                     "skill_id": str(skill_id),
                 }
             else:
@@ -101,13 +124,18 @@ async def analyze_evidence(
                 "canonical": canonical,
                 "in_experience": False,
                 "in_project": False,
+                "in_leetcode": False,
+                "in_certificate": False,
                 "skill_id": sid,
             }
-        src = str(source_id)
-        if src in exp_ids:
+        if source_type == "experience":
             skill_evidence[canonical]["in_experience"] = True
-        if src in proj_ids:
+        elif source_type == "project":
             skill_evidence[canonical]["in_project"] = True
+        elif source_type == "leetcode_tag":
+            skill_evidence[canonical]["in_leetcode"] = True
+        elif source_type == "certificate":
+            skill_evidence[canonical]["in_certificate"] = True
 
     # ── GitHub language evidence ────────────────────────────────────────────
     gh_rows = await db.execute(
@@ -127,11 +155,21 @@ async def analyze_evidence(
         in_gh = canonical.lower() in github_langs or data.get("name", "").lower() in github_langs
         data["in_github"] = in_gh
 
-        sources = sum([data["in_experience"], data["in_project"], in_gh])
-        if sources >= 2:
+        in_leetcode = data.get("in_leetcode", False)
+        in_certificate = data.get("in_certificate", False)
+
+        sources = sum([
+            data["in_experience"],
+            data["in_project"],
+            in_gh,
+            in_leetcode,
+            in_certificate
+        ])
+
+        if sources >= 3:
             data["confidence"] = "high"
             high_conf += 1
-        elif sources == 1:
+        elif sources >= 1:
             data["confidence"] = "medium"
             medium_conf += 1
         else:

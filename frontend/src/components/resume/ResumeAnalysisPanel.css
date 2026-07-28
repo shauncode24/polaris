@@ -388,3 +388,53 @@
   content: '✦';
   color: var(--accent);
 }
+
+/* Category grouping and labels */
+.rap__cat-group { margin-bottom: 14px; }
+.rap__cat-group:last-child { margin-bottom: 0; }
+.rap__cat-label {
+  display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 8px;
+}
+.rap__cat-group--green .rap__cat-label { color: var(--success); }
+.rap__cat-group--orange .rap__cat-label { color: var(--warning); }
+.rap__cat-group--red .rap__cat-label { color: var(--danger); }
+.rap__bar-fill--cat-green { background: var(--success); }
+.rap__bar-fill--cat-orange { background: var(--warning); }
+.rap__bar-fill--cat-red { background: var(--danger); }
+
+/* Stacked styling */
+.rap-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rap__header-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+}
+
+.rap__title-main {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.rap__collapsible-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Keyword details helper */
+.rap__kw-badge em {
+  font-size: 9.5px;
+  font-weight: 500;
+  opacity: 0.8;
+  margin-left: 4px;
+  font-style: normal;
+}
+

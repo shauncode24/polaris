@@ -246,6 +246,15 @@ async def get_resume_workspace(
         for j in jobs
     ]
 
+    # ── Role compatibility & Cross-source gaps ───────────────────────────────
+    from app.services.resume.analysis.evidence import analyze_evidence
+    from app.services.resume.analysis.role_fit import compute_role_fit
+    from app.services.resume.analysis.coverage import analyze_cross_source_coverage
+
+    evidence_res = await analyze_evidence(db, uid, latest.id)
+    role_fit = compute_role_fit(evidence_res.get("skills", []))
+    coverage_gaps = await analyze_cross_source_coverage(db, uid, latest.id)
+
     return {
         "has_resume": True,
         "current_resume": {
@@ -271,4 +280,6 @@ async def get_resume_workspace(
             "missing_from_resume": missing_from_resume[:10],
         },
         "resume_vs_jobs": resume_vs_jobs,
+        "role_fit": role_fit,
+        "coverage_gaps": coverage_gaps,
     }
