@@ -153,8 +153,26 @@ async def get_resume_workspace(
     )
     resume_skill_count = skill_names_result.scalar_one()
 
+    # ── Latest deterministic analysis ────────────────────────────────────────
+    analysis_result = await db.execute(
+        select(ResumeAnalysis)
+        .where(ResumeAnalysis.user_id == uid)
+        .order_by(ResumeAnalysis.created_at.desc())
+        .limit(1)
+    )
+    analysis_row = analysis_result.scalar_one_or_none()
+    
+    if not analysis_row or "warnings" not in analysis_row.analysis_json:
+        from app.services.resume.analysis.engine import run_analysis
+        try:
+            latest_analysis = await run_analysis(db, uid)
+        except Exception:
+            latest_analysis = analysis_row.analysis_json if analysis_row else None
+    else:
+        latest_analysis = analysis_row.analysis_json
+
     # ── ATS health flags ────────────────────────────────────────────────────
-    ats_flags = run_ats_checks(latest.raw_text)
+    ats_flags = latest_analysis.get("warnings", []) if latest_analysis else []
 
     # ── Latest review (LLM) ─────────────────────────────────────────────────
     review_result = await db.execute(
@@ -176,16 +194,6 @@ async def get_resume_workspace(
             "bullet_reviews": rj.get("bullet_reviews", []),
             "created_at": review_row.created_at.isoformat(),
         }
-
-    # ── Latest deterministic analysis ────────────────────────────────────────
-    analysis_result = await db.execute(
-        select(ResumeAnalysis)
-        .where(ResumeAnalysis.user_id == uid)
-        .order_by(ResumeAnalysis.created_at.desc())
-        .limit(1)
-    )
-    analysis_row = analysis_result.scalar_one_or_none()
-    latest_analysis = analysis_row.analysis_json if analysis_row else None
 
     # ── Version history ─────────────────────────────────────────────────────
     versions = []

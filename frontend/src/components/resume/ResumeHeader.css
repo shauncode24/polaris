@@ -15,8 +15,15 @@
 .rh__left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 20px;
   min-width: 0;
+}
+
+.rh__divider {
+  width: 1px;
+  height: 36px;
+  background: var(--border);
+  flex-shrink: 0;
 }
 
 .rh__file-icon {
@@ -61,49 +68,75 @@
   background: var(--border);
 }
 
-.rh__badges {
+.rh__filename-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
-.rh__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  white-space: nowrap;
+.rh__version-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
-.rh__badge--score {
-  background: var(--success-soft);
+.rh__stats-strip {
+  display: grid;
+  grid-template-rows: auto auto;
+  grid-auto-flow: column;
+  gap: 2px 20px;
+  align-items: baseline;
+  margin-top: 0;
+}
+
+.rh__stat-item {
+  display: contents;
+}
+
+.rh__stat-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-soft);
+  line-height: 1;
+}
+
+.rh__stat-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rh__stat-item--primary .rh__stat-val {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.rh__stat-item--primary .rh__stat-lbl {
+  font-size: 10px;
+}
+
+.rh__stat-item.tone-strong .rh__stat-val,
+.rh__stat-item--primary.tone-strong .rh__stat-lbl {
   color: var(--success);
 }
 
-.rh__badge--score.warn {
-  background: var(--warning-soft);
+.rh__stat-item.tone-partial .rh__stat-val,
+.rh__stat-item--primary.tone-partial .rh__stat-lbl {
   color: var(--warning);
 }
 
-.rh__badge--score.danger {
-  background: var(--danger-soft);
+.rh__stat-item.tone-weak .rh__stat-val,
+.rh__stat-item--primary.tone-weak .rh__stat-lbl {
   color: var(--danger);
-}
-
-.rh__badge--ats {
-  background: var(--info-soft);
-  color: var(--info);
-}
-
-.rh__badge--version {
-  background: var(--surface-soft);
-  color: var(--text-soft);
-  border: 1px solid var(--border);
 }
 
 .rh__right {

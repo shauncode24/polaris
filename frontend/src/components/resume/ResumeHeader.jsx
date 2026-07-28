@@ -9,12 +9,6 @@ function formatDate(iso) {
   })
 }
 
-function scoreBadgeClass(score) {
-  if (score == null) return ''
-  if (score >= 75) return 'rh__badge--score'
-  if (score >= 50) return 'rh__badge--score warn'
-  return 'rh__badge--score danger'
-}
 
 export default function ResumeHeader({
   workspace,
@@ -32,21 +26,28 @@ export default function ResumeHeader({
   const reviewScore = latest_review?.overall_score
   const atsPassed = ats_flags.filter(f => f.severity !== 'low').length === 0
 
-  const atsScore = latest_analysis?.module_scores?.parsing ?? Math.max(
-    0,
-    100 - ats_flags.reduce((acc, f) => {
-      if (f.severity === 'high') return acc + 25
-      if (f.severity === 'medium') return acc + 10
-      return acc + 5
-    }, 0)
-  )
+  const atsScore = latest_analysis?.overall_score ?? null
 
+
+  function getScoreTone(score) {
+    if (score == null) return ''
+    if (score >= 75) return 'strong'
+    if (score >= 50) return 'partial'
+    return 'weak'
+  }
 
   return (
     <div className="rh">
       <div className="rh__left">
         <div className="rh__meta" style={{ paddingLeft: 0 }}>
-          <div className="rh__filename">{current_resume.filename}</div>
+          <div className="rh__filename-row">
+            <div className="rh__filename">{current_resume.filename}</div>
+            {versions.length > 0 && (
+              <span className="rh__version-badge">
+                {versions[0]?.version || 'v1'}
+              </span>
+            )}
+          </div>
           <div className="rh__sub">
             <span>Uploaded {formatDate(current_resume.created_at)}</span>
             {versions.length > 1 && (
@@ -56,35 +57,29 @@ export default function ResumeHeader({
               </>
             )}
           </div>
-          <div className="rh__badges">
-            {versions.length > 0 && (
-              <span className="rh__badge rh__badge--version">
-                {versions[0]?.version || 'v1'} (current)
-              </span>
-            )}
-            {analysisScore != null && (
-              <span className={`rh__badge ${scoreBadgeClass(analysisScore)}`}>
-                ★ {analysisScore}/100 analysis
-              </span>
-            )}
-            {reviewScore != null && (
-              <span className={`rh__badge ${scoreBadgeClass(reviewScore)}`}>
-                ★ {reviewScore}/100 AI review
-              </span>
-            )}
-            <span className={`rh__badge ${scoreBadgeClass(atsScore)}`}>
-              ★ {atsScore}/100 ATS score
-            </span>
-            <span className={`rh__badge rh__badge--ats`}
-              style={{
-                background: atsPassed ? 'var(--success-soft)' : 'var(--warning-soft)',
-                color: atsPassed ? 'var(--success)' : 'var(--warning)',
-              }}
-            >
-              {atsPassed ? '✓ ATS checks passed' : `${ats_flags.filter(f => f.severity !== 'low').length} ATS flags`}
-            </span>
+        </div>
+
+        <div className="rh__divider" />
+
+        <div className="rh__stats-strip">
+          <div className={`rh__stat-item rh__stat-item--primary tone-${getScoreTone(atsScore)}`}>
+            <span className="rh__stat-val">{atsScore != null ? `${atsScore}` : '—'}</span>
+            <span className="rh__stat-lbl">ATS SCORE</span>
           </div>
 
+          {reviewScore != null && (
+            <div className={`rh__stat-item tone-${getScoreTone(reviewScore)}`}>
+              <span className="rh__stat-val">{reviewScore}</span>
+              <span className="rh__stat-lbl">AI REVIEW</span>
+            </div>
+          )}
+
+          {analysisScore != null && (
+            <div className={`rh__stat-item tone-${getScoreTone(analysisScore)}`}>
+              <span className="rh__stat-val">{analysisScore}</span>
+              <span className="rh__stat-lbl">ANALYSIS</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -122,7 +117,7 @@ export default function ResumeHeader({
 
         <button
           type="button"
-          className="rh__btn"
+          className="rh__btn rh__btn--primary"
           onClick={onReview}
           disabled={reviewLoading}
         >

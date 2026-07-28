@@ -6,22 +6,14 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const MODULE_CATEGORY = {
-  structure: 'green', parsing: 'green', formatting: 'green',
-  content: 'orange', metrics: 'orange',
-  keywords: 'red', evidence: 'red',
-}
-const CATEGORY_LABEL = { green: 'Formatting & ATS', orange: 'Content Quality', red: 'Keywords & Evidence' }
-const CATEGORY_ORDER = ['green', 'orange', 'red']
-
-function groupModules(moduleScores) {
-  const groups = { green: [], orange: [], red: [] }
-  for (const [name, val] of Object.entries(moduleScores)) {
-    const cat = MODULE_CATEGORY[name] || 'orange'
-    groups[cat].push({ name, val })
-  }
-  return groups
-}
+const CATEGORIES = [
+  { key: 'parsing', label: 'Parsing & ATS Compatibility', weight: 25 },
+  { key: 'completeness', label: 'Resume Completeness', weight: 20 },
+  { key: 'content_quality', label: 'Content Quality', weight: 25 },
+  { key: 'structure', label: 'Resume Structure & Organization', weight: 15 },
+  { key: 'keywords', label: 'Keyword Coverage', weight: 10 },
+  { key: 'professionalism', label: 'Professionalism', weight: 5 },
+]
 
 export default function ResumeAnalysisPanel({ analysis, onRunAnalysis, analysisLoading }) {
   if (!analysis) {
@@ -77,23 +69,21 @@ export default function ResumeAnalysisPanel({ analysis, onRunAnalysis, analysisL
             </div>
 
             <div className="rap__modules">
-              {CATEGORY_ORDER.map((cat) => {
-                const items = groupModules(module_scores)[cat]
-                if (!items.length) return null
+              {CATEGORIES.map(({ key, label, weight }) => {
+                const val = module_scores?.[key] ?? 0
+                const tone = val >= 80 ? 'high' : val >= 50 ? 'mid' : 'low'
                 return (
-                  <div className={`rap__cat-group rap__cat-group--${cat}`} key={cat}>
-                    <span className="rap__cat-label">{CATEGORY_LABEL[cat]}</span>
-                    {items.map(({ name, val }) => (
-                      <div className="rap__module-bar" key={name}>
-                        <div className="rap__module-meta">
-                          <span className="rap__module-name">{name === 'parsing' ? 'ATS parsing' : name}</span>
-                          <span className="rap__module-score">{val}%</span>
-                        </div>
-                        <div className="rap__bar-track">
-                          <div className={`rap__bar-fill rap__bar-fill--cat-${cat}`} style={{ width: `${val}%` }} />
-                        </div>
+                  <div className="rap__module-bar" key={key}>
+                    <div className="rap__module-meta">
+                      <div className="rap__module-name-group" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span className="rap__module-name">{label}</span>
+                        <span className="rap__module-weight" style={{ fontSize: '10.5px', color: 'var(--text-soft)', fontWeight: 500 }}>({weight}%)</span>
                       </div>
-                    ))}
+                      <span className="rap__module-score">{val}/100</span>
+                    </div>
+                    <div className="rap__bar-track">
+                      <div className={`rap__bar-fill ${tone}`} style={{ width: `${val}%` }} />
+                    </div>
                   </div>
                 )
               })}

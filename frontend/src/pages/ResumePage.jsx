@@ -87,12 +87,7 @@ export default function ResumePage() {
   const hasResume = workspace?.has_resume
 
   // Combine engine parsing warnings + structure issues for the Health component if they exist
-  let healthFlags = workspace?.ats_flags || []
-  if (workspace?.latest_analysis?.modules) {
-    const parseWarns = workspace.latest_analysis.modules.parsing?.warnings || []
-    const structIssues = workspace.latest_analysis.modules.structure?.issues || []
-    healthFlags = [...parseWarns, ...structIssues]
-  }
+  const healthFlags = workspace?.latest_analysis?.warnings || workspace?.ats_flags || []
 
   return (
     <div className="resume-layout">

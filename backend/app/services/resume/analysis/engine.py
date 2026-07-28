@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import Experience, Project, JobDescription, Resume, GithubSnapshot, LeetcodeSnapshot, Certificate
+from app.models.facts import Experience, Project, Education, JobDescription, Resume, GithubSnapshot, LeetcodeSnapshot, Certificate
 from app.models.structure import Skill
 from app.models.inference import ResumeAnalysis
 
@@ -78,6 +78,14 @@ async def run_analysis(
     )
     projects = list(proj_result.scalars().all())
 
+    edu_result = await db.execute(
+        select(Education).where(
+            Education.user_id == user_id,
+            Education.resume_id == resume.id,
+        )
+    )
+    education = list(edu_result.scalars().all())
+
     all_bullets = _collect_bullets(experiences, projects)
 
     # ── 3. JD keyword extraction (if provided) ───────────────────────────────
@@ -141,20 +149,20 @@ async def run_analysis(
     keywords   = analyze_keywords(raw_text, jd_keywords, profile_skills if profile_skills else None)
     evidence   = await analyze_evidence(db, user_id, resume.id)
 
-    # ── 5. Aggregate ─────────────────────────────────────────────────────────
-    module_scores = {
-        "structure":  structure["score"],
-        "parsing":    parsing["score"],
-        "formatting": formatting["score"],
-        "content":    content["score"],
-        "metrics":    metrics["score"],
-        "keywords":   keywords["score"],
-        "evidence":   evidence["score"],
-    }
+    # ── 5. Run ATS v2 Scorer ────────────────────────────────────────────────
+    from app.services.resume.analysis.ats_scorer_v2 import analyze_ats_v2
+    ats_res = analyze_ats_v2(
+        raw_text=raw_text,
+        experiences=experiences,
+        projects=projects,
+        education=education,
+        profile_skills=profile_skills if profile_skills else None
+    )
 
-    overall    = compute_overall_score(module_scores)
-    grade      = get_grade(overall)
-    label      = get_label(overall)
+    overall = ats_res["score"]
+    module_scores = ats_res["module_scores"]
+    grade = get_grade(overall)
+    label = get_label(overall)
     grade_color = get_grade_color(overall)
 
     # ── 6. Suggestions ───────────────────────────────────────────────────────
@@ -168,6 +176,7 @@ async def run_analysis(
         "label":          label,
         "grade_color":    grade_color,
         "module_scores":  module_scores,
+        "warnings":       ats_res.get("warnings", []),
         "modules": {
             "structure":  structure,
             "parsing":    parsing,
