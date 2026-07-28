@@ -1,0 +1,21 @@
+.lc-diff__bar {
+  display: flex;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--surface-soft);
+  margin: 16px 0 18px;
+}
+.lc-diff__seg--easy { background: var(--success); }
+.lc-diff__seg--medium { background: var(--warning); }
+.lc-diff__seg--hard { background: var(--danger); }
+
+.lc-diff__stats { display: flex; justify-content: space-between; text-align: center; }
+.lc-diff__stat { display: flex; flex-direction: column; gap: 2px; }
+.lc-diff__value { font-size: 20px; font-weight: 700; }
+.lc-diff__value--easy { color: var(--success); }
+.lc-diff__value--medium { color: var(--warning); }
+.lc-diff__value--hard { color: var(--danger); }
+.lc-diff__label { font-size: 12px; color: var(--text-soft); }
+
+.lc-diff__insight { font-size: 12.5px; color: var(--text-soft); margin-top: 16px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 14px; }

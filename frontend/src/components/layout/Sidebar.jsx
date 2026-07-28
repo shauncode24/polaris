@@ -33,7 +33,7 @@ function useNavGroups() {
         { key: 'resume', label: 'Resume', icon: IconDocument, to: '/resume', badge: results.resume ? 'Synced' : null },
         { key: 'projects-profile', label: 'Projects', icon: IconFolder, to: '/projects' },
         { key: 'github', label: 'GitHub', icon: IconGithub, to: '/github', badge: results.github ? 'Synced' : null },
-        { key: 'leetcode', label: 'LeetCode', icon: IconCode, to: '/build-profile', badge: results.leetcode ? 'Synced' : null },
+        { key: 'leetcode', label: 'LeetCode', icon: IconCode, to: '/leetcode', badge: results.leetcode ? 'Synced' : null },
         { key: 'certificates', label: 'Certificates', icon: IconAward, to: '/build-profile' },
         { key: 'notes', label: 'Notes', icon: IconClipboardList },
       ],

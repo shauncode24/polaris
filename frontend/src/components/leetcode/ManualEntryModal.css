@@ -1,0 +1,35 @@
+.lc-modal__backdrop {
+  position: fixed; inset: 0;
+  background: var(--overlay);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+.lc-modal {
+  width: 100%; max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 22px;
+}
+.lc-modal h3 { font-size: 16px; margin-bottom: 6px; }
+.lc-modal__lead { font-size: 12.5px; color: var(--text-soft); margin-bottom: 14px; }
+.lc-modal__textarea {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.lc-modal__error { font-size: 12.5px; color: var(--danger); margin-top: 8px; }
+.lc-modal__actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.lc-modal__cancel { background: none; border: none; color: var(--text-soft); font-size: 13px; cursor: pointer; }
+.lc-modal__save {
+  padding: 8px 16px; border-radius: var(--radius-sm); border: none;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.lc-modal__save:disabled { opacity: 0.5; cursor: not-allowed; }

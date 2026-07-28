@@ -1,0 +1,6 @@
+.lc-career__list { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+.lc-career__item { display: flex; flex-direction: column; gap: 2px; }
+.lc-career__label { font-size: 13px; font-weight: 700; color: var(--ink); }
+.lc-career__note { font-size: 12.5px; }
+.lc-career__note--ready { color: var(--success); }
+.lc-career__note--warn { color: var(--warning); }

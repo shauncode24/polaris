@@ -1,0 +1,5 @@
+.lc-contest__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 6px; }
+.lc-contest__stat--wide { grid-column: 1 / -1; }
+.lc-contest__stat { display: flex; flex-direction: column; gap: 2px; }
+.lc-contest__value { font-size: 22px; font-weight: 700; color: var(--ink); }
+.lc-contest__label { font-size: 12px; color: var(--text-soft); }

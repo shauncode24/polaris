@@ -1,0 +1,44 @@
+.lc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lc-header__title-row { display: flex; align-items: center; gap: 12px; }
+.lc-header__title-row h1 { font-size: 26px; }
+
+.lc-header__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--success);
+  background: var(--success-soft);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+.lc-header__status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.lc-header__sub { font-size: 13.5px; color: var(--text-soft); margin-top: 6px; }
+
+.lc-header__actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.lc-header__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lc-header__btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.lc-header__btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.lc-header__btn--danger:hover { border-color: var(--danger); color: var(--danger); }
