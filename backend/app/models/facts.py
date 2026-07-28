@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, Boolean
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -53,10 +53,16 @@ class Project(Base):
     resume_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"))
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
+    tagline: Mapped[str | None] = mapped_column(String(255))
     stack: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     repo_url: Mapped[str | None] = mapped_column(String(500))
     impact_metrics: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = created_at_col()
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 
 class Education(Base):

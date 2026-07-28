@@ -1,5 +1,6 @@
 // frontend/src/pages/InterviewPrepPage.jsx
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Sidebar from '../components/layout/Sidebar'
 import BreadcrumbBar from '../components/layout/BreadcrumbBar'
@@ -26,6 +27,7 @@ function nextId(prefix) {
 
 function InterviewPrepPage() {
   const { token } = useAuth()
+  const [searchParams] = useSearchParams()
 
   const [jobs, setJobs] = useState([])
   const [sessions, setSessions] = useState([])
@@ -41,6 +43,7 @@ function InterviewPrepPage() {
   const [messages, setMessages] = useState([])
   const [pending, setPending] = useState(false)
   const bottomRef = useRef(null)
+  const prefillHandled = useRef(false)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -106,7 +109,20 @@ function InterviewPrepPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Lets other pages (e.g. Projects' "Project intelligence" quick actions)
+  // hand off a ready-made question via ?prefill=... and have it asked
+  // automatically, exactly once per navigation.
+  useEffect(() => {
+    const prefill = searchParams.get('prefill')
+    if (prefill && !prefillHandled.current) {
+      prefillHandled.current = true
+      handleSubmitAnswer(prefill)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
   function handleNewSession() {
+    prefillHandled.current = true
     startSession()
   }
 

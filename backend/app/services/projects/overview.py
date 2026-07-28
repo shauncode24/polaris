@@ -1,0 +1,116 @@
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.facts import GithubSnapshot, Project
+from app.models.github_analysis import GithubProjectAnalysis
+from app.models.structure import Capability, ProjectCapability, ProjectSkill, Skill
+from app.schemas.projects import ProjectCard, ProjectsOverviewResponse, ProjectsStats
+from app.services.projects.scoring import compute_rating, compute_status
+
+
+def _fallback_tagline(name: str, description: str | None) -> str:
+    if description:
+        first_sentence = description.strip().split(".")[0].strip()
+        if first_sentence:
+            return first_sentence if len(first_sentence) <= 80 else first_sentence[:77].rstrip() + "..."
+    return name
+
+
+async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverviewResponse:
+    projects_result = await db.execute(
+        select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
+    )
+    projects = list(projects_result.scalars().all())
+
+    if not projects:
+        return ProjectsOverviewResponse(stats=ProjectsStats(), projects=[])
+
+    project_ids = [p.id for p in projects]
+
+    skill_rows = await db.execute(
+        select(ProjectSkill.project_id, Skill.name, Skill.canonical_name)
+        .join(Skill, ProjectSkill.skill_id == Skill.id)
+        .where(ProjectSkill.project_id.in_(project_ids))
+    )
+    skills_by_project: dict = {}
+    all_skill_canonicals: set[str] = set()
+    for project_id, name, canonical in skill_rows.all():
+        skills_by_project.setdefault(project_id, []).append({"name": name, "canonical": canonical})
+        all_skill_canonicals.add(canonical)
+
+    capability_rows = await db.execute(
+        select(ProjectCapability.project_id, Capability.name)
+        .join(Capability, ProjectCapability.capability_id == Capability.id)
+        .where(ProjectCapability.project_id.in_(project_ids))
+    )
+    capabilities_by_project: dict = {}
+    all_capability_names: set[str] = set()
+    for project_id, name in capability_rows.all():
+        capabilities_by_project.setdefault(project_id, []).append(name)
+        all_capability_names.add(name)
+
+    analysis_rows = await db.execute(
+        select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user_id)
+    )
+    # Best-effort match by name — there's no direct FK between a resume-sourced
+    # Project and a synced GitHub repo, so this is a heuristic, not a guarantee.
+    analysis_by_repo_name = {a.repo_name.lower(): a for a in analysis_rows.scalars().all()}
+
+    connected_repos_result = await db.execute(
+        select(func.count(func.distinct(GithubSnapshot.repo_name))).where(GithubSnapshot.user_id == user_id)
+    )
+    connected_repositories = connected_repos_result.scalar_one() or 0
+
+    cards: list[ProjectCard] = []
+    for p in projects:
+        project_skills = skills_by_project.get(p.id, [])
+        project_capabilities = capabilities_by_project.get(p.id, [])
+
+        matched_analysis = analysis_by_repo_name.get(p.name.lower())
+
+        rating = compute_rating(
+            description_length=len(p.description or ""),
+            skill_count=len(project_skills),
+            capability_count=len(project_capabilities),
+            github_quality_score=matched_analysis.quality_score if matched_analysis else None,
+            github_activity_score=matched_analysis.activity_score if matched_analysis else None,
+        )
+        status = compute_status(matched_analysis.is_active if matched_analysis else None)
+
+        cards.append(
+            ProjectCard(
+                id=str(p.id),
+                name=p.name,
+                tagline=p.tagline or _fallback_tagline(p.name, p.description),
+                description=p.description,
+                stack=(p.stack or [s["name"] for s in project_skills])[:6],
+                capabilities=list(project_capabilities),
+                is_featured=False,  # set below, rank-based
+                status=status,
+                rating=rating,
+                updated_at=p.updated_at or p.created_at,
+                repo_url=p.repo_url,
+                has_repo=matched_analysis is not None or bool(p.repo_url),
+            )
+        )
+
+    # Feature the top-rated projects (up to 4) — computed by rank rather than
+    # a stored flag, so "Featured" stays honest as new evidence comes in
+    # instead of drifting out of date like a manually-set flag would.
+    featured_count = min(4, len(cards))
+    ranked = sorted(cards, key=lambda c: c.rating, reverse=True)
+    featured_ids = {c.id for c in ranked[:featured_count] if c.rating >= 3.0}
+    for c in cards:
+        c.is_featured = c.id in featured_ids
+
+    cards.sort(key=lambda c: c.updated_at, reverse=True)
+
+    stats = ProjectsStats(
+        total=len(cards),
+        featured=sum(1 for c in cards if c.is_featured),
+        technologies=len(all_skill_canonicals),
+        capabilities=len(all_capability_names),
+        connected_repositories=connected_repositories,
+    )
+
+    return ProjectsOverviewResponse(stats=stats, projects=cards)

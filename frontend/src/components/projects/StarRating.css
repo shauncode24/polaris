@@ -1,0 +1,3 @@
+.star-rating { display: inline-flex; gap: 1px; line-height: 1; }
+.star-rating__star { color: var(--border); }
+.star-rating__star--filled { color: #d4a72c; }

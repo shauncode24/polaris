@@ -1,0 +1,10 @@
+.projects-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.projects-header__title { font-size: 26px; }
+.projects-header__sub { font-size: 14px; color: var(--text-soft); margin-top: 4px; max-width: 560px; }
+.projects-header__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

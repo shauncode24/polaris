@@ -1,0 +1,41 @@
+.compare-projects { display: flex; flex-direction: column; gap: 12px; }
+.compare-projects__header h2 { font-size: 19px; }
+.compare-projects__lead { font-size: 13px; color: var(--text-soft); margin-top: 2px; }
+
+.compare-projects__card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.compare-projects__title { font-size: 15px; margin-bottom: 10px; }
+.compare-projects__metrics { display: flex; flex-direction: column; gap: 10px; }
+.compare-projects__row { display: flex; align-items: center; justify-content: space-between; font-size: 13.5px; }
+.compare-projects__label { color: var(--text-soft); }
+.compare-projects__winner { font-weight: 700; color: var(--ink); }
+
+.compare-projects__recommendation {
+  background: var(--accent-soft);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.compare-projects__recommendation-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+.compare-projects__recommendation p { font-size: 13.5px; color: var(--ink); line-height: 1.55; }
+
+@media (max-width: 720px) {
+  .compare-projects__card { grid-template-columns: 1fr; }
+}

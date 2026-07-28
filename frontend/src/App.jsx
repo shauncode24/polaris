@@ -13,6 +13,7 @@ import CareerPlannerPage from './pages/CareerPlannerPage'
 import InterviewPrepPage from './pages/InterviewPrepPage'
 import ProfilePage from './pages/ProfilePage'
 import ResumePage from './pages/ResumePage'
+import ProjectsPage from './pages/ProjectsPage'
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
               <Route path="/interview" element={<ProtectedRoute><InterviewPrepPage /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/resume" element={<ProtectedRoute><ResumePage /></ProtectedRoute>} />
+              <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </ProfileDataProvider>
