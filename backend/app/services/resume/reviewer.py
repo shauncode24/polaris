@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -141,6 +142,26 @@ async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewr
         raise ReviewGenerationError(f"Resume review rewrites LLM call failed: {e}") from e
 
 
+def sanitize_ai_review_text(text: str) -> str:
+    if not text:
+        return text
+    # Match uuid-based keys like exp_uuid_idx or proj_uuid_idx (with optional quotes)
+    raw_id_pattern = r"['\"]?(?:exp|proj)_[a-fA-F0-9\-]{32,36}_\d+['\"]?"
+    # Replace list of IDs inside parentheses, e.g., (exp_1, exp_2)
+    text = re.sub(rf"\(\s*{raw_id_pattern}(?:\s*,\s*{raw_id_pattern})*\s*\)", "", text)
+    # Replace individual IDs
+    text = re.sub(raw_id_pattern, "", text)
+    # Clean up spaces & parentheses
+    text = re.sub(r"\s+", " ", text)
+    text = text.replace(" ( )", "").replace("()", "").strip()
+    # Clean up empty quotes/braces and double commas
+    text = re.sub(r"\s*,\s*,", ",", text)
+    text = re.sub(r",\s*\.", ".", text)
+    # If the text ends or starts with a comma/space
+    text = text.strip(", ")
+    return text
+
+
 async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewReport:
     resume = await _get_latest_resume(db, user_id)
     if resume is None:
@@ -261,9 +282,9 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
 
     report = ResumeReviewReport(
         overall_score=score,
-        summary=narrative.summary,
-        strengths=narrative.strengths,
-        top_priority_fixes=narrative.top_priority_fixes,
+        summary=sanitize_ai_review_text(narrative.summary),
+        strengths=[sanitize_ai_review_text(s) for s in narrative.strengths] if narrative.strengths else [],
+        top_priority_fixes=[sanitize_ai_review_text(f) for f in narrative.top_priority_fixes] if narrative.top_priority_fixes else [],
         bullet_reviews=bullet_reviews,
         ats_flags=[ATSFlag(**f) for f in ats_flags],
         stats=stats,

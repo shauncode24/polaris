@@ -18,6 +18,18 @@ function barColor(score) {
   return 'var(--danger)'
 }
 
+function sanitizeText(text) {
+  if (!text) return ''
+  let clean = text.replace(/\(\s*(?:exp|proj)_[a-f0-9\-]{32,36}_\d+(?:\s*,\s*(?:exp|proj)_[a-f0-9\-]{32,36}_\d+)*\s*\)/gi, '')
+  const rawIdRegex = /['"]?(?:exp|proj)_[a-f0-9\-]{32,36}_\d+['"]?/gi
+  clean = clean.replace(rawIdRegex, '')
+  clean = clean.replace(/\s+/g, ' ')
+  clean = clean.replace(/\s*\(\s*\)/g, '')
+  clean = clean.replace(/,\s*\./g, '.')
+  clean = clean.replace(/\s*,\s*,/g, ',')
+  return clean.trim().replace(/^,\s*/, '').replace(/,\s*$/, '')
+}
+
 export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }) {
   if (!review) {
     return (
@@ -57,8 +69,8 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
                 <div className="rrp__score-label">Overall Resume Score</div>
                 <div className="rrp__bar-track">
                   <div
-                    className="rrp__bar-fill"
-                    style={{ width: `${score}%`, background: barColor(score) }}
+                    className="rrppm__bar-fill"
+                    style={{ width: `${score}%`, background: barColor(score), height: '100%', borderRadius: 'var(--radius-pill)', transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }}
                   />
                 </div>
               </div>
@@ -87,7 +99,7 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
             )}
 
             {/* Summary */}
-            {summary && <p className="rrp__summary">{summary}</p>}
+            {summary && <p className="rrp__summary">{sanitizeText(summary)}</p>}
 
             {/* Strengths */}
             {strengths.length > 0 && (
@@ -97,7 +109,7 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
                   {strengths.slice(0, 3).map((s, i) => (
                     <div key={i} className="rrp__list-item" style={{'--color': 'var(--success)'}}>
                       <span style={{ color: 'var(--success)', marginTop: 1 }}>✓</span>
-                      {s}
+                      {sanitizeText(s)}
                     </div>
                   ))}
                 </div>
@@ -112,7 +124,7 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
                   {top_priority_fixes.slice(0, 4).map((f, i) => (
                     <div key={i} className="rrp__list-item">
                       <span style={{ color: 'var(--warning)', marginTop: 1 }}>!</span>
-                      {f}
+                      {sanitizeText(f)}
                     </div>
                   ))}
                 </div>

@@ -151,3 +151,10 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.rh__btn--active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+

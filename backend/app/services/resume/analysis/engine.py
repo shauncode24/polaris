@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import Experience, Project, JobDescription, Resume
+from app.models.facts import Experience, Project, JobDescription, Resume, GithubSnapshot, LeetcodeSnapshot, Certificate
+from app.models.structure import Skill
 from app.models.inference import ResumeAnalysis
 
 from app.services.resume.analysis.structure   import analyze_structure
@@ -101,7 +102,43 @@ async def run_analysis(
     formatting = analyze_formatting(raw_text)
     content    = analyze_content(all_bullets)
     metrics    = analyze_metrics(all_bullets)
-    keywords   = analyze_keywords(raw_text, jd_keywords)
+
+    # Fetch user's profile skills to use as keyword pool if no target JD is chosen
+    profile_skills = set()
+    if not jd_keywords:
+        # GitHub
+        gh_rows = await db.execute(
+            select(GithubSnapshot.languages).where(GithubSnapshot.user_id == user_id)
+        )
+        for row in gh_rows.fetchall():
+            if row[0]:
+                profile_skills.update(k.lower() for k in row[0].keys())
+
+        # Leetcode
+        lc_ev_rows = await db.execute(
+            select(Skill.canonical_name)
+            .join(LeetcodeSnapshot, (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name))
+            .where(LeetcodeSnapshot.user_id == user_id)
+        )
+        profile_skills.update(r[0].lower() for r in lc_ev_rows.fetchall() if r[0])
+
+        # Certificates
+        cert_ev_rows = await db.execute(
+            select(Certificate.skills).where(Certificate.user_id == user_id)
+        )
+        for row in cert_ev_rows.fetchall():
+            if row[0]:
+                profile_skills.update(s.lower() for s in row[0])
+
+        # Experience & Project stacks
+        for exp in experiences:
+            if exp.stack:
+                profile_skills.update(s.lower() for s in exp.stack)
+        for proj in projects:
+            if proj.stack:
+                profile_skills.update(s.lower() for s in proj.stack)
+
+    keywords   = analyze_keywords(raw_text, jd_keywords, profile_skills if profile_skills else None)
     evidence   = await analyze_evidence(db, user_id, resume.id)
 
     # ── 5. Aggregate ─────────────────────────────────────────────────────────

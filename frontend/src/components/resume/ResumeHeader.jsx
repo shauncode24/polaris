@@ -16,17 +16,6 @@ function scoreBadgeClass(score) {
   return 'rh__badge--score danger'
 }
 
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="40" height="48" rx="6" fill="var(--accent-soft)" />
-      <path d="M8 14h18l8 8v20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V16a2 2 0 0 1 2-2z" fill="var(--surface)" stroke="var(--border)" strokeWidth="1" />
-      <path d="M26 14v8h8" stroke="var(--border)" strokeWidth="1" fill="none" />
-      <text x="12" y="34" fill="var(--accent)" fontSize="8" fontWeight="700" fontFamily="sans-serif">PDF</text>
-    </svg>
-  )
-}
-
 export default function ResumeHeader({
   workspace,
   onUpload,
@@ -35,22 +24,27 @@ export default function ResumeHeader({
   onAnalyze,
   analyzeLoading,
   uploadInputRef,
-  jobs = [],
-  selectedJobId,
-  setSelectedJobId,
+  showPreview,
+  onTogglePreview,
 }) {
   const { current_resume, latest_analysis, latest_review, ats_flags = [], versions = [] } = workspace
   const analysisScore = latest_analysis?.overall_score
   const reviewScore = latest_review?.overall_score
   const atsPassed = ats_flags.filter(f => f.severity !== 'low').length === 0
 
+  const atsScore = Math.max(
+    0,
+    100 - ats_flags.reduce((acc, f) => {
+      if (f.severity === 'high') return acc + 25
+      if (f.severity === 'medium') return acc + 10
+      return acc + 5
+    }, 0)
+  )
+
   return (
     <div className="rh">
       <div className="rh__left">
-        <div className="rh__file-icon">
-          <FileIcon />
-        </div>
-        <div className="rh__meta">
+        <div className="rh__meta" style={{ paddingLeft: 0 }}>
           <div className="rh__filename">{current_resume.filename}</div>
           <div className="rh__sub">
             <span>Uploaded {formatDate(current_resume.created_at)}</span>
@@ -73,10 +67,13 @@ export default function ResumeHeader({
               </span>
             )}
             {reviewScore != null && (
-              <span className="rh__badge rh__badge--version">
+              <span className={`rh__badge ${scoreBadgeClass(reviewScore)}`}>
                 ★ {reviewScore}/100 AI review
               </span>
             )}
+            <span className={`rh__badge ${scoreBadgeClass(atsScore)}`}>
+              ★ {atsScore}/100 ATS score
+            </span>
             <span className={`rh__badge rh__badge--ats`}
               style={{
                 background: atsPassed ? 'var(--success-soft)' : 'var(--warning-soft)',
@@ -86,6 +83,7 @@ export default function ResumeHeader({
               {atsPassed ? '✓ ATS checks passed' : `${ats_flags.filter(f => f.severity !== 'low').length} ATS flags`}
             </span>
           </div>
+
         </div>
       </div>
 
@@ -108,6 +106,19 @@ export default function ResumeHeader({
           </svg>
           Re-upload
         </button>
+        
+        <button
+          type="button"
+          className={`rh__btn ${showPreview ? 'rh__btn--active' : ''}`}
+          onClick={onTogglePreview}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          {showPreview ? 'Hide Preview' : 'Resume Preview'}
+        </button>
+
         <button
           type="button"
           className="rh__btn"
@@ -117,35 +128,10 @@ export default function ResumeHeader({
           {reviewLoading ? 'Reviewing…' : 'AI Review'}
         </button>
 
-        {jobs.length > 0 && (
-          <select
-            className="rh__job-select"
-            value={selectedJobId || ''}
-            onChange={(e) => setSelectedJobId(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--ink)',
-              fontSize: '12.5px',
-              fontWeight: 500,
-              maxWidth: '200px'
-            }}
-          >
-            <option value="">-- Generic Analysis --</option>
-            {jobs.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.role} at {j.company || 'Unknown'}
-              </option>
-            ))}
-          </select>
-        )}
-
         <button
           type="button"
           className="rh__btn rh__btn--primary"
-          onClick={() => onAnalyze(selectedJobId)}
+          onClick={() => onAnalyze()}
           disabled={analyzeLoading}
         >
           {analyzeLoading ? (

@@ -20,39 +20,30 @@ const SEV_ICON = {
 }
 
 export default function ResumeHealth({ ats_flags = [] }) {
-  const blocking = ats_flags.filter(f => f.severity !== 'low').length
   const allGood = ats_flags.length === 0
 
   return (
-    <div className="rh-checks">
-      <div className="rh-checks__header">
-        <span className="rh-checks__title">ATS Health Checks</span>
-        <span className={`rh-checks__score ${blocking === 0 ? 'rh-checks__score--pass' : 'rh-checks__score--fail'}`}>
-          {blocking === 0 ? '✓ All clear' : `${blocking} issue${blocking > 1 ? 's' : ''}`}
-        </span>
-      </div>
-      <div className="rh-checks__body">
-        {allGood ? (
-          <div className="rh-checks__all-good">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            No ATS issues detected — great work!
-          </div>
-        ) : (
-          ats_flags.map((flag, i) => (
-            <div className="rh-checks__item" key={i}>
-              <div className={`rh-checks__icon rh-checks__icon--${flag.severity}`}>
-                {SEV_ICON[flag.severity] || SEV_ICON.low}
-              </div>
-              <div>
-                <div className="rh-checks__detail">{flag.detail}</div>
-                <div className="rh-checks__sev">{flag.severity} severity</div>
-              </div>
+    <div className="rh-checks__body">
+      {allGood ? (
+        <div className="rh-checks__all-good">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          No ATS issues detected — great work!
+        </div>
+      ) : (
+        ats_flags.map((flag, i) => (
+          <div className="rh-checks__item" key={i}>
+            <div className={`rh-checks__icon rh-checks__icon--${flag.severity}`}>
+              {SEV_ICON[flag.severity] || SEV_ICON.low}
             </div>
-          ))
-        )}
-      </div>
+            <div>
+              <div className="rh-checks__detail">{flag.detail}</div>
+              <div className="rh-checks__sev">{flag.severity} severity</div>
+            </div>
+          </div>
+        ))
+      )}
     </div>
   )
 }

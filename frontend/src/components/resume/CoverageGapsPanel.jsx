@@ -2,11 +2,12 @@ import CollapsibleSection from '../common/CollapsibleSection'
 import './CoverageGapsPanel.css'
 
 export default function CoverageGapsPanel({ coverage }) {
-  const githubGaps = coverage?.github_not_on_resume || []
-  const leetcodeGaps = coverage?.leetcode_not_on_resume || []
-  const certGaps = coverage?.certificates_not_on_resume || []
+  const githubGaps = coverage?.github_gaps || []
+  const leetcodeGaps = coverage?.leetcode_gaps || []
+  const certGaps = coverage?.certificate_gaps || []
+  const projectSuggestions = coverage?.project_suggestions || []
   
-  const totalGaps = githubGaps.length + leetcodeGaps.length + certGaps.length
+  const totalGaps = githubGaps.length + leetcodeGaps.length + certGaps.length + projectSuggestions.length
 
   if (totalGaps === 0) {
     return (
@@ -18,8 +19,12 @@ export default function CoverageGapsPanel({ coverage }) {
     )
   }
 
-  function handleAddClick(skill, source) {
+  function handleAddClick(skill) {
     alert(`Add "${skill}" to your resume to close the coverage gap! Resume text editor coming soon.`);
+  }
+
+  function handleAddProjectClick(repoName) {
+    alert(`Showcase project "${repoName}" on your resume! Resume text editor coming soon.`);
   }
 
   return (
@@ -31,25 +36,44 @@ export default function CoverageGapsPanel({ coverage }) {
       className="cgap"
     >
       <div className="cgap__list">
-        {githubGaps.map(skill => (
-          <div className="cgap__row" key={skill}>
-            <span className="cgap__skill">{skill.replace(/_/g, ' ')}</span>
-            <span className="cgap__source">from GitHub</span>
-            <button className="cgap__cta" onClick={() => handleAddClick(skill, 'GitHub')}>+ Add to Resume</button>
+        {githubGaps.map(gap => (
+          <div className="cgap__row" key={gap.skill}>
+            <div className="cgap__text-col">
+              <span className="cgap__skill">{gap.skill.replace(/_/g, ' ')}</span>
+              <p className="cgap__reason">{gap.reason}</p>
+            </div>
+            <span className="cgap__source cgap__source--github">GitHub</span>
+            <button className="cgap__cta" onClick={() => handleAddClick(gap.skill)}>+ Add</button>
           </div>
         ))}
-        {leetcodeGaps.map(skill => (
-          <div className="cgap__row" key={skill}>
-            <span className="cgap__skill">{skill.replace(/_/g, ' ')}</span>
-            <span className="cgap__source">from LeetCode</span>
-            <button className="cgap__cta" onClick={() => handleAddClick(skill, 'LeetCode')}>+ Add to Resume</button>
+        {projectSuggestions.map(proj => (
+          <div className="cgap__row cgap__row--project" key={proj.repo_name}>
+            <div className="cgap__text-col">
+              <span className="cgap__skill">{proj.repo_name}</span>
+              <p className="cgap__reason">{proj.reason}</p>
+            </div>
+            <span className="cgap__source cgap__source--suggest">Suggestion</span>
+            <button className="cgap__cta cgap__cta--showcase" onClick={() => handleAddProjectClick(proj.repo_name)}>+ Showcase</button>
           </div>
         ))}
-        {certGaps.map(skill => (
-          <div className="cgap__row" key={skill}>
-            <span className="cgap__skill">{skill.replace(/_/g, ' ')}</span>
-            <span className="cgap__source">from Certificates</span>
-            <button className="cgap__cta" onClick={() => handleAddClick(skill, 'Certificates')}>+ Add to Resume</button>
+        {leetcodeGaps.map(gap => (
+          <div className="cgap__row" key={gap.skill}>
+            <div className="cgap__text-col">
+              <span className="cgap__skill">{gap.skill.replace(/_/g, ' ')}</span>
+              <p className="cgap__reason">{gap.reason}</p>
+            </div>
+            <span className="cgap__source cgap__source--leetcode">LeetCode</span>
+            <button className="cgap__cta" onClick={() => handleAddClick(gap.skill)}>+ Add</button>
+          </div>
+        ))}
+        {certGaps.map(gap => (
+          <div className="cgap__row" key={gap.skill}>
+            <div className="cgap__text-col">
+              <span className="cgap__skill">{gap.skill.replace(/_/g, ' ')}</span>
+              <p className="cgap__reason">{gap.reason}</p>
+            </div>
+            <span className="cgap__source cgap__source--cert">Certificate</span>
+            <button className="cgap__cta" onClick={() => handleAddClick(gap.skill)}>+ Add</button>
           </div>
         ))}
       </div>

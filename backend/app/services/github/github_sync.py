@@ -1,12 +1,15 @@
+import asyncio
 from collections import defaultdict
 from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.models.facts import GithubSnapshot
 from app.models.inference import ProfileSnapshot
+from app.models.github_analysis import GithubProjectAnalysis
 from app.services.github.github_client import (
     GithubSyncError,
     fetch_commit_count_last_30d,
@@ -15,10 +18,14 @@ from app.services.github.github_client import (
     fetch_readme_exists,
     fetch_repos,
     fetch_test_signal,
+    fetch_repo_file,
+    fetch_repo_path_exists,
+    fetch_last_commit_date,
 )
 from app.services.github.github_insights import build_github_insights
 from app.services.github.github_scoring import score_repository
 from app.services.github.github_taxonomy import categorize_technologies
+from app.services.github.github_analyzer import analyze_repo
 
 
 async def _get_previously_synced_repo_names(db: AsyncSession, user_id) -> set[str]:
@@ -69,11 +76,50 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
             topics = repo.get("topics", []) or []
             default_branch = repo.get("default_branch", "main")
 
-            languages = await fetch_languages(client, username, repo_name, token)
-            commits_30d = await fetch_commit_count_last_30d(client, username, repo_name, username, token)
-            has_readme = await fetch_readme_exists(client, username, repo_name, token)
-            has_ci = await fetch_ci_config_exists(client, username, repo_name, token)
-            has_tests = await fetch_test_signal(client, username, repo_name, token, default_branch)
+            # Concurrently fetch all repository info for insights and deep analysis
+            languages_task = fetch_languages(client, username, repo_name, token)
+            commits_task = fetch_commit_count_last_30d(client, username, repo_name, username, token)
+            readme_task = fetch_readme_exists(client, username, repo_name, token)
+            ci_task = fetch_ci_config_exists(client, username, repo_name, token)
+            tests_task = fetch_test_signal(client, username, repo_name, token, default_branch)
+            
+            package_json_task = fetch_repo_file(client, username, repo_name, "package.json", token)
+            requirements_task = fetch_repo_file(client, username, repo_name, "requirements.txt", token)
+            pyproject_task = fetch_repo_file(client, username, repo_name, "pyproject.toml", token)
+            dockerfile_task = fetch_repo_path_exists(client, username, repo_name, "Dockerfile", token)
+            compose_yml_task = fetch_repo_path_exists(client, username, repo_name, "docker-compose.yml", token)
+            compose_yaml_task = fetch_repo_path_exists(client, username, repo_name, "docker-compose.yaml", token)
+            last_commit_task = fetch_last_commit_date(client, username, repo_name, token)
+
+            (
+                languages,
+                commits_30d,
+                has_readme,
+                has_ci,
+                has_tests,
+                package_json,
+                requirements_txt,
+                pyproject_toml,
+                has_dockerfile,
+                has_compose_yml,
+                has_compose_yaml,
+                last_commit_at
+            ) = await asyncio.gather(
+                languages_task,
+                commits_task,
+                readme_task,
+                ci_task,
+                tests_task,
+                package_json_task,
+                requirements_task,
+                pyproject_task,
+                dockerfile_task,
+                compose_yml_task,
+                compose_yaml_task,
+                last_commit_task
+            )
+
+            has_compose = has_compose_yml or has_compose_yaml
 
             repo_language_map[repo_name] = languages
             repo_topics_map[repo_name] = topics
@@ -115,12 +161,72 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 "project_score": score,
             })
 
+            # Deep repo technology & capability analysis
+            analysis = analyze_repo(
+                repo_name=repo_name,
+                languages=languages,
+                package_json=package_json,
+                requirements_txt=requirements_txt,
+                pyproject_toml=pyproject_toml,
+                has_dockerfile=has_dockerfile,
+                has_compose=has_compose,
+                has_workflows=has_ci,
+                has_tests_dir=has_tests,
+                has_readme=has_readme,
+                commits_30d=commits_30d,
+                last_commit_at=last_commit_at,
+                is_archived=is_archived,
+            )
+
+            # Upsert insights into github_project_analysis table
+            insert_vals = {
+                "user_id": user.id,
+                "repo_name": repo_name,
+                "category": analysis["category"],
+                "primary_language": analysis["primary_language"],
+                "technologies": analysis["technologies"],
+                "capabilities": analysis["capabilities"],
+                "is_backend": analysis["is_backend"],
+                "is_frontend": analysis["is_frontend"],
+                "is_database": analysis["is_database"],
+                "is_containerized": analysis["is_containerized"],
+                "has_readme": analysis["has_readme"],
+                "has_tests": analysis["has_tests"],
+                "has_ci": analysis["has_ci"],
+                "is_active": analysis["is_active"],
+                "last_activity_days": analysis["last_activity_days"],
+                "activity_score": analysis["activity_score"],
+                "quality_score": analysis["quality_score"],
+                "maintenance_score": analysis["maintenance_score"],
+                "computed_at": datetime.now(timezone.utc),
+            }
+
+            stmt = (
+                pg_insert(GithubProjectAnalysis)
+                .values(**insert_vals)
+                .on_conflict_do_update(
+                    constraint="uq_repo_analysis_user_repo",
+                    set_={k: v for k, v in insert_vals.items() if k not in ("id", "user_id", "repo_name")},
+                )
+            )
+            await db.execute(stmt)
+
     for row in snapshot_rows:
         db.add(row)
     await db.flush()
 
     current_repo_names = {r["name"] for r in repositories_report}
     removed_repo_names = previously_synced - current_repo_names
+
+    # Delete records in github_project_analysis for any removed repos
+    if removed_repo_names:
+        from sqlalchemy import delete
+        await db.execute(
+            delete(GithubProjectAnalysis)
+            .where(GithubProjectAnalysis.user_id == user.id)
+            .where(GithubProjectAnalysis.repo_name.in_(removed_repo_names))
+        )
+
     languages_detected, total_language_bytes = _aggregate_languages(repo_language_map)
     tech_distribution = categorize_technologies(repo_language_map, repo_topics_map)
     scores = {r["name"]: r["project_score"]["overall"] for r in repositories_report}

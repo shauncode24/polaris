@@ -41,9 +41,19 @@ def _keyword_present(kw: str, norm_text: str) -> bool:
     return bool(re.search(r"(?<![a-zA-Z0-9#\+])" + escaped + r"(?![a-zA-Z0-9#\+])", norm_text))
 
 
-def analyze_keywords(raw_text: str, jd_keywords: set[str] | None = None) -> dict:
+def analyze_keywords(
+    raw_text: str,
+    jd_keywords: set[str] | None = None,
+    profile_keywords: set[str] | None = None,
+) -> dict:
     norm_text    = _normalize(raw_text)
-    keyword_pool = jd_keywords if jd_keywords else DEFAULT_SW_KEYWORDS
+    
+    if jd_keywords:
+        keyword_pool = jd_keywords
+    elif profile_keywords:
+        keyword_pool = {k.lower() for k in profile_keywords if k}
+    else:
+        keyword_pool = DEFAULT_SW_KEYWORDS
 
     matched: list[str] = []
     missing: list[str] = []

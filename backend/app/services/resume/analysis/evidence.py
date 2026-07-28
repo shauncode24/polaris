@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import Experience, Project, GithubSnapshot, LeetcodeSnapshot, Certificate
 from app.models.structure import Skill, ProjectSkill
-from app.models.inference import SkillEvidence
+from app.models.inference import SkillEvidence, ProfileSnapshot
 
 
 async def analyze_evidence(
@@ -111,31 +111,99 @@ async def analyze_evidence(
             else:
                 project_skill_set[canonical]["in_project"] = True
 
-    # ── Merge SkillEvidence rows ────────────────────────────────────────────
-    skill_evidence: dict[str, dict] = dict(project_skill_set)
+    # ── Fetch resume skills from latest snapshot to show all of them ────────
+    snapshot_result = await db.execute(
+        select(ProfileSnapshot)
+        .where(ProfileSnapshot.user_id == user_id, ProfileSnapshot.note == "resume upload")
+        .order_by(ProfileSnapshot.taken_at.desc())
+        .limit(1)
+    )
+    snapshot = snapshot_result.scalar_one_or_none()
+    
+    resume_skills_set = set()
+    if snapshot and snapshot.skills_json:
+        resume_skills_set = {k.lower() for k in snapshot.skills_json.keys()}
 
+    # Merge ProjectSkill keys and Experience/Project linked SkillEvidence canonicals
+    linked_resume_skills_set = set()
+    for canonical in project_skill_set.keys():
+        linked_resume_skills_set.add(canonical.lower())
     for skill_id, source_id, source_type in evidence_list:
-        sid = str(skill_id)
-        info = skill_map.get(sid, {})
-        canonical = info.get("canonical", sid)
-        if canonical not in skill_evidence:
-            skill_evidence[canonical] = {
-                "name": info.get("name", canonical),
+        if source_type in ("experience", "project"):
+            sid = str(skill_id)
+            info = skill_map.get(sid, {})
+            canonical = info.get("canonical", sid)
+            linked_resume_skills_set.add(canonical.lower())
+
+    # Complete set of resume skills
+    all_resume_skills = resume_skills_set | linked_resume_skills_set
+
+    skill_evidence: dict[str, dict] = {}
+
+    if all_resume_skills:
+        all_skills_query = await db.execute(
+            select(Skill.id, Skill.name, Skill.canonical_name)
+            .where(Skill.canonical_name.in_(list(all_resume_skills)))
+        )
+        for skill_id, name, canonical in all_skills_query.fetchall():
+            canonical_lower = canonical.lower()
+            skill_evidence[canonical_lower] = {
+                "name": name,
                 "canonical": canonical,
                 "in_experience": False,
                 "in_project": False,
                 "in_leetcode": False,
                 "in_certificate": False,
-                "skill_id": sid,
+                "skill_id": str(skill_id),
             }
-        if source_type == "experience":
-            skill_evidence[canonical]["in_experience"] = True
-        elif source_type == "project":
-            skill_evidence[canonical]["in_project"] = True
-        elif source_type == "leetcode_tag":
-            skill_evidence[canonical]["in_leetcode"] = True
-        elif source_type == "certificate":
-            skill_evidence[canonical]["in_certificate"] = True
+
+        # Merge project_skill_set evidence
+        for canonical, info in project_skill_set.items():
+            canonical_lower = canonical.lower()
+            if canonical_lower in skill_evidence:
+                skill_evidence[canonical_lower]["in_project"] = True
+
+        # Merge SkillEvidence rows
+        for skill_id, source_id, source_type in evidence_list:
+            sid = str(skill_id)
+            info = skill_map.get(sid, {})
+            canonical = info.get("canonical", sid)
+            canonical_lower = canonical.lower()
+
+            if canonical_lower in skill_evidence:
+                if source_type == "experience":
+                    skill_evidence[canonical_lower]["in_experience"] = True
+                elif source_type == "project":
+                    skill_evidence[canonical_lower]["in_project"] = True
+                elif source_type == "leetcode_tag":
+                    skill_evidence[canonical_lower]["in_leetcode"] = True
+                elif source_type == "certificate":
+                    skill_evidence[canonical_lower]["in_certificate"] = True
+    else:
+        # Fallback old behavior
+        skill_evidence = dict(project_skill_set)
+        for skill_id, source_id, source_type in evidence_list:
+            sid = str(skill_id)
+            info = skill_map.get(sid, {})
+            canonical = info.get("canonical", sid)
+            if canonical not in skill_evidence:
+                skill_evidence[canonical] = {
+                    "name": info.get("name", canonical),
+                    "canonical": canonical,
+                    "in_experience": False,
+                    "in_project": False,
+                    "in_leetcode": False,
+                    "in_certificate": False,
+                    "skill_id": sid,
+                }
+            if source_type == "experience":
+                skill_evidence[canonical]["in_experience"] = True
+            elif source_type == "project":
+                skill_evidence[canonical]["in_project"] = True
+            elif source_type == "leetcode_tag":
+                skill_evidence[canonical]["in_leetcode"] = True
+            elif source_type == "certificate":
+                skill_evidence[canonical]["in_certificate"] = True
 
     # ── GitHub language evidence ────────────────────────────────────────────
     gh_rows = await db.execute(

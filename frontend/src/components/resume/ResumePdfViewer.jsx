@@ -30,7 +30,11 @@ export default function ResumePdfViewer({ hasPdf }) {
   ) : null
 
   return (
-    <CollapsibleSection title="Resume Preview" defaultOpen={false} actions={actions} className="rpv">
+    <div className="rpv-panel">
+      <div className="rpv-panel__header">
+        <span className="rpv-panel__title">Resume PDF Preview</span>
+        {actions}
+      </div>
       <div className="rpv__embed-wrap">
         {hasPdf ? (
           <embed
@@ -52,6 +56,6 @@ export default function ResumePdfViewer({ hasPdf }) {
           </div>
         )}
       </div>
-    </CollapsibleSection>
+    </div>
   )
 }

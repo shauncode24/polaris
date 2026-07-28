@@ -1,10 +1,25 @@
 /* ResumePdfViewer.css */
-.rpv {
+.rpv-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
+
+.rpv-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rpv-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 
 .rpv__header {
   display: flex;

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis } from '../api/resume'
-import { listJobAnalyses } from '../api/jobs'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
@@ -14,6 +13,7 @@ import ResumeVersions from '../components/resume/ResumeVersions'
 import ResumeConsistency from '../components/resume/ResumeConsistency'
 import RoleFitPanel from '../components/resume/RoleFitPanel'
 import CoverageGapsPanel from '../components/resume/CoverageGapsPanel'
+import CollapsibleSection from '../components/common/CollapsibleSection'
 import './ResumePage.css'
 
 export default function ResumePage() {
@@ -26,9 +26,7 @@ export default function ResumePage() {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [error, setError] = useState(null)
-  
-  const [jobs, setJobs] = useState([])
-  const [selectedJobId, setSelectedJobId] = useState('')
+  const [showPreview, setShowPreview] = useState(false)
 
   async function loadWorkspace() {
     try {
@@ -43,15 +41,6 @@ export default function ResumePage() {
 
   useEffect(() => {
     loadWorkspace()
-    
-    // Fetch job descriptions for target JD analysis
-    if (token) {
-      listJobAnalyses(token)
-        .then(data => {
-          setJobs(data || [])
-        })
-        .catch(console.error)
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
@@ -191,17 +180,19 @@ export default function ResumePage() {
                 onAnalyze={handleRunAnalysis}
                 analyzeLoading={analyzeLoading}
                 uploadInputRef={uploadInputRef}
-                jobs={jobs}
-                selectedJobId={selectedJobId}
-                setSelectedJobId={setSelectedJobId}
+                showPreview={showPreview}
+                onTogglePreview={() => setShowPreview(!showPreview)}
               />
 
               <div className="resume-columns">
                 {/* Left column */}
                 <div className="resume-col">
-                  <ResumePdfViewer hasPdf={workspace.current_resume?.has_pdf} />
-                  <ResumeSnapshot snapshot={workspace.snapshot} />
-                  <ResumeHealth ats_flags={healthFlags} />
+                  {showPreview && (
+                    <ResumePdfViewer hasPdf={workspace.current_resume?.has_pdf} />
+                  )}
+                  <CollapsibleSection title="ATS Review" defaultOpen={true} className="rh-checks-collapsible">
+                    <ResumeHealth ats_flags={healthFlags} />
+                  </CollapsibleSection>
                   <ResumeAnalysisPanel
                     analysis={workspace.latest_analysis}
                     onRunAnalysis={handleRunAnalysis}

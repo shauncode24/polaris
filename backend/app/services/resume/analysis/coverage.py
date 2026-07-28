@@ -51,13 +51,24 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
         github_skills = {val for val in resolved_gh.values() if val is not None}
 
     # ── 3. LeetCode skills ──────────────────────────────────────────────────
+    EXCLUDED_LEETCODE_TAGS = {
+        "array", "string", "sorting", "math", "simulation", "two pointers", 
+        "matrix", "hash table", "search", "binary search", "sliding window",
+        "stack", "queue", "linked list", "recursion", "divide and conquer",
+        "greedy", "heap", "priority queue", "bit manipulation", "counting",
+        "number theory", "combinatorics"
+    }
+    
     leetcode_skills_result = await db.execute(
         select(Skill.canonical_name)
         .join(LeetcodeSnapshot, (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name))
         .where(LeetcodeSnapshot.user_id == user_id)
         .distinct()
     )
-    leetcode_skills = {r[0] for r in leetcode_skills_result.fetchall() if r[0]}
+    leetcode_skills = {
+        r[0] for r in leetcode_skills_result.fetchall()
+        if r[0] and r[0].lower() not in EXCLUDED_LEETCODE_TAGS
+    }
 
     # ── 4. Certificate skills ───────────────────────────────────────────────
     cert_skills_result = await db.execute(
@@ -79,8 +90,116 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
     leetcode_only = leetcode_skills - resume_skills
     cert_only = cert_skills - resume_skills
 
+    # ── 5. Fetch GitHub project metadata to build mapping & suggestions ───
+    github_projects_result = await db.execute(
+        select(GithubProjectAnalysis)
+        .where(GithubProjectAnalysis.user_id == user_id)
+    )
+    github_projects = github_projects_result.scalars().all()
+
+    # Get names/urls of projects on the resume
+    resume_projects_result = await db.execute(
+        select(Project.name, Project.repo_url)
+        .where(Project.user_id == user_id, Project.resume_id == resume_id)
+    )
+    resume_projects_data = resume_projects_result.fetchall()
+    resume_project_names = {r[0].lower() for r in resume_projects_data if r[0]}
+    resume_project_urls = {r[1].lower() for r in resume_projects_data if r[1]}
+
+    # Map missing GitHub technologies to specific repo names
+    github_gap_details = []
+    for skill in sorted(github_only):
+        matching_repos = []
+        for gp in github_projects:
+            if gp.technologies and any(t.lower() == skill.lower() for t in gp.technologies):
+                matching_repos.append(gp.repo_name)
+        if matching_repos:
+            repos_str = ", ".join(matching_repos[:2])
+            reason = f"Evidenced in your GitHub repo '{repos_str}' but missing from your resume."
+            github_gap_details.append({
+                "skill": skill,
+                "reason": reason,
+                "repos": matching_repos
+            })
+        else:
+            github_gap_details.append({
+                "skill": skill,
+                "reason": f"Evidenced on your GitHub profile but missing from your resume.",
+                "repos": []
+            })
+
+    # Suggestions for missing GitHub projects entirely (Polaris personalized recommendations)
+    project_suggestions = []
+    for gp in github_projects:
+        is_on_resume = False
+        gp_name_lower = gp.repo_name.lower()
+        if gp_name_lower in resume_project_names:
+            is_on_resume = True
+        for url in resume_project_urls:
+            if gp_name_lower in url:
+                is_on_resume = True
+                
+        if not is_on_resume:
+            techs = ", ".join(gp.technologies[:3])
+            tech_desc = f" built using {techs}" if gp.technologies else ""
+            
+            if gp.quality_score and gp.quality_score >= 60:
+                reason = f"Your high-quality repository '{gp.repo_name}'{tech_desc} (Quality: {gp.quality_score}%) is missing from your resume."
+                project_suggestions.append({
+                    "repo_name": gp.repo_name,
+                    "technologies": gp.technologies,
+                    "reason": reason,
+                    "type": "project_addition"
+                })
+            elif gp.activity_score and gp.activity_score >= 50:
+                reason = f"Your highly active repository '{gp.repo_name}'{tech_desc} (Activity: {gp.activity_score}%) is missing from your resume."
+                project_suggestions.append({
+                    "repo_name": gp.repo_name,
+                    "technologies": gp.technologies,
+                    "reason": reason,
+                    "type": "project_addition"
+                })
+
+    # Map missing Certificate skills to specific certificate names
+    cert_rows_result = await db.execute(
+        select(Certificate)
+        .where(Certificate.user_id == user_id)
+    )
+    user_certs = cert_rows_result.scalars().all()
+    
+    cert_gap_details = []
+    for skill in sorted(cert_only):
+        matching_certs = []
+        for c in user_certs:
+            if c.skills and any(s.lower() == skill.lower() for s in c.skills):
+                matching_certs.append(c.name)
+        if matching_certs:
+            certs_str = ", ".join(matching_certs[:2])
+            reason = f"Evidenced in your certificate '{certs_str}' but missing from your resume."
+            cert_gap_details.append({
+                "skill": skill,
+                "reason": reason,
+                "certs": matching_certs
+            })
+        else:
+            cert_gap_details.append({
+                "skill": skill,
+                "reason": f"Evidenced in your certificates but missing from your resume.",
+                "certs": []
+            })
+
+    # Map LeetCode gaps
+    leetcode_gap_details = []
+    for skill in sorted(leetcode_only):
+        reason = f"Evidenced from your LeetCode problem solutions but missing from your resume."
+        leetcode_gap_details.append({
+            "skill": skill,
+            "reason": reason
+        })
+
     return {
-        "github_not_on_resume": sorted(github_only),
-        "leetcode_not_on_resume": sorted(leetcode_only),
-        "certificates_not_on_resume": sorted(cert_only),
+        "github_gaps": github_gap_details,
+        "leetcode_gaps": leetcode_gap_details,
+        "certificate_gaps": cert_gap_details,
+        "project_suggestions": project_suggestions
     }
