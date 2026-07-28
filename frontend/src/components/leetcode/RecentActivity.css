@@ -1,11 +1,16 @@
-.lc-activity { display: flex; flex-direction: column; gap: 16px; }
-.lc-activity__summary { font-size: 13.5px; color: var(--ink); }
-.lc-activity__group h4 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-soft); margin-bottom: 8px; }
-.lc-activity__group ul { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); padding-left: 4px; }
-.lc-activity__pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.lc-activity__pill {
-  font-size: 12px; font-weight: 500;
-  padding: 4px 11px; border-radius: var(--radius-pill);
-  background: var(--surface-soft); border: 1px solid var(--border);
-  color: var(--text); text-transform: capitalize;
+.lc-timeline { display: flex; flex-direction: column; gap: 8px; }
+.lc-timeline__item {
+  position: relative;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--ink);
 }
+.lc-timeline__dot {
+  position: absolute; left: 0; top: 6px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+}
+.lc-timeline__item--count .lc-timeline__dot { background: var(--success); }
+.lc-timeline__item--mastery .lc-timeline__dot { background: var(--info); }
+.lc-timeline__item--new .lc-timeline__dot { background: var(--accent); }
+.lc-timeline__item--reinforced .lc-timeline__dot { background: var(--text-soft); }

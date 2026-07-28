@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -71,3 +72,58 @@ async def submit_leetcode_manual(
     db: AsyncSession = Depends(get_db),
 ):
     return await sync_leetcode_manual(db, current_user, payload.tag_counts)
+
+
+@router.get("/leetcode/workspace")
+async def get_leetcode_workspace(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Restore Leetcode workspace sync snapshot & portfolio review review_json from database."""
+    snapshot = await db.execute(
+        select(ProfileSnapshot)
+        .where(ProfileSnapshot.user_id == current_user.id)
+        .where(ProfileSnapshot.note.in_(["leetcode sync", "leetcode manual submission"]))
+        .order_by(ProfileSnapshot.taken_at.desc())
+        .limit(1)
+    )
+    snapshot = snapshot.scalar_one_or_none()
+    if snapshot is None:
+        return {"has_data": False}
+
+    payload = snapshot.skills_json
+    
+    # Get latest LeetCode review
+    review_result = await db.execute(
+        select(LeetcodePortfolioReview)
+        .where(LeetcodePortfolioReview.user_id == current_user.id)
+        .order_by(LeetcodePortfolioReview.created_at.desc())
+        .limit(1)
+    )
+    review_row = review_result.scalar_one_or_none()
+    portfolio_review = review_row.review_json if review_row else None
+
+    return {
+        "has_data": True,
+        "username": current_user.leetcode_username,
+        "synced_at": snapshot.taken_at.isoformat(),
+        "summary": payload.get("stats", {}),
+        "insights": payload.get("insights", {}),
+        "portfolio_review": portfolio_review,
+    }
+
+
+@router.post("/leetcode/review")
+async def run_leetcode_portfolio_review(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger an LLM-powered review of the user's LeetCode performance."""
+    from fastapi import HTTPException
+    from app.services.leetcode.leetcode_reviewer import generate_leetcode_portfolio_review
+    
+    try:
+        report = await generate_leetcode_portfolio_review(db, current_user.id)
+        return report
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

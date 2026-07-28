@@ -127,3 +127,20 @@ class GithubPortfolioReview(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class LeetcodePortfolioReview(Base):
+    """LLM career-interpretation layer over the deterministic LeetCode
+    analysis (leetcode_sync.py / leetcode_insights.py).
+    One row per review run — stores the model's read of LeetCode facts,
+    including comparisons to GitHub-derived practical engineering capabilities.
+    Safe to regenerate any time the prompt or leetcode_knowledge.py's shape changes.
+    """
+    __tablename__ = "leetcode_portfolio_reviews"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    review_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

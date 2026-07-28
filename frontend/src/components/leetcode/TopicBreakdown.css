@@ -53,3 +53,5 @@
 @media (max-width: 620px) {
   .lc-topic__row { grid-template-columns: 90px 1fr 30px 60px 14px; gap: 8px; }
 }
+
+.csec__body .lc-card { background: none; border: none; box-shadow: none; padding: 0; }

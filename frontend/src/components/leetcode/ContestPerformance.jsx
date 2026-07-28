@@ -9,7 +9,14 @@ function ContestPerformance({ rating, globalRanking, attendedContestsCount }) {
       <h3>Contest performance</h3>
 
       {!hasRating ? (
-        <p className="lc-empty-text">No contest history yet — attend a rated contest to unlock this.</p>
+        <div className="lc-contest__empty-info">
+          <p className="lc-empty-text">No contest history yet.</p>
+          <ul className="lc-contest__benefits">
+            <li>Contest rating is one of the few LeetCode signals recruiters recognize by name.</li>
+            <li>Attending contests builds timed-pressure problem solving — the actual skill interviews test.</li>
+            <li>5+ rated contests is enough to start showing a real trend, not just a single score.</li>
+          </ul>
+        </div>
       ) : (
         <div className="lc-contest__grid">
           <div className="lc-contest__stat">

@@ -1,6 +1,6 @@
 // frontend/src/components/leetcode/TopicBreakdown.jsx
 import { useState } from 'react'
-import { confidenceTier, confidenceLabel } from '../../utils/leetcodeMastery'
+import { confidenceTier, tierDisplayLabel } from '../../utils/leetcodeMastery'
 import './TopicBreakdown.css'
 
 function TopicRow({ topic, maxProblems }) {
@@ -16,7 +16,7 @@ function TopicRow({ topic, maxProblems }) {
           <span className={`lc-topic__fill lc-topic__fill--${tier}`} style={{ width: `${pct}%` }} />
         </span>
         <span className="lc-topic__count">{topic.problems}</span>
-        <span className={`lc-topic__badge lc-topic__badge--${tier}`}>{confidenceLabel(tier)}</span>
+        <span className={`lc-topic__badge lc-topic__badge--${tier}`}>{tierDisplayLabel(tier)}</span>
         <span className="lc-topic__chevron">{expanded ? '⌄' : '›'}</span>
       </button>
       {expanded && (

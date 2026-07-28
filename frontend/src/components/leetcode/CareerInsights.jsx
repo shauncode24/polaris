@@ -1,53 +1,50 @@
 // frontend/src/components/leetcode/CareerInsights.jsx
-// Grounded in the same blind_spots the backend computes (leetcode_insights.py)
-// rather than fabricated per-company percentages, which the sync pipeline
-// has no basis for producing.
+// Deterministic readiness percentages (see utils/interviewReadiness.js) —
+// this is the "Interview Readiness" feature: a weighted average over real
+// topic_mastery data, never a fabricated per-company number.
+import { computeReadinessTracks } from '../../utils/interviewReadiness'
 import './CareerInsights.css'
 
-function buildTracks(blindSpots, attendedContestsCount) {
-  const missingFundamentals = blindSpots?.missing_fundamentals || []
-  const advancedTopics = blindSpots?.advanced_topics || []
-
-  const tracks = [
-    {
-      label: 'DSA Fundamentals',
-      ready: missingFundamentals.length === 0,
-      note: missingFundamentals.length === 0
-        ? 'Ready'
-        : `Needs: ${missingFundamentals.slice(0, 2).join(', ')}`,
-    },
-    {
-      label: 'Advanced / SDE-2 style',
-      ready: missingFundamentals.length === 0 && advancedTopics.length === 0,
-      note: advancedTopics.length === 0
-        ? (missingFundamentals.length === 0 ? 'Ready' : 'Close fundamentals first')
-        : `Needs: ${advancedTopics.slice(0, 2).join(', ')}`,
-    },
-    {
-      label: 'Competitive Programming',
-      ready: (attendedContestsCount || 0) >= 5,
-      note: (attendedContestsCount || 0) >= 5 ? 'Ready' : 'Not enough contest reps yet',
-    },
-  ]
-
-  return tracks
+function barTone(pct) {
+  if (pct >= 70) return 'strong'
+  if (pct >= 40) return 'partial'
+  return 'weak'
 }
 
-function CareerInsights({ blindSpots, attendedContestsCount }) {
-  const tracks = buildTracks(blindSpots, attendedContestsCount)
+function CareerInsights({ topicMastery, attendedContestsCount }) {
+  const tracks = computeReadinessTracks(topicMastery)
+  const contestReady = (attendedContestsCount || 0) >= 5
 
   return (
     <section className="lc-card lc-career">
-      <h3>Career insights</h3>
+      <h3>Interview readiness</h3>
+      <p className="lc-card__lead">A weighted read of your topic mastery against what each interview style actually tests.</p>
+
       <div className="lc-career__list">
         {tracks.map((t) => (
-          <div className="lc-career__item" key={t.label}>
-            <span className="lc-career__label">{t.label}</span>
-            <span className={`lc-career__note ${t.ready ? 'lc-career__note--ready' : 'lc-career__note--warn'}`}>
-              {t.note}
-            </span>
+          <div className="lc-career__row" key={t.key}>
+            <div className="lc-career__row-top">
+              <span className="lc-career__label">{t.label}</span>
+              <span className="lc-career__pct">{t.percentage}%</span>
+            </div>
+            <div className="lc-career__track">
+              <div className={`lc-career__fill lc-career__fill--${barTone(t.percentage)}`} style={{ width: `${t.percentage}%` }} />
+            </div>
+            {t.weakTopics.length > 0 && (
+              <span className="lc-career__gap">Weakest: {t.weakTopics.slice(0, 2).join(', ')}</span>
+            )}
           </div>
         ))}
+
+        <div className="lc-career__row">
+          <div className="lc-career__row-top">
+            <span className="lc-career__label">Competitive Programming</span>
+            <span className="lc-career__pct">{contestReady ? 'Ready' : 'Building'}</span>
+          </div>
+          <span className="lc-career__gap">
+            {contestReady ? `${attendedContestsCount} contests attended` : 'Fewer than 5 rated contests attended so far'}
+          </span>
+        </div>
       </div>
     </section>
   )

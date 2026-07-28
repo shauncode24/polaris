@@ -1,7 +1,7 @@
-// frontend/src/components/leetcode/TodaysFocus.jsx
 import './TodaysFocus.css'
 
 const MINUTES_PER_RECOMMENDATION = 30
+const GAIN_BY_PRIORITY = { High: 4, Medium: 2, Low: 1 }
 
 function TodaysFocus({ recommendations }) {
   const items = recommendations || []
@@ -19,7 +19,8 @@ function TodaysFocus({ recommendations }) {
             {items.map((r, i) => (
               <li key={i} className="lc-focus__item">
                 <span className={`lc-focus__priority lc-focus__priority--${(r.priority || 'medium').toLowerCase()}`} />
-                {r.action}
+                <span className="lc-focus__text">{r.action}</span>
+                <span className="lc-focus__gain">+{GAIN_BY_PRIORITY[r.priority] || 1}% readiness (est.)</span>
               </li>
             ))}
           </ul>

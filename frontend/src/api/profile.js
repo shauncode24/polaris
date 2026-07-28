@@ -50,4 +50,17 @@ export function getProfileData(token) {
   return fetch(`${API_BASE_URL}/profile/data`, {
     headers: authHeaders(token),
   }).then(handle)
+}
+
+export function getLeetcodeWorkspace(token) {
+  return fetch(`${API_BASE_URL}/sync/leetcode/workspace`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
+export function runLeetcodePortfolioReview(token) {
+  return fetch(`${API_BASE_URL}/sync/leetcode/review`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  }).then(handle)
 }

@@ -24,7 +24,9 @@ function WeakAreas({ topicMastery, longestGapDays }) {
           <div className="lc-weak__item" key={t.topic}>
             <div className="lc-weak__item-row">
               <span className="lc-weak__item-name">{t.topic}</span>
-              <span className="lc-weak__item-count">{t.problems} solved</span>
+              <span className="lc-weak__item-count">
+                {t.problems === 0 ? 'Never practiced' : `${t.problems} solved`}
+              </span>
             </div>
             <p className="lc-weak__item-detail">
               {t.problems === 0

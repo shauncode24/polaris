@@ -11,6 +11,8 @@ const TIER_BY_MASTERY = {
   'Extensive Practice': 'high',
 }
 
+const DISPLAY_TIER_LABEL = { high: 'Mastered', medium: 'Growing', low: 'Weak' }
+
 export function confidenceTier(mastery) {
   return TIER_BY_MASTERY[mastery] || 'medium'
 }
@@ -35,4 +37,8 @@ export function formatRelativeTime(iso) {
   if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`
   const months = Math.floor(days / 30)
   return `${months} month${months === 1 ? '' : 's'} ago`
+}
+
+export function tierDisplayLabel(tier) {
+  return DISPLAY_TIER_LABEL[tier] || 'Growing'
 }

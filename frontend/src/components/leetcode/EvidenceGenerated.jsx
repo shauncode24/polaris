@@ -1,5 +1,5 @@
-// frontend/src/components/leetcode/EvidenceGenerated.jsx
 import { confidenceTier, confidenceLabel } from '../../utils/leetcodeMastery'
+import { supportsFor } from '../../utils/topicSupports'
 import './EvidenceGenerated.css'
 
 function EvidenceGenerated({ topicMastery }) {
@@ -7,6 +7,10 @@ function EvidenceGenerated({ topicMastery }) {
     .filter((t) => t.problems > 0)
     .sort((a, b) => b.problems - a.problems)
     .slice(0, 4)
+
+  function handleAddToResume(topic) {
+    alert(`Add "${topic}" evidence to your resume! Resume text editor coming soon.`)
+  }
 
   return (
     <section className="lc-card">
@@ -33,6 +37,12 @@ function EvidenceGenerated({ topicMastery }) {
                 <span className="lc-evidence__card-detail">
                   {t.problems} solved problem{t.problems === 1 ? '' : 's'} · {t.mastery}
                 </span>
+                <div className="lc-evidence__supports">
+                  {supportsFor(t.topic).map((s) => <span key={s} className="lc-evidence__support-tag">{s}</span>)}
+                </div>
+                <button type="button" className="lc-evidence__add-btn" onClick={() => handleAddToResume(t.topic)}>
+                  + Add to resume
+                </button>
               </div>
             )
           })}

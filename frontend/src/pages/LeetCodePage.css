@@ -2,10 +2,10 @@
 .leetcode-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .leetcode-content {
-  padding: 28px 32px 64px;
+  padding: 20px 24px 48px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
   max-width: 1320px;
   width: 100%;
   margin: 0 auto;
@@ -22,18 +22,18 @@
 
 .leetcode-columns {
   display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 20px;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
   align-items: start;
 }
 
-.leetcode-col { display: flex; flex-direction: column; gap: 20px; }
-.leetcode-col--side { position: sticky; top: 88px; }
+.leetcode-col { display: flex; flex-direction: column; gap: 12px; }
+.leetcode-col--side { position: sticky; top: 76px; }
 
 .leetcode-row-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 14px;
 }
 
 @media (max-width: 1080px) {
@@ -42,6 +42,6 @@
 }
 @media (max-width: 720px) {
   .leetcode-layout { flex-direction: column; }
-  .leetcode-content { padding: 20px 16px 48px; }
+  .leetcode-content { padding: 16px 14px 40px; }
   .leetcode-row-2 { grid-template-columns: 1fr; }
 }

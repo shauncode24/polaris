@@ -1,0 +1,11 @@
+.combined-signal__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+.combined-signal__label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-soft); }
+.combined-signal__pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.combined-signal__pill {
+  font-size: 12px; padding: 3px 10px; border-radius: var(--radius-pill);
+  background: var(--surface-soft); border: 1px solid var(--border); color: var(--text);
+}
+.combined-signal__empty { font-size: 12px; color: var(--text-soft); margin-top: 6px; }
+.combined-signal__note { font-size: 12.5px; color: var(--text); line-height: 1.55; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+
+@media (max-width: 620px) { .combined-signal__cols { grid-template-columns: 1fr; } }
