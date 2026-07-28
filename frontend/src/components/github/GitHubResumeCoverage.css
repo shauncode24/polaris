@@ -1,0 +1,23 @@
+.gh-resume-coverage {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gh-resume-coverage h2 { font-size: 16px; }
+.gh-resume-coverage__hint { font-size: 13px; color: var(--text); line-height: 1.5; }
+.gh-resume-coverage__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.gh-resume-coverage__chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: var(--radius-pill);
+  background: var(--warning-soft);
+  color: #a2760f;
+}
+.gh-resume-coverage__link { align-self: flex-start; font-size: 13px; font-weight: 600; color: var(--accent); }
+.gh-resume-coverage__link:hover { color: var(--accent-strong); }

@@ -19,7 +19,6 @@ from app.services.github.github_client import (
 from app.services.github.github_insights import build_github_insights
 from app.services.github.github_scoring import score_repository
 from app.services.github.github_taxonomy import categorize_technologies
-# get_or_create_default_user removed
 
 
 async def _get_previously_synced_repo_names(db: AsyncSession, user_id) -> set[str]:
@@ -111,6 +110,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 "topics": topics, "description": repo.get("description"),
                 "pushed_at": repo.get("pushed_at"),
                 "archived": is_archived, "is_new": is_new,
+                "private": bool(repo.get("private", False)),
                 "has_readme": has_readme, "has_ci": has_ci, "has_tests": has_tests,
                 "project_score": score,
             })
@@ -142,9 +142,27 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         repositories_report, scores, tech_distribution, total_language_bytes, prev_insights
     )
 
+    summary = {
+        "repos_synced": len(repositories_report),
+        "new_repositories": new_count,
+        "updated_repositories": len(repositories_report) - new_count,
+        "archived_repositories": archived_count,
+        "removed_repositories": len(removed_repo_names),
+        "total_stars": total_stars,
+        "total_forks": total_forks,
+        "total_commits_last_30_days": total_commits,
+        "languages_detected": languages_detected,
+    }
+
     snapshot = ProfileSnapshot(
         user_id=user.id, taken_at=datetime.now(timezone.utc),
-        skills_json={"repos_synced": sorted(current_repo_names), "insights": insights},
+        skills_json={
+            "username": username,
+            "repos_synced": sorted(current_repo_names),
+            "repositories": repositories_report,
+            "summary": summary,
+            "insights": insights,
+        },
         note="github sync",
     )
     db.add(snapshot)
@@ -158,17 +176,8 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         "synced_at": snapshot.taken_at.isoformat(),
         "user_id": str(user.id),
         "snapshot_id": str(snapshot.id),
-        "summary": {
-            "repos_synced": len(repositories_report),
-            "new_repositories": new_count,
-            "updated_repositories": len(repositories_report) - new_count,
-            "archived_repositories": archived_count,
-            "removed_repositories": len(removed_repo_names),
-            "total_stars": total_stars,
-            "total_forks": total_forks,
-            "total_commits_last_30_days": total_commits,
-            "languages_detected": languages_detected,
-        },
+        "username": username,
+        "summary": summary,
         "repositories": repositories_report,
         "removed_repository_names": sorted(removed_repo_names),
         "insights": insights,

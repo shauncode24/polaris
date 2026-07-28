@@ -55,7 +55,10 @@ async def authenticate_with_google(db: AsyncSession, credential: str) -> User:
 
     try:
         idinfo = id_token.verify_oauth2_token(
-            credential, google_requests.Request(), settings.google_client_id
+            credential,
+            google_requests.Request(),
+            settings.google_client_id,
+            clock_skew_in_seconds=10,
         )
     except ValueError as e:
         raise AuthError(f"Invalid Google credential: {e}") from e

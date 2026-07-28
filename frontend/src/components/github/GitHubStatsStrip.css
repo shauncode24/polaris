@@ -1,0 +1,20 @@
+.gh-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+}
+.gh-stats__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gh-stats__value { font-size: 22px; font-weight: 700; color: var(--ink); }
+.gh-stats__label { font-size: 12px; color: var(--text-soft); }
+
+@media (max-width: 1080px) { .gh-stats { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .gh-stats { grid-template-columns: repeat(2, 1fr); } }

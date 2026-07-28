@@ -1,0 +1,28 @@
+.gh-health {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+.gh-health__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gh-health__label { font-size: 12.5px; color: var(--text-soft); }
+.gh-health__value { font-size: 24px; font-weight: 800; color: var(--ink); }
+.gh-health__value--high { color: var(--success); }
+.gh-health__value--medium { color: var(--warning); }
+.gh-health__value--low { color: var(--danger); }
+.gh-health__tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-soft); }
+.gh-health__tag-dot { width: 6px; height: 6px; border-radius: 50%; }
+.gh-health__tag-dot--high { background: var(--success); }
+.gh-health__tag-dot--medium { background: var(--warning); }
+.gh-health__tag-dot--low { background: var(--danger); }
+
+@media (max-width: 1080px) { .gh-health { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px) { .gh-health { grid-template-columns: repeat(2, 1fr); } }

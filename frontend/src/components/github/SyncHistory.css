@@ -1,0 +1,14 @@
+.gh-sync-history {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gh-sync-history h2 { font-size: 16px; }
+.gh-sync-history__item { display: flex; flex-direction: column; gap: 3px; }
+.gh-sync-history__when { font-size: 11px; color: var(--text-soft); }
+.gh-sync-history__text { font-size: 13px; color: var(--ink); font-weight: 500; }

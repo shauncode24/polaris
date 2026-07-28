@@ -1,0 +1,40 @@
+.gh-activity {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.gh-activity__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.gh-activity__header h2 { font-size: 16px; }
+.gh-activity__header p { font-size: 12.5px; color: var(--text-soft); margin-top: 2px; }
+.gh-activity__badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--success);
+  background: var(--success-soft);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.gh-activity__empty { font-size: 13px; color: var(--text-soft); }
+
+.gh-activity__list { display: flex; flex-direction: column; gap: 10px; }
+.gh-activity__row { display: grid; grid-template-columns: 110px 1fr 34px; align-items: center; gap: 10px; }
+.gh-activity__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gh-activity__track { height: 9px; border-radius: var(--radius-pill); background: var(--surface-soft); overflow: hidden; }
+.gh-activity__bar { height: 100%; border-radius: var(--radius-pill); }
+.gh-activity__bar--high { background: var(--success); }
+.gh-activity__bar--medium { background: #47bfff; }
+.gh-activity__bar--low { background: var(--border); }
+.gh-activity__count { font-size: 12px; color: var(--text-soft); text-align: right; }

@@ -1,0 +1,27 @@
+.gh-timeline {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.gh-timeline h2 { font-size: 16px; }
+.gh-timeline__empty { font-size: 13px; color: var(--text-soft); }
+.gh-timeline__list { display: flex; flex-direction: column; gap: 12px; }
+.gh-timeline__item { display: flex; flex-direction: column; gap: 2px; padding-left: 14px; position: relative; }
+.gh-timeline__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.gh-timeline__when { font-size: 11px; color: var(--text-soft); }
+.gh-timeline__text { font-size: 13px; color: var(--text); }
+.gh-timeline__text strong { color: var(--ink); }

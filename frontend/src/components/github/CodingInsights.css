@@ -1,0 +1,20 @@
+.gh-coding {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.gh-coding h2 { font-size: 16px; }
+.gh-coding__group { display: flex; flex-direction: column; gap: 8px; }
+.gh-coding__label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.gh-coding__label--strength { color: var(--success); }
+.gh-coding__label--gap { color: #a2760f; }
+.gh-coding__tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.gh-coding__tag { font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: var(--radius-pill); }
+.gh-coding__tag--strength { background: var(--success-soft); color: var(--success); }
+.gh-coding__tag--gap { background: var(--warning-soft); color: #a2760f; }
+.gh-coding__empty { font-size: 12.5px; color: var(--text-soft); }
