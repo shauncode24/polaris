@@ -20,3 +20,10 @@ export function getGithubWorkspace(token) {
     headers: authHeaders(token),
   }).then(handle)
 }
+
+export function runGithubPortfolioReview(token) {
+  return fetch(`${API_BASE_URL}/github/review`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  }).then(handle)
+}

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProfileData } from '../contexts/ProfileDataContext'
-import { getGithubWorkspace, syncGithub } from '../api/github'
+import { getGithubWorkspace, syncGithub, runGithubPortfolioReview } from '../api/github'
 import { getProfileData } from '../api/profile'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import GitHubHeader from '../components/github/GitHubHeader'
 import GitHubHealthCards from '../components/github/GitHubHealthCards'
+import PortfolioReviewPanel from '../components/github/PortfolioReviewPanel'
 import GitHubStatsStrip from '../components/github/GitHubStatsStrip'
 import RepositoryActivity from '../components/github/RepositoryActivity'
 import ActivityTimeline from '../components/github/ActivityTimeline'
@@ -52,6 +53,9 @@ function GitHubPage() {
   const [syncing, setSyncing] = useState(false)
   const [connectError, setConnectError] = useState('')
 
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [reviewError, setReviewError] = useState('')
+
   const [resumeProjectNames, setResumeProjectNames] = useState([])
   const [resumeLoading, setResumeLoading] = useState(true)
 
@@ -91,6 +95,7 @@ function GitHubPage() {
       summary: data.summary,
       repositories: data.repositories,
       insights: data.insights,
+      portfolio_review: workspace?.portfolio_review || null,
     }
     setWorkspace(normalized)
     setResult('github', { ...data, username })
@@ -121,6 +126,19 @@ function GitHubPage() {
       setConnectError(e.message || 'GitHub sync failed.')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleRunReview() {
+    setReviewLoading(true)
+    setReviewError('')
+    try {
+      const review = await runGithubPortfolioReview(token)
+      setWorkspace((prev) => ({ ...prev, portfolio_review: review }))
+    } catch (e) {
+      setReviewError(e.message || 'Could not generate the portfolio review.')
+    } finally {
+      setReviewLoading(false)
     }
   }
 
@@ -210,6 +228,15 @@ function GitHubPage() {
                   { label: 'Hygiene', value: quality.label, tone: quality.tone, breakdown: { 'Readme Weight': '30%', 'Tests Weight': '40%', 'CI Weight': '30%', 'Formula (Heuristic ⓘ)': '0.3*README + 0.4*Tests + 0.3*CI' } },
                 ]}
               />
+
+              <CollapsibleSection title="AI Portfolio Review" defaultOpen={true}>
+                {reviewError && <p className="github-error">{reviewError}</p>}
+                <PortfolioReviewPanel
+                  review={workspace?.portfolio_review}
+                  onRun={handleRunReview}
+                  loading={reviewLoading}
+                />
+              </CollapsibleSection>
 
               <CollapsibleSection title="Stats" dense defaultOpen={false}>
                 <GitHubStatsStrip stats={statItems} />

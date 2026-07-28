@@ -2,17 +2,25 @@ import json
 import os
 from openai import AsyncOpenAI
 
-client = AsyncOpenAI(
-    base_url=os.environ.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"),
-    api_key=os.environ.get("GEMINI_API_KEY") or "not-set",
-)
+# client = AsyncOpenAI(
+#     base_url=os.environ.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+#     api_key=os.environ.get("GEMINI_API_KEY") or "not-set",
+# )
 # client = AsyncOpenAI(
 #     base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
 #     api_key="ollama",  # required by the SDK, unused by Ollama
 # )
 
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+# MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 # MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:4b")
+
+client = AsyncOpenAI(
+    base_url=os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+    api_key=os.environ.get("GROQ_API_KEY") or "not-set",
+)
+
+MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 def clean_json_content(content: str) -> str:
     if not content:

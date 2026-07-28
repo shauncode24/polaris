@@ -1,0 +1,111 @@
+.pr-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.pr-panel__empty {
+  padding: 40px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+.pr-panel__cta {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.pr-panel__cta:hover { background: var(--accent-soft); }
+.pr-panel__cta:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pr-container { display: flex; flex-direction: column; gap: 16px; }
+.pr-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; }
+.pr-header h3 { font-size: 16px; font-weight: 700; color: var(--ink); }
+.pr-refresh {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.pr-refresh:hover { color: var(--accent-strong); }
+.pr-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pr-degraded-notice {
+  font-size: 13px;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+
+.pr-collapsible-stack { display: flex; flex-direction: column; gap: 14px; }
+
+.pr-assessment { font-size: 13.5px; color: var(--text); line-height: 1.65; }
+
+.pr-flagship-list { display: flex; flex-direction: column; gap: 10px; }
+.pr-flagship-card {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
+}
+.pr-flagship-name { font-size: 13.5px; font-weight: 700; color: var(--accent-strong); }
+.pr-flagship-reason { font-size: 12.5px; color: var(--text); margin-top: 4px; line-height: 1.5; }
+
+.pr-role-list { display: flex; flex-direction: column; gap: 12px; }
+.pr-role-row { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.pr-role-row:last-child { border-bottom: none; padding-bottom: 0; }
+.pr-role-name { font-size: 13px; font-weight: 700; color: var(--ink); margin-right: 10px; }
+.pr-role-stars { color: #d4a72c; font-size: 13px; }
+.pr-role-rationale { font-size: 12.5px; color: var(--text-soft); margin-top: 4px; line-height: 1.5; }
+
+.pr-habits-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pr-habits-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+.pr-habits-label--good { color: var(--success); }
+.pr-habits-label--gap { color: var(--warning); }
+.pr-habits-grid ul { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--text); }
+
+.pr-skill-explain-list { display: flex; flex-direction: column; gap: 10px; }
+.pr-skill-explain-row { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.pr-skill-explain-row:last-child { border-bottom: none; padding-bottom: 0; }
+.pr-skill-explain-name { font-size: 13px; font-weight: 700; color: var(--ink); text-transform: capitalize; }
+.pr-skill-explain-text { font-size: 12.5px; color: var(--text-soft); margin-top: 3px; line-height: 1.5; }
+
+.pr-recruiter-notices { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); margin-bottom: 10px; }
+.pr-recruiter-decision {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-soft);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+
+.pr-growth-story { font-size: 13px; color: var(--text); line-height: 1.6; }
+
+.pr-resume-suggestions { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--text); }
+
+.pr-roadmap { display: flex; flex-direction: column; gap: 10px; }
+.pr-roadmap li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text); }
+.pr-roadmap li span {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--surface-soft); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--ink); flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .pr-habits-grid { grid-template-columns: 1fr; }
+}

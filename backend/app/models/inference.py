@@ -108,4 +108,22 @@ class ResumeAnalysis(Base):
     analysis_json: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    )
+
+
+class GithubPortfolioReview(Base):
+    """LLM career-interpretation layer over the deterministic GitHub
+    analysis (github_analyzer.py / github_insights.py / GithubProjectAnalysis).
+    One row per review run — this table never computes a single fact
+    itself (no scores, no technology detection); it only stores the
+    model's read of facts that are already verified elsewhere. Safe to
+    regenerate any time the prompt or github_knowledge.py's shape changes.
+    """
+    __tablename__ = "github_portfolio_reviews"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    review_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
