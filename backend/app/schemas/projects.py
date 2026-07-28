@@ -10,9 +10,11 @@ class ProjectCard(BaseModel):
     description: str | None = None
     stack: list[str] = []
     capabilities: list[str] = []
+    engineering_tags: list[str] = []      # NEW — replaces star rating as the headline signal
+    tier: str = "Career Project"          # NEW — Flagship / Career / Learning / Prototype / Archived
     is_featured: bool = False
-    status: str = "completed"  # "ongoing" | "completed"
-    rating: float = 3.0
+    status: str = "completed"
+    rating: float = 3.0                   # kept internally for sorting only; not shown as stars anymore
     updated_at: datetime | None = None
     repo_url: str | None = None
     has_repo: bool = False
@@ -20,8 +22,10 @@ class ProjectCard(BaseModel):
 
 class ProjectsStats(BaseModel):
     total: int = 0
-    featured: int = 0
+    flagship: int = 0                     # NEW
     technologies: int = 0
+    resume_coverage_pct: float = 0.0      # NEW
+    github_coverage_pct: float = 0.0      # NEW
     capabilities: int = 0
     connected_repositories: int = 0
 

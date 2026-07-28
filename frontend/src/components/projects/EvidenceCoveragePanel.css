@@ -1,0 +1,11 @@
+.evidence-coverage__list { display: flex; flex-direction: column; gap: 10px; }
+.evidence-coverage__row { display: grid; grid-template-columns: 20px 90px 1fr; align-items: center; gap: 8px; }
+.evidence-coverage__mark {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fff;
+}
+.evidence-coverage__mark.is-done { background: var(--success); border-color: var(--success); }
+.evidence-coverage__label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.evidence-coverage__detail { font-size: 12px; color: var(--text-soft); text-align: right; }

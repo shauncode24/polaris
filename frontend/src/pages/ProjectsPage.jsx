@@ -4,14 +4,15 @@ import { useAuth } from '../contexts/AuthContext'
 import { listProjects, getProjectsInsights } from '../api/projects'
 import Sidebar from '../components/layout/Sidebar'
 import BreadcrumbBar from '../components/layout/BreadcrumbBar'
+import CollapsibleSection from '../components/common/CollapsibleSection'
 import ProjectsHeader from '../components/projects/ProjectsHeader'
 import ProjectsStatsGrid from '../components/projects/ProjectsStatsGrid'
 import ProjectGallery from '../components/projects/ProjectGallery'
-import ProjectIntelligencePanel from '../components/projects/ProjectIntelligencePanel'
+import InterviewToolkitPanel from '../components/projects/InterviewToolkitPanel'
 import CompareProjectsPanel from '../components/projects/CompareProjectsPanel'
 import AIRecommendationsPanel from '../components/projects/AIRecommendationsPanel'
 import RecentMilestonesPanel from '../components/projects/RecentMilestonesPanel'
-import SourceCoveragePanel from '../components/projects/SourceCoveragePanel'
+import EvidenceCoveragePanel from '../components/projects/EvidenceCoveragePanel'
 import './ProjectsPage.css'
 
 function ProjectsPage() {
@@ -61,7 +62,10 @@ function ProjectsPage() {
   }
 
   const projects = overview?.projects || []
-  const featuredProject = projects.find((p) => p.is_featured) || projects[0]
+  const featuredProject = projects.find((p) => p.tier === 'Flagship Project') || projects[0]
+  const interviewReadyCount = projects.filter(
+    (p) => p.tier === 'Flagship Project' || p.tier === 'Career Project'
+  ).length
 
   return (
     <div className="projects-page">
@@ -78,23 +82,43 @@ function ProjectsPage() {
 
           <div className="projects-page__columns">
             <div className="projects-page__col projects-page__col--main">
-              <ProjectGallery
-                projects={projects}
-                loading={loading}
-                onOpenProject={handleOpenProject}
-                onAddProject={() => navigate('/profile')}
-              />
+              <CollapsibleSection title="Project Gallery" subtitle="Large, evidence-rich work" defaultOpen={true}>
+                <ProjectGallery
+                  projects={projects}
+                  loading={loading}
+                  onOpenProject={handleOpenProject}
+                  onAddProject={() => navigate('/profile')}
+                />
+              </CollapsibleSection>
 
-              {insights?.comparison && <CompareProjectsPanel comparison={insights.comparison} />}
+              {insights?.comparison && (
+                <CollapsibleSection title="Compare & Recommend" dense defaultOpen={true}>
+                  <CompareProjectsPanel comparison={insights.comparison} />
+                </CollapsibleSection>
+              )}
+
               {insights?.recommendations?.length > 0 && (
-                <AIRecommendationsPanel recommendations={insights.recommendations} />
+                <CollapsibleSection title="AI Recommendations" dense defaultOpen={false}>
+                  <AIRecommendationsPanel recommendations={insights.recommendations} />
+                </CollapsibleSection>
               )}
             </div>
 
             <div className="projects-page__col projects-page__col--side">
-              <ProjectIntelligencePanel featuredProjectName={featuredProject?.name} />
-              <SourceCoveragePanel coverage={insights?.source_coverage} />
-              <RecentMilestonesPanel milestones={insights?.milestones} />
+              <CollapsibleSection title="Interview Toolkit" dense defaultOpen={true}>
+                <InterviewToolkitPanel featuredProjectName={featuredProject?.name} />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Evidence Coverage" dense defaultOpen={true}>
+                <EvidenceCoveragePanel
+                  coverage={insights?.source_coverage}
+                  interviewReadyCount={interviewReadyCount}
+                />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Recent Analysis" dense defaultOpen={false}>
+                <RecentMilestonesPanel milestones={insights?.milestones} />
+              </CollapsibleSection>
             </div>
           </div>
         </div>

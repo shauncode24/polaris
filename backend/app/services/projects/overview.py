@@ -1,11 +1,12 @@
+from app.api import projects
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.projects.scoring import compute_rating, compute_status, compute_tier, derive_engineering_tags
 
 from app.models.facts import GithubSnapshot, Project
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.structure import Capability, ProjectCapability, ProjectSkill, Skill
 from app.schemas.projects import ProjectCard, ProjectsOverviewResponse, ProjectsStats
-from app.services.projects.scoring import compute_rating, compute_status
 
 
 def _fallback_tagline(name: str, description: str | None) -> str:
@@ -65,7 +66,6 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     for p in projects:
         project_skills = skills_by_project.get(p.id, [])
         project_capabilities = capabilities_by_project.get(p.id, [])
-
         matched_analysis = analysis_by_repo_name.get(p.name.lower())
 
         rating = compute_rating(
@@ -76,6 +76,13 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
             github_activity_score=matched_analysis.activity_score if matched_analysis else None,
         )
         status = compute_status(matched_analysis.is_active if matched_analysis else None)
+        has_repo = matched_analysis is not None or bool(p.repo_url)
+
+        engineering_tags = derive_engineering_tags(
+            p.stack or [s["name"] for s in project_skills],
+            extra_capabilities=list(project_capabilities) + (matched_analysis.capabilities if matched_analysis else []),
+        )
+        tier = compute_tier(rating, has_repo=has_repo, github_tier=matched_analysis.tier if matched_analysis else None)
 
         cards.append(
             ProjectCard(
@@ -85,14 +92,17 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
                 description=p.description,
                 stack=(p.stack or [s["name"] for s in project_skills])[:6],
                 capabilities=list(project_capabilities),
-                is_featured=False,  # set below, rank-based
+                engineering_tags=engineering_tags,
+                tier=tier,
+                is_featured=False,
                 status=status,
                 rating=rating,
                 updated_at=p.updated_at or p.created_at,
                 repo_url=p.repo_url,
-                has_repo=matched_analysis is not None or bool(p.repo_url),
+                has_repo=has_repo,
             )
         )
+
 
     # Feature the top-rated projects (up to 4) — computed by rank rather than
     # a stored flag, so "Featured" stays honest as new evidence comes in
@@ -105,10 +115,16 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
 
     cards.sort(key=lambda c: c.updated_at, reverse=True)
 
+    resume_backed = sum(1 for p in projects if p.resume_id is not None)
+    github_backed = sum(1 for c in cards if c.has_repo)
+    flagship_count = sum(1 for c in cards if c.tier == "Flagship Project")
+
     stats = ProjectsStats(
         total=len(cards),
-        featured=sum(1 for c in cards if c.is_featured),
+        flagship=flagship_count,
         technologies=len(all_skill_canonicals),
+        resume_coverage_pct=round((resume_backed / len(cards)) * 100) if cards else 0.0,
+        github_coverage_pct=round((github_backed / len(cards)) * 100) if cards else 0.0,
         capabilities=len(all_capability_names),
         connected_repositories=connected_repositories,
     )

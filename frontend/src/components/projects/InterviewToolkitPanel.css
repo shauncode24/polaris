@@ -1,0 +1,15 @@
+.interview-toolkit__lead { font-size: 12.5px; color: var(--text-soft); margin-bottom: 4px; }
+.interview-toolkit__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.interview-toolkit__chip {
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.interview-toolkit__chip:hover { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 400px) { .interview-toolkit__grid { grid-template-columns: 1fr; } }
