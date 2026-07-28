@@ -9,15 +9,18 @@
   gap: 12px;
 }
 .gh-resume-coverage h2 { font-size: 16px; }
-.gh-resume-coverage__hint { font-size: 13px; color: var(--text); line-height: 1.5; }
-.gh-resume-coverage__chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.gh-resume-coverage__chip {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 11px;
-  border-radius: var(--radius-pill);
-  background: var(--warning-soft);
-  color: #a2760f;
+
+.gh-funnel { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.gh-funnel__step {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 10px 14px; border-radius: var(--radius-md);
+  background: var(--surface-soft); border: 1px solid var(--border);
+  min-width: 90px;
 }
-.gh-resume-coverage__link { align-self: flex-start; font-size: 13px; font-weight: 600; color: var(--accent); }
-.gh-resume-coverage__link:hover { color: var(--accent-strong); }
+.gh-funnel__step strong { font-size: 20px; color: var(--ink); }
+.gh-funnel__step span { font-size: 11px; color: var(--text-soft); font-weight: 500; }
+.gh-funnel__step--good strong { color: var(--success); }
+.gh-funnel__step--warn { transition: all 0.2s ease; }
+.gh-funnel__step--warn:hover { border-color: var(--warning); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.gh-funnel__step--warn strong { color: var(--warning); }
+.gh-funnel__arrow { color: var(--text-soft); font-weight: bold; }

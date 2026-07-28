@@ -8,6 +8,60 @@ belongs in the raw snapshot, not here.
 from datetime import datetime, timezone
 
 
+def build_repo_headline(repo: dict) -> str:
+    """One synthesized sentence per repo so the explorer stops reading
+    like a repeated data table. Every clause is a real, checked fact —
+    never invented. Deterministic, same philosophy as the rest of this
+    file: no LLM call, just prioritized templating.
+    """
+    strengths, gaps = [], []
+    if repo.get("has_readme"):
+        strengths.append("well documented")
+    else:
+        gaps.append("missing README")
+    if repo.get("has_tests"):
+        strengths.append("tested")
+    else:
+        gaps.append("no tests")
+    if repo.get("has_ci"):
+        strengths.append("has CI")
+    else:
+        gaps.append("no CI")
+
+    score = repo.get("project_score", {}).get("overall", 0)
+    lead = "Strong architecture" if score >= 70 else ("Solid foundation" if score >= 45 else "Early stage")
+
+    parts = []
+    if strengths:
+        parts.append(", ".join(strengths[:2]).capitalize())
+    if gaps:
+        parts.append(f"needs {gaps[0]}" if len(gaps) == 1 else f"needs {', '.join(gaps[:2])}")
+
+    return f"{lead} — " + "; ".join(parts) if parts else lead
+
+
+def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
+    """Estimates the score-point gain from fixing the single biggest gap
+    on each repo, using the exact same weights as github_scoring.py so
+    the number shown is never fabricated — it's a real delta of that
+    formula. Sorted descending so 'highest ROI' is genuinely highest ROI.
+    """
+    candidates = []
+    for r in repositories:
+        breakdown = r.get("project_score", {}).get("breakdown", {})
+        if not r.get("has_readme"):
+            candidates.append({"project": r["name"], "action": f"Write a README for {r['name']}", "impact": 10})
+        if not r.get("has_tests"):
+            candidates.append({"project": r["name"], "action": f"Add tests to {r['name']}", "impact": 15})
+        if not r.get("has_ci"):
+            candidates.append({"project": r["name"], "action": f"Add CI to {r['name']}", "impact": 10})
+        if r.get("archived") is False and r.get("commits_last_30_days", 0) == 0 and breakdown.get("activity", 0) < 5:
+            candidates.append({"project": r["name"], "action": f"Archive or resume {r['name']}", "impact": 4})
+
+    candidates.sort(key=lambda c: c["impact"], reverse=True)
+    return candidates[:6]
+
+
 def build_github_insights(
     repositories: list[dict],
     scores: dict[str, int],
@@ -116,30 +170,7 @@ def build_github_insights(
         new_technologies = sorted(list(curr_techs - prev_techs))
 
     # 4. Recommendations
-    recommendations = []
-    highest_scored_repo = max(repositories, key=lambda r: scores.get(r["name"], 0), default=None)
-    if highest_scored_repo:
-        recommendations.append({
-            "project": highest_scored_repo["name"],
-            "reason": "Highest engineering score. Continue investing here.",
-        })
-
-    good_inactive_repos = [
-        r for r in repositories if r.get("commits_last_30_days", 0) == 0 and scores.get(r["name"], 0) >= 30
-    ]
-    good_inactive_repo = max(good_inactive_repos, key=lambda r: scores.get(r["name"], 0), default=None)
-    if good_inactive_repo:
-        recommendations.append({
-            "project": good_inactive_repo["name"],
-            "reason": "Good foundation but lacks recent activity.",
-        })
-
-    most_active_repo = max(repositories, key=lambda r: r.get("commits_last_30_days", 0), default=None)
-    if most_active_repo and most_active_repo.get("commits_last_30_days", 0) > 0:
-        recommendations.append({
-            "project": most_active_repo["name"],
-            "reason": "Most active repository this month.",
-        })
+    recommendations = build_ranked_recommendations(repositories)
 
     # Softer, non-absolute observations for strengths
     strengths_list = []

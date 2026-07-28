@@ -21,7 +21,7 @@ function buildTitle({ source, role, company, selectedJob }) {
 }
 
 function GoalSetupPanel({
-  jobs, jobsLoading, goals, goalsLoading, preselectedJobId,
+  jobs, jobsLoading, goals, goalsLoading, preselectedJobId, prefilledTopic,
   onCreateAndGenerate, onGenerateExisting, busy,
 }) {
   const [tab, setTab] = useState('new') // 'new' | 'existing'
@@ -42,6 +42,14 @@ function GoalSetupPanel({
       setSelectedJobId(preselectedJobId)
     }
   }, [preselectedJobId, jobs])
+
+  useEffect(() => {
+    if (prefilledTopic) {
+      setTab('new')
+      setSource('manual')
+      setRole(prefilledTopic)
+    }
+  }, [prefilledTopic])
 
   const selectedJob = jobs.find((j) => j.id === selectedJobId) || null
 

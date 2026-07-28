@@ -40,6 +40,7 @@ class GithubProjectAnalysis(Base):
     activity_score: Mapped[float] = mapped_column(Float, default=0.0)
     quality_score: Mapped[float] = mapped_column(Float, default=0.0)
     maintenance_score: Mapped[float] = mapped_column(Float, default=0.0)
+    tier: Mapped[str] = mapped_column(String(50), server_default="experiment")
 
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

@@ -22,7 +22,7 @@ from app.services.github.github_client import (
     fetch_repo_path_exists,
     fetch_last_commit_date,
 )
-from app.services.github.github_insights import build_github_insights
+from app.services.github.github_insights import build_github_insights, build_repo_headline, build_ranked_recommendations
 from app.services.github.github_scoring import score_repository
 from app.services.github.github_taxonomy import categorize_technologies
 from app.services.github.github_analyzer import analyze_repo
@@ -149,18 +149,6 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 archived=is_archived, has_description=bool(repo.get("description")),
             )
 
-            repositories_report.append({
-                "name": repo_name, "stars": stars, "forks": forks,
-                "commits_last_30_days": commits_30d,
-                "languages": list(languages.keys()),
-                "topics": topics, "description": repo.get("description"),
-                "pushed_at": repo.get("pushed_at"),
-                "archived": is_archived, "is_new": is_new,
-                "private": bool(repo.get("private", False)),
-                "has_readme": has_readme, "has_ci": has_ci, "has_tests": has_tests,
-                "project_score": score,
-            })
-
             # Deep repo technology & capability analysis
             analysis = analyze_repo(
                 repo_name=repo_name,
@@ -177,6 +165,27 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 last_commit_at=last_commit_at,
                 is_archived=is_archived,
             )
+
+            repo_entry = {
+                "name": repo_name, "stars": stars, "forks": forks,
+                "commits_last_30_days": commits_30d,
+                "languages": list(languages.keys()),
+                "topics": topics, "description": repo.get("description"),
+                "pushed_at": repo.get("pushed_at"),
+                "archived": is_archived, "is_new": is_new,
+                "private": bool(repo.get("private", False)),
+                "has_readme": has_readme, "has_ci": has_ci, "has_tests": has_tests,
+                "project_score": score,
+                "tier": analysis["tier"],
+            }
+            repo_entry["headline"] = build_repo_headline({
+                **repo_entry,
+                "project_score": score,
+                "has_readme": has_readme,
+                "has_tests": has_tests,
+                "has_ci": has_ci
+            })
+            repositories_report.append(repo_entry)
 
             # Upsert insights into github_project_analysis table
             insert_vals = {
@@ -198,6 +207,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 "activity_score": analysis["activity_score"],
                 "quality_score": analysis["quality_score"],
                 "maintenance_score": analysis["maintenance_score"],
+                "tier": analysis["tier"],
                 "computed_at": datetime.now(timezone.utc),
             }
 
@@ -247,6 +257,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
     insights = build_github_insights(
         repositories_report, scores, tech_distribution, total_language_bytes, prev_insights
     )
+    insights["recommendations"] = build_ranked_recommendations(repositories_report)
 
     summary = {
         "repos_synced": len(repositories_report),

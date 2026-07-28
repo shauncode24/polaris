@@ -32,7 +32,7 @@ export default function ResumeHeader({
   const reviewScore = latest_review?.overall_score
   const atsPassed = ats_flags.filter(f => f.severity !== 'low').length === 0
 
-  const atsScore = Math.max(
+  const atsScore = latest_analysis?.module_scores?.parsing ?? Math.max(
     0,
     100 - ats_flags.reduce((acc, f) => {
       if (f.severity === 'high') return acc + 25
@@ -40,6 +40,7 @@ export default function ResumeHeader({
       return acc + 5
     }, 0)
   )
+
 
   return (
     <div className="rh">

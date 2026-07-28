@@ -74,7 +74,7 @@ def analyze_repo(
     is_backend = bool(technologies & BACKEND_TECH)
     is_frontend = bool(technologies & FRONTEND_TECH) or any(
         lang in languages for lang in ("JavaScript", "TypeScript", "HTML", "CSS")
-    ) and not is_backend is False and bool(technologies & FRONTEND_TECH)
+    )
     is_database = bool(technologies & DATABASE_TECH)
     is_containerized = has_dockerfile or has_compose
     has_tests = has_tests_dir or "Testing" in technologies
@@ -107,6 +107,16 @@ def analyze_repo(
         else round(max(0, 100 - min(last_activity_days if last_activity_days is not None else 999, 100)), 1)
     )
 
+    combined = quality_score * 0.6 + activity_score * 0.4
+    if is_archived:
+        tier = "archived"
+    elif combined >= 60 and has_readme:
+        tier = "flagship"
+    elif combined >= 30:
+        tier = "career"
+    else:
+        tier = "experiment"
+
     return {
         "repo_name": repo_name,
         "category": category,
@@ -125,6 +135,7 @@ def analyze_repo(
         "activity_score": activity_score,
         "quality_score": quality_score,
         "maintenance_score": maintenance_score,
+        "tier": tier,
     }
 
 

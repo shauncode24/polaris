@@ -33,7 +33,7 @@ function CodingInsights({ insights }) {
 
   return (
     <section className="gh-coding">
-      <h2>Coding insights</h2>
+      <h2>Coding insights <small style={{ fontSize: '11px', color: 'var(--text-soft)', fontWeight: 'normal', marginLeft: '6px' }}>heuristic ⓘ</small></h2>
 
       <div className="gh-coding__group">
         <span className="gh-coding__label gh-coding__label--strength">Strengths</span>

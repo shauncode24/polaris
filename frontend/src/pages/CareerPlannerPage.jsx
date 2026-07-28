@@ -19,6 +19,7 @@ function CareerPlannerPage() {
   const { token } = useAuth()
   const [searchParams] = useSearchParams()
   const preselectedJobId = searchParams.get('jobId')
+  const prefilledTopic = searchParams.get('prefill')
 
   const [jobs, setJobs] = useState([])
   const [jobsLoading, setJobsLoading] = useState(true)
@@ -146,6 +147,7 @@ function CareerPlannerPage() {
                 goals={goals}
                 goalsLoading={goalsLoading}
                 preselectedJobId={preselectedJobId}
+                prefilledTopic={prefilledTopic}
                 onCreateAndGenerate={handleCreateAndGenerate}
                 onGenerateExisting={handleGenerateExisting}
                 busy={generating}

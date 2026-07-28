@@ -11,7 +11,12 @@ function isCovered(repoName, resumeProjectNames) {
 
 function GitHubResumeCoverage({ repositories, resumeProjectNames, loading }) {
   const active = repositories.filter((r) => !r.archived)
-  const missing = active.filter((r) => !isCovered(r.name, resumeProjectNames))
+  const careerWorthy = active.filter((r) => r.tier === 'flagship' || r.tier === 'career')
+  const onResume = careerWorthy.filter((r) => isCovered(r.name, resumeProjectNames))
+  
+  const missingCareerWorthy = careerWorthy.filter((r) => !isCovered(r.name, resumeProjectNames))
+  const firstMissing = missingCareerWorthy[0]
+  const missingLink = firstMissing ? `/resume?highlight=${encodeURIComponent(firstMissing.name)}` : '/resume'
 
   return (
     <section className="gh-resume-coverage">
@@ -20,18 +25,30 @@ function GitHubResumeCoverage({ repositories, resumeProjectNames, loading }) {
         <p className="gh-resume-coverage__hint">Checking your resume…</p>
       ) : (
         <>
-          <p className="gh-resume-coverage__hint">
-            {active.length} repositor{active.length === 1 ? 'y' : 'ies'}, but only{' '}
-            {active.length - missing.length} appear as resume projects.
-          </p>
-          {missing.length > 0 && (
-            <div className="gh-resume-coverage__chips">
-              {missing.slice(0, 6).map((r) => (
-                <span key={r.name} className="gh-resume-coverage__chip">{r.name}</span>
-              ))}
+          <div className="gh-funnel">
+            <div className="gh-funnel__step">
+              <strong>{active.length}</strong>
+              <span>Repositories</span>
             </div>
-          )}
-          <Link to="/profile" className="gh-resume-coverage__link">Review coverage →</Link>
+            <div className="gh-funnel__arrow">↓</div>
+            <div className="gh-funnel__step">
+              <strong>{careerWorthy.length}</strong>
+              <span>Career-worthy</span>
+            </div>
+            <div className="gh-funnel__arrow">↓</div>
+            <div className="gh-funnel__step gh-funnel__step--good">
+              <strong>{onResume.length}</strong>
+              <span>On resume</span>
+            </div>
+            <div className="gh-funnel__arrow">↓</div>
+            <Link to={missingLink} className="gh-funnel__step gh-funnel__step--warn" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+              <strong>{careerWorthy.length - onResume.length}</strong>
+              <span>Missing ⓘ</span>
+            </Link>
+          </div>
+          <p className="gh-resume-coverage__hint" style={{ marginTop: '12px', fontSize: '11px', color: 'var(--text-soft)', display: 'block' }}>
+            ⓘ On-resume status is inferred via a best-effort name-matching heuristic.
+          </p>
         </>
       )}
     </section>

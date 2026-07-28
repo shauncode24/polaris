@@ -59,12 +59,11 @@
 .gh-repo-item__updated { margin-left: auto; font-size: 11.5px; color: var(--text-soft); white-space: nowrap; }
 
 .gh-repo-item__desc { font-size: 12.5px; color: var(--text); margin-top: 6px; line-height: 1.5; }
-.gh-repo-item__pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.gh-repo-item__pill {
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  color: var(--text);
-}
+.gh-repo-item__headline { font-size: 12.5px; color: var(--ink); font-weight: 500; }
+.gh-repo-item__tier { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-pill); margin-left: 8px; }
+.gh-repo-item__tier--flagship { background: var(--accent-soft); color: var(--accent-strong); }
+.gh-repo-item__tier--career { background: var(--success-soft); color: var(--success); }
+.gh-repo-item__tier--experiment { background: var(--surface-soft); color: var(--text-soft); }
+.gh-repo-item__tier--archived { background: var(--warning-soft); color: #a2760f; }
+.gh-repo-item__headline-link { color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; }
+.gh-repo-item__headline-link:hover { color: var(--accent-strong); }

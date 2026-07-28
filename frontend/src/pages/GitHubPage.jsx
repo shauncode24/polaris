@@ -17,6 +17,7 @@ import AIRecommendations from '../components/github/AIRecommendations'
 import GitHubResumeCoverage from '../components/github/GitHubResumeCoverage'
 import SyncHistory from '../components/github/SyncHistory'
 import GitHubConnectPanel from '../components/github/GitHubConnectPanel'
+import CollapsibleSection from '../components/common/CollapsibleSection'
 import './GitHubPage.css'
 
 function scoreLabel(score) {
@@ -198,27 +199,49 @@ function GitHubPage() {
             />
           ) : (
             <>
-              <GitHubHealthCards metrics={healthMetrics} />
-              <GitHubStatsStrip stats={statItems} />
+              <GitHubHealthCards
+                overall={avgScore}
+                overallLabel={quality.label}
+                overallTone={quality.tone}
+                metrics={[
+                  { label: 'Activity', value: activity.label, tone: activity.tone, breakdown: { '30d commits': summary.total_commits_last_30_days ?? 0, 'Formula (Heuristic ⓘ)': 'Commits / 20 per repo' } },
+                  { label: 'Documentation', value: documentation.label, tone: documentation.tone, breakdown: { 'With README': `${insights.engineering_practices?.documentation?.repos_with_readme ?? 0} / ${repositories.length}`, 'Formula': '% of repos with README' } },
+                  { label: 'Portfolio', value: portfolio.label, tone: portfolio.tone, breakdown: { 'Repositories': repositories.length, 'Avg Score': `${avgScore}/100`, 'Formula': 'Average of all repo scores' } },
+                  { label: 'Hygiene', value: quality.label, tone: quality.tone, breakdown: { 'Readme Weight': '30%', 'Tests Weight': '40%', 'CI Weight': '30%', 'Formula (Heuristic ⓘ)': '0.3*README + 0.4*Tests + 0.3*CI' } },
+                ]}
+              />
 
-              <div className="github-columns">
-                <RepositoryActivity repositories={repositories} />
-                <ActivityTimeline repositories={repositories} />
-              </div>
+              <CollapsibleSection title="Stats" dense defaultOpen={false}>
+                <GitHubStatsStrip stats={statItems} />
+              </CollapsibleSection>
 
-              <RepositoryExplorer repositories={repositories} />
+              <CollapsibleSection title="Activity" dense defaultOpen={false}>
+                <div className="github-columns">
+                  <RepositoryActivity repositories={repositories} />
+                  <ActivityTimeline repositories={repositories} />
+                </div>
+              </CollapsibleSection>
 
-              <div className="github-columns">
-                <LanguageAnalytics languages={summary.languages_detected || []} />
-                <CodingInsights insights={insights} />
-              </div>
+              <CollapsibleSection title="Repository Explorer" defaultOpen={true}>
+                <RepositoryExplorer repositories={repositories} />
+              </CollapsibleSection>
 
-              <div className="github-columns">
+              <CollapsibleSection title="Languages & Engineering Habits" dense defaultOpen={false}>
+                <div className="github-columns">
+                  <LanguageAnalytics languages={summary.languages_detected || []} />
+                  <CodingInsights insights={insights} />
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Recommendations" defaultOpen={true}>
                 <AIRecommendations
                   repositories={repositories}
                   insightRecommendations={insights.recommendations}
                 />
-                <div className="github-col-stack">
+              </CollapsibleSection>
+
+              <CollapsibleSection title="GitHub → Resume" dense defaultOpen={true}>
+                <div className="github-columns">
                   <GitHubResumeCoverage
                     repositories={repositories}
                     resumeProjectNames={resumeProjectNames}
@@ -226,7 +249,7 @@ function GitHubPage() {
                   />
                   <SyncHistory syncedAt={workspace?.synced_at} summary={summary} />
                 </div>
-              </div>
+              </CollapsibleSection>
             </>
           )}
         </div>

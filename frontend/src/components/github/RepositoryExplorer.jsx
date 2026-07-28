@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formatRelativeTime } from '../../utils/formatRelativeTime'
 import './RepositoryExplorer.css'
 
@@ -59,13 +60,27 @@ function RepositoryExplorer({ repositories }) {
                   <span className="gh-repo-item__updated">Updated {formatRelativeTime(repo.pushed_at)}</span>
                 </div>
                 {repo.description && <p className="gh-repo-item__desc">{repo.description}</p>}
-                {pills.length > 0 && (
-                  <div className="gh-repo-item__pills">
-                    {pills.map((p) => (
-                      <span key={p} className="gh-repo-item__pill">{p}</span>
-                    ))}
-                  </div>
-                )}
+                
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                  <p className="gh-repo-item__headline" style={{ margin: 0 }}>
+                    {(repo.headline || '').includes('no tests') ? (
+                      <>
+                        {(repo.headline || '').split('no tests')[0]}
+                        <Link to="/career-planner?prefill=Testing" className="gh-repo-item__headline-link" title="Prefill focus topic in Career Planner">
+                          no tests <small className="heuristic-tag" style={{ fontSize: '9px', opacity: 0.8 }}>heuristic ⓘ</small>
+                        </Link>
+                        {(repo.headline || '').split('no tests')[1]}
+                      </>
+                    ) : (
+                      repo.headline
+                    )}
+                  </p>
+                  {repo.tier && (
+                    <span className={`gh-repo-item__tier gh-repo-item__tier--${repo.tier}`}>
+                      {repo.tier === 'flagship' ? '★ Flagship' : repo.tier === 'career' ? 'Career project' : repo.tier === 'archived' ? 'Archived' : 'Experiment'}
+                    </span>
+                  )}
+                </div>
               </li>
             )
           })}
