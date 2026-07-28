@@ -15,7 +15,6 @@ import WeakAreas from '../components/leetcode/WeakAreas'
 import DifficultyDistribution from '../components/leetcode/DifficultyDistribution'
 import ContestPerformance from '../components/leetcode/ContestPerformance'
 import EvidenceGenerated from '../components/leetcode/EvidenceGenerated'
-import TodaysFocus from '../components/leetcode/TodaysFocus'
 import CareerInsights from '../components/leetcode/CareerInsights'
 import CombinedSignal from '../components/leetcode/CombinedSignal'
 import RecruiterPerspective from '../components/leetcode/RecruiterPerspective'
@@ -200,10 +199,6 @@ function LeetCodePage() {
                       topicMastery={topicMastery}
                       attendedContestsCount={summary?.attended_contests_count}
                     />
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Today's focus" defaultOpen={true} dense>
-                    <TodaysFocus recommendations={insights?.recommendations} />
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Practice heatmap" dense defaultOpen={false}>
