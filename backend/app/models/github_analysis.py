@@ -42,6 +42,46 @@ class GithubProjectAnalysis(Base):
     maintenance_score: Mapped[float] = mapped_column(Float, default=0.0)
     tier: Mapped[str] = mapped_column(String(50), server_default="experiment")
 
+    # --- Fork / hygiene / collaboration / architecture signals ---
+    is_fork: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_meaningful_fork_contribution: Mapped[bool] = mapped_column(Boolean, default=False)
+    commit_hygiene_score: Mapped[float] = mapped_column(Float, default=0.0)
+    collaboration_mode: Mapped[str] = mapped_column(String(20), server_default="solo")
+    collaboration_score: Mapped[float] = mapped_column(Float, default=0.0)
+    architecture_assessment: Mapped[dict | None] = mapped_column(JSONB)
+
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GithubRepoAnalysisCache(Base):
+    """SHA-gated cache of the SLOW per-repo computations only: commit
+    hygiene sampling, PR/review lookups (~16 requests per repo with
+    PRs), fork-contribution commit counting, and the architecture-depth
+    LLM pass (tree fetch + model call). Keyed by the repo's last commit
+    SHA rather than a TTL — if HEAD hasn't moved since the last sync,
+    none of these signals could have changed, so reuse is always safe,
+    never stale. Cheap per-repo checks (languages, README/CI/tests
+    existence, manifest scans) are NOT cached here and are still
+    refetched every sync — they're single lightweight calls where
+    caching would save little and risks staleness if a file changes
+    without a new commit being what triggers the sync (e.g. force-push).
+    Separate from GithubProjectAnalysis, which is the full rendered
+    per-sync analysis and always gets rewritten regardless of cache hits.
+    """
+    __tablename__ = "github_repo_analysis_cache"
+    __table_args__ = (UniqueConstraint("user_id", "repo_name", name="uq_repo_cache_user_repo"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    repo_name: Mapped[str] = mapped_column(String(255))
+    last_commit_sha: Mapped[str] = mapped_column(String(64))
+
+    commit_hygiene: Mapped[dict] = mapped_column(JSONB)
+    pr_stats: Mapped[dict] = mapped_column(JSONB)
+    collaboration: Mapped[dict] = mapped_column(JSONB)
+    fork_contribution_commits: Mapped[int] = mapped_column(Integer, default=0)
+    architecture_assessment: Mapped[dict | None] = mapped_column(JSONB)
+
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

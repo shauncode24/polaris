@@ -1,4 +1,4 @@
-# backend/app/services/github_analyzer.py
+# backend/app/services_github_analyzer.py
 from datetime import datetime, timezone
 
 # Evidence -> inferred technology. Checked as a case-insensitive substring
@@ -52,6 +52,8 @@ def analyze_repo(
     commits_30d: int,
     last_commit_at: datetime | None,
     is_archived: bool,
+    is_fork: bool = False,
+    is_meaningful_fork_contribution: bool = False,
 ) -> dict:
     """Pure derivation — same inputs always produce the same output, so
     this is safe to re-run any time the scoring formula changes, without
@@ -110,6 +112,10 @@ def analyze_repo(
     combined = quality_score * 0.6 + activity_score * 0.4
     if is_archived:
         tier = "archived"
+    elif is_fork and not is_meaningful_fork_contribution:
+        # A clone-through with no real added work is not portfolio evidence,
+        # regardless of how healthy the upstream repo's own signals are.
+        tier = "fork"
     elif combined >= 60 and has_readme:
         tier = "flagship"
     elif combined >= 30:
@@ -136,6 +142,8 @@ def analyze_repo(
         "quality_score": quality_score,
         "maintenance_score": maintenance_score,
         "tier": tier,
+        "is_fork": is_fork,
+        "is_meaningful_fork_contribution": is_meaningful_fork_contribution,
     }
 
 
@@ -176,6 +184,9 @@ def build_portfolio_analysis(
         "repos_without_readme": sum(1 for r in repo_analyses if not r["has_readme"]),
         "containerized_repos": sum(1 for r in repo_analyses if r["is_containerized"]),
         "full_stack_repos": sum(1 for r in repo_analyses if r["category"] == "Full Stack"),
+        "non_contributed_forks": sum(
+            1 for r in repo_analyses if r.get("is_fork") and not r.get("is_meaningful_fork_contribution")
+        ),
     }
 
     observations: list[str] = []
@@ -193,6 +204,11 @@ def build_portfolio_analysis(
         observations.append(
             f"Only {quality_metrics['repos_with_tests']} of {quality_metrics['total_repos']} "
             f"repositories contain automated tests."
+        )
+    if quality_metrics["non_contributed_forks"] > 0:
+        observations.append(
+            f"{quality_metrics['non_contributed_forks']} synced repositories are forks with no "
+            f"significant original contribution — excluded from portfolio strength scoring."
         )
     if previous_technology_distribution:
         for tech, count in technology_distribution.items():

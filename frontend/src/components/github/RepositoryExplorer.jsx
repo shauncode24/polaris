@@ -9,6 +9,22 @@ function scoreTone(score) {
   return 'low'
 }
 
+function collaborationLabel(mode) {
+  if (mode === 'collaborative') return 'Collaborative'
+  if (mode === 'mixed') return 'Mixed'
+  return 'Solo'
+}
+
+function architectureLabel(depthLabel) {
+  const map = {
+    flat_script: 'Flat script',
+    basic_structure: 'Basic structure',
+    layered: 'Layered',
+    well_architected: 'Well architected',
+  }
+  return map[depthLabel] || null
+}
+
 function RepositoryExplorer({ repositories }) {
   const [query, setQuery] = useState('')
 
@@ -48,6 +64,10 @@ function RepositoryExplorer({ repositories }) {
           {filtered.map((repo) => {
             const score = repo.project_score?.overall ?? 0
             const pills = [...(repo.languages || []), ...(repo.topics || [])].slice(0, 4)
+            const nonContributedFork = repo.is_fork && repo.is_meaningful_fork_contribution === false
+            const collabMode = repo.collaboration?.mode
+            const archLabel = architectureLabel(repo.architecture_assessment?.depth_label)
+
             return (
               <li key={repo.name} className="gh-repo-item">
                 <div className="gh-repo-item__top">
@@ -56,11 +76,16 @@ function RepositoryExplorer({ repositories }) {
                     {repo.private ? 'Private' : 'Public'}
                   </span>
                   {repo.archived && <span className="gh-repo-item__archived">Archived</span>}
+                  {repo.is_fork && (
+                    <span className="gh-repo-item__fork" title={nonContributedFork ? 'No significant original commits detected' : 'Fork with real original contribution'}>
+                      {nonContributedFork ? 'Fork · no contribution' : 'Fork · contributed'}
+                    </span>
+                  )}
                   <span className={`gh-repo-item__score gh-repo-item__score--${scoreTone(score)}`}>{score}</span>
                   <span className="gh-repo-item__updated">Updated {formatRelativeTime(repo.pushed_at)}</span>
                 </div>
                 {repo.description && <p className="gh-repo-item__desc">{repo.description}</p>}
-                
+
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
                   <p className="gh-repo-item__headline" style={{ margin: 0 }}>
                     {(repo.headline || '').includes('no tests') ? (
@@ -77,7 +102,17 @@ function RepositoryExplorer({ repositories }) {
                   </p>
                   {repo.tier && (
                     <span className={`gh-repo-item__tier gh-repo-item__tier--${repo.tier}`}>
-                      {repo.tier === 'flagship' ? '★ Flagship' : repo.tier === 'career' ? 'Career project' : repo.tier === 'archived' ? 'Archived' : 'Experiment'}
+                      {repo.tier === 'flagship' ? '★ Flagship' : repo.tier === 'career' ? 'Career project' : repo.tier === 'archived' ? 'Archived' : repo.tier === 'fork' ? 'Fork' : 'Experiment'}
+                    </span>
+                  )}
+                  {!nonContributedFork && collabMode && (
+                    <span className="gh-repo-item__signal-chip" title={`${repo.collaboration.pr_count} PR(s), ${repo.collaboration.reviewed_pr_count} reviewed`}>
+                      {collaborationLabel(collabMode)}
+                    </span>
+                  )}
+                  {!nonContributedFork && archLabel && (
+                    <span className="gh-repo-item__signal-chip" title={(repo.architecture_assessment.observations || []).join(' · ')}>
+                      {archLabel}
                     </span>
                   )}
                 </div>

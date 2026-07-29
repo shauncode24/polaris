@@ -14,6 +14,9 @@ def build_repo_headline(repo: dict) -> str:
     never invented. Deterministic, same philosophy as the rest of this
     file: no LLM call, just prioritized templating.
     """
+    if repo.get("is_fork") and repo.get("is_meaningful_fork_contribution") is False:
+        return "Fork — no significant original contribution detected"
+
     strengths, gaps = [], []
     if repo.get("has_readme"):
         strengths.append("well documented")
@@ -45,9 +48,14 @@ def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
     on each repo, using the exact same weights as github_scoring.py so
     the number shown is never fabricated — it's a real delta of that
     formula. Sorted descending so 'highest ROI' is genuinely highest ROI.
+    Skips forks with no real contribution — there's nothing to recommend
+    improving on someone else's code.
     """
     candidates = []
     for r in repositories:
+        if r.get("is_fork") and r.get("is_meaningful_fork_contribution") is False:
+            continue
+
         breakdown = r.get("project_score", {}).get("breakdown", {})
         if not r.get("has_readme"):
             candidates.append({"project": r["name"], "action": f"Write a README for {r['name']}", "impact": 10})
@@ -57,6 +65,14 @@ def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
             candidates.append({"project": r["name"], "action": f"Add CI to {r['name']}", "impact": 10})
         if r.get("archived") is False and r.get("commits_last_30_days", 0) == 0 and breakdown.get("activity", 0) < 5:
             candidates.append({"project": r["name"], "action": f"Archive or resume {r['name']}", "impact": 4})
+
+        hygiene = r.get("commit_hygiene") or {}
+        if hygiene.get("sample_size", 0) >= 5 and hygiene.get("score", 100) < 40:
+            candidates.append({
+                "project": r["name"],
+                "action": f"Write clearer, more specific commit messages for {r['name']}",
+                "impact": 6,
+            })
 
     candidates.sort(key=lambda c: c["impact"], reverse=True)
     return candidates[:6]
@@ -128,6 +144,11 @@ def build_github_insights(
     active_projects = sum(1 for r in repositories if r.get("commits_last_30_days", 0) > 0)
     stale_projects = len(repositories) - active_projects
 
+    hygiene_scores = [r["commit_hygiene"]["score"] for r in repositories if (r.get("commit_hygiene") or {}).get("sample_size", 0) > 0]
+    avg_hygiene_score = round(sum(hygiene_scores) / len(hygiene_scores)) if hygiene_scores else None
+
+    collaborative_repos = sum(1 for r in repositories if (r.get("collaboration") or {}).get("mode") in ("collaborative", "mixed"))
+
     # 3. Progress and Trends
     dominant_languages = [
         lang for lang, _ in sorted(total_language_bytes.items(), key=lambda kv: kv[1], reverse=True)[:2]
@@ -182,6 +203,8 @@ def build_github_insights(
         strengths_list.append("Portfolio includes implementations leveraging database technologies.")
     if category_counts.get("ai", 0) > 0:
         strengths_list.append("Portfolio includes applications with integrated AI/ML components.")
+    if collaborative_repos > 0:
+        strengths_list.append(f"{collaborative_repos} repositories show real PR/review collaboration, not just solo commits.")
 
     return {
         "portfolio_profile": {
@@ -204,6 +227,12 @@ def build_github_insights(
             "maintenance": {
                 "active_projects": active_projects,
                 "stale_projects": stale_projects,
+            },
+            "commit_hygiene": {
+                "average_score": avg_hygiene_score,
+            },
+            "collaboration": {
+                "collaborative_or_mixed_repos": collaborative_repos,
             },
         },
         "progress": {

@@ -44,14 +44,20 @@ async def build_github_knowledge_object(db: AsyncSession, user_id) -> dict | Non
 
     # Rank by the same quality+activity signal github_analyzer.py already
     # uses for flagship tiering, so the model sees the strongest evidence
-    # first instead of working through every synced repo.
+    # first instead of working through every synced repo. Non-contributed
+    # forks are excluded entirely — they're not evidence of this person's work.
+    eligible = [
+        r for r in repositories
+        if not (r.get("is_fork") and r.get("is_meaningful_fork_contribution") is False)
+    ]
+
     def _rank_key(repo: dict) -> float:
         a = analysis_by_repo.get(repo["name"])
         if a is None:
             return repo.get("project_score", {}).get("overall", 0)
         return a.quality_score * 0.6 + a.activity_score * 0.4
 
-    ranked = sorted(repositories, key=_rank_key, reverse=True)[:MAX_REPOS_IN_KNOWLEDGE]
+    ranked = sorted(eligible, key=_rank_key, reverse=True)[:MAX_REPOS_IN_KNOWLEDGE]
 
     repo_summaries = []
     for repo in ranked:
@@ -72,6 +78,10 @@ async def build_github_knowledge_object(db: AsyncSession, user_id) -> dict | Non
             "commits_last_30_days": repo.get("commits_last_30_days"),
             "is_active": a.is_active if a else None,
             "archived": repo.get("archived"),
+            "is_fork": repo.get("is_fork", False),
+            "commit_hygiene": repo.get("commit_hygiene"),
+            "collaboration": repo.get("collaboration"),
+            "architecture_assessment": repo.get("architecture_assessment"),
         })
 
     all_technologies = sorted({t for a in analysis_by_repo.values() for t in (a.technologies or [])})
@@ -82,6 +92,7 @@ async def build_github_knowledge_object(db: AsyncSession, user_id) -> dict | Non
             "repos_synced": summary.get("repos_synced"),
             "total_commits_last_30_days": summary.get("total_commits_last_30_days"),
             "languages_detected": [l["language"] for l in summary.get("languages_detected", [])[:8]],
+            "forked_repositories": summary.get("forked_repositories", 0),
         },
         "engineering_practices": insights.get("engineering_practices", {}),
         "portfolio_profile": insights.get("portfolio_profile", {}),

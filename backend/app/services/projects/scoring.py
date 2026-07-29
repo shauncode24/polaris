@@ -11,10 +11,6 @@ BACKEND_SKILLS = {
 MIN_RATING = 1.0
 MAX_RATING = 5.0
 
-# Deterministic keyword -> capability label. Same idea as github_analyzer.py's
-# CAPABILITY_MAP, but applied directly to a project's stack so resume-only
-# projects (no linked GitHub repo) still get real engineering tags instead
-# of a raw tech dump. Never LLM-derived, never guessed.
 STACK_CAPABILITY_MAP: dict[str, str] = {
     "docker": "Containerization", "kubernetes": "Containerization",
     "fastapi": "API Design", "django": "API Design", "flask": "API Design",
@@ -35,12 +31,6 @@ STACK_CAPABILITY_MAP: dict[str, str] = {
 
 
 def derive_engineering_tags(stack: list[str], extra_capabilities: list[str] | None = None) -> list[str]:
-    """Deterministic. Merges any capabilities already computed elsewhere
-    (e.g. GithubProjectAnalysis.capabilities, or a manually-tagged
-    ProjectCapability row) with keyword-derived tags from the stack, so
-    a project reads as 'Authentication, Caching, AI Integration' instead
-    of 'React, Express, MongoDB'. Capped so the UI stays scannable.
-    """
     tags: list[str] = list(dict.fromkeys(extra_capabilities or []))
     for tech in stack:
         key = tech.lower().replace(" ", "_").replace(".", "")
@@ -55,15 +45,11 @@ _GITHUB_TIER_LABELS = {
     "career": "Career Project",
     "experiment": "Learning Project",
     "archived": "Archived",
+    "fork": "Fork (No Contribution)",
 }
 
 
 def compute_tier(rating: float, has_repo: bool, github_tier: str | None) -> str:
-    """Replaces the star rating with a label a recruiter can act on.
-    Prefers the real GitHub-derived tier (github_analyzer.py already
-    computes this from README/tests/CI/activity) when a repo is linked;
-    falls back to a rating-based bucket for resume-only projects.
-    """
     if github_tier:
         return _GITHUB_TIER_LABELS.get(github_tier, "Career Project")
     if rating >= 4.0 and has_repo:
