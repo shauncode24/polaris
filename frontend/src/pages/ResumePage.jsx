@@ -123,11 +123,11 @@ export default function ResumePage() {
     }
   }
 
-  async function handleFetchCoherence(targetRole) {
+  async function handleFetchCoherence(targetRole, regenerate = false) {
     setCoherenceLoading(true)
     setCoherenceError(null)
     try {
-      const data = await getResumeCoherence(token, targetRole)
+      const data = await getResumeCoherence(token, targetRole, regenerate)
       setCoherence(data)
     } catch (e) {
       setCoherenceError(e.message)
@@ -136,11 +136,11 @@ export default function ResumePage() {
     }
   }
 
-  async function handleFetchTailoring(jobId) {
+  async function handleFetchTailoring(jobId, regenerate = false) {
     setTailoringLoading(true)
     setTailoringError(null)
     try {
-      const data = await getResumeTailoring(token, jobId)
+      const data = await getResumeTailoring(token, jobId, regenerate)
       setTailoring(data)
     } catch (e) {
       setTailoringError(e.message)

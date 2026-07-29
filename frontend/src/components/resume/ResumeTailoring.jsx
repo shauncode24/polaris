@@ -4,9 +4,12 @@ import './ResumeTailoring.css'
 
 export default function ResumeTailoring({ jobs = [], onFetch, data, loading, error }) {
   const [selectedJd, setSelectedJd] = useState('')
+  const hasData = !!data
 
   function handleRun() {
-    if (selectedJd) onFetch(selectedJd)
+    // Second argument tells the API layer whether to force a fresh LLM
+    // call (Re-run) or accept a cached report if one exists (Tailor).
+    if (selectedJd) onFetch(selectedJd, hasData)
   }
 
   const rankedItems = data?.ranked_items ?? []
@@ -14,8 +17,6 @@ export default function ResumeTailoring({ jobs = [], onFetch, data, loading, err
   const leadIds = new Set(llm.lead_items ?? [])
   const cutIds = new Set(llm.cut_bullets ?? [])
   const emphasizeIds = new Set(llm.emphasize_bullets ?? [])
-
-  const hasData = !!data
 
   return (
     <CollapsibleSection title="Resume Tailoring" defaultOpen={false} className="rtail">

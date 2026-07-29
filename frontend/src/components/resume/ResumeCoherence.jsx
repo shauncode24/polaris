@@ -4,9 +4,12 @@ import './ResumeCoherence.css'
 
 export default function ResumeCoherence({ token, onFetch, data, loading, error }) {
   const [targetRole, setTargetRole] = useState('')
+  const hasData = !!data
 
   function handleRun() {
-    onFetch(targetRole.trim() || null)
+    // Second argument tells the API layer whether to force a fresh LLM
+    // call (Re-run) or accept a cached report if one exists (Analyze).
+    onFetch(targetRole.trim() || null, hasData)
   }
 
   const facts = data?.facts ?? {}
@@ -19,8 +22,6 @@ export default function ResumeCoherence({ token, onFetch, data, loading, error }
 
   const offNarrative = facts.off_narrative_bullets ?? []
   const weakBullets = dilution.weak_bullets ?? []
-
-  const hasData = !!data
 
   return (
     <CollapsibleSection title="Narrative Coherence" defaultOpen={false} className="rcoh">

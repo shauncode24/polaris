@@ -51,16 +51,17 @@ export function runResumeAnalysis(token, jobDescriptionId = null) {
   }).then(handle)
 }
 
-export function getResumeCoherence(token, targetRole = null) {
+export function getResumeCoherence(token, targetRole = null, regenerate = false) {
   const url = new URL(`${API_BASE_URL}/resume/coherence`)
   if (targetRole) url.searchParams.append('target_role', targetRole)
+  if (regenerate) url.searchParams.append('regenerate', 'true')
   return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
-export function getResumeTailoring(token, jobDescriptionId) {
-  return fetch(`${API_BASE_URL}/resume/tailor/${jobDescriptionId}`, {
-    headers: authHeaders(token),
-  }).then(handle)
+export function getResumeTailoring(token, jobDescriptionId, regenerate = false) {
+  const url = new URL(`${API_BASE_URL}/resume/tailor/${jobDescriptionId}`)
+  if (regenerate) url.searchParams.append('regenerate', 'true')
+  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
 export function getResumeEvolution(token) {

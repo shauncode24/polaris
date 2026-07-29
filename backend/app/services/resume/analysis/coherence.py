@@ -8,6 +8,36 @@ category distribution itself, only interprets it.
 from app.services.jobs.skill_categories import CATEGORY_MAP, DEFAULT_CATEGORY
 from app.services.resume.analysis.role_fit import ROLE_ARCHETYPES
 
+# Free-text phrasing -> archetype. A target role typed by the user
+# ("full stack developer", "back-end engineer", "AI engineer") almost
+# never matches a ROLE_ARCHETYPES key verbatim. Previously any non-exact
+# match silently fell through to `dominant_category` alone — which is
+# what made a stated "Full Stack Developer" target collapse into
+# whatever category happened to hold the most skill signal (e.g.
+# "General Technical"). This keyword layer catches the common phrasings
+# before falling back to that behavior.
+ROLE_KEYWORDS: dict[str, str] = {
+    "full stack": "Full Stack Engineer",
+    "full-stack": "Full Stack Engineer",
+    "fullstack": "Full Stack Engineer",
+    "backend": "Backend Engineer",
+    "back-end": "Backend Engineer",
+    "back end": "Backend Engineer",
+    "server-side": "Backend Engineer",
+    "frontend": "Frontend Engineer",
+    "front-end": "Frontend Engineer",
+    "front end": "Frontend Engineer",
+    "ui engineer": "Frontend Engineer",
+    "machine learning": "AI/ML Engineer",
+    "ml engineer": "AI/ML Engineer",
+    "ai engineer": "AI/ML Engineer",
+    "artificial intelligence": "AI/ML Engineer",
+    "devops": "DevOps / Platform",
+    "platform engineer": "DevOps / Platform",
+    "site reliability": "DevOps / Platform",
+    "sre": "DevOps / Platform",
+}
+
 
 def compute_category_distribution(skill_confidence_by_canonical: dict[str, float]) -> dict[str, float]:
     """category -> confidence-weighted share of total signal, normalized
@@ -28,10 +58,26 @@ def compute_category_distribution(skill_confidence_by_canonical: dict[str, float
 def _categories_for_role(role_label: str | None) -> set[str] | None:
     if not role_label:
         return None
+    lowered = role_label.strip().lower()
+
+    # 1. Exact archetype match (role_label literally equals an archetype name)
     for archetype, categories in ROLE_ARCHETYPES.items():
-        if archetype.lower() == role_label.lower():
+        if archetype.lower() == lowered:
             return categories
-    return None
+
+    # 2. Fuzzy keyword match against common free-text phrasings
+    matched_archetypes: set[str] = set()
+    for keyword, archetype in ROLE_KEYWORDS.items():
+        if keyword in lowered:
+            matched_archetypes.add(archetype)
+
+    if not matched_archetypes:
+        return None
+
+    categories: set[str] = set()
+    for archetype in matched_archetypes:
+        categories |= ROLE_ARCHETYPES.get(archetype, set())
+    return categories
 
 
 def compute_narrative_facts(

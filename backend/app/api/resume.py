@@ -20,8 +20,8 @@ from uuid import UUID
 from app.schemas.resume_coherence import CoherenceReport
 from app.schemas.resume_tailoring import TailoringReport
 from app.schemas.resume_evolution import EvolutionReport
-from app.services.resume.coherence_narrative import generate_coherence_report
-from app.services.resume.tailoring_llm import generate_tailoring_report
+from app.services.resume.coherence_narrative import generate_coherence_report, get_cached_coherence_report
+from app.services.resume.tailoring_llm import generate_tailoring_report, get_cached_tailoring_report
 from app.services.resume.evolution import build_evolution_report
 
 router = APIRouter(prefix="/resume", tags=["resume"])
@@ -382,6 +382,7 @@ async def get_resume_workspace(
 @router.get("/coherence", response_model=CoherenceReport)
 async def get_resume_coherence(
     target_role: str | None = None,
+    regenerate: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -391,12 +392,19 @@ async def get_resume_coherence(
     resume = result.scalar_one_or_none()
     if resume is None:
         raise HTTPException(status_code=400, detail="No uploaded resume found — upload a resume first.")
+
+    if not regenerate:
+        cached = await get_cached_coherence_report(db, resume.id, target_role)
+        if cached is not None:
+            return cached
+
     return await generate_coherence_report(db, current_user.id, resume.id, target_role)
 
 
 @router.get("/tailor/{job_description_id}", response_model=TailoringReport)
 async def get_resume_tailoring(
     job_description_id: UUID,
+    regenerate: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -406,11 +414,16 @@ async def get_resume_tailoring(
     resume = result.scalar_one_or_none()
     if resume is None:
         raise HTTPException(status_code=400, detail="No uploaded resume found — upload a resume first.")
+
+    if not regenerate:
+        cached = await get_cached_tailoring_report(db, resume.id, job_description_id)
+        if cached is not None:
+            return cached
+
     try:
         return await generate_tailoring_report(db, current_user.id, resume.id, job_description_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 @router.get("/evolution", response_model=EvolutionReport)
 async def get_resume_evolution(

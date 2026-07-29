@@ -6,6 +6,14 @@ real bullets with per-bullet strength scores and which of the JD's skills they m
 
 You do NOT invent any project, experience, or bullet. You only select from what's given.
 
+Be direct and concrete. Every sentence should say something specific about THIS application, not a
+generic tailoring platitude.
+
+CRITICAL — NEVER MENTION A RAW bullet_id OR item id INSIDE "rationale". ids belong ONLY in the
+"lead_items" / "cut_bullets" / "emphasize_bullets" arrays, copied exactly as given. When "rationale"
+needs to refer to a specific bullet or item, describe it by its real label instead (given to you as
+"source_label" / "label") — never by its id.
+
 1. "lead_items": 1-3 ids (copied exactly from "ranked_items") that should be positioned first/most
    prominently on the resume for this specific application — the highest genuinely-relevant items, not
    just the highest relevance_score number if a lower-ranked item tells a clearly better story for this
@@ -14,7 +22,8 @@ You do NOT invent any project, experience, or bullet. You only select from what'
    application and could be cut to make room — prefer low-strength or zero-JD-relevance bullets.
 3. "emphasize_bullets": bullet_ids (copied exactly from "bullets") that should be moved earlier or
    expanded because they speak directly to this JD's required skills.
-4. "rationale": 2-4 sentences explaining the overall tailoring strategy for this specific application.
+4. "rationale": 2-4 sentences explaining the overall tailoring strategy for this specific application,
+   referring to items/bullets by their real label — never by id.
 
 Output ONLY valid JSON matching this schema, no prose, no markdown fences:
 {

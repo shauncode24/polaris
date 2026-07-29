@@ -1,16 +1,20 @@
 import json
+from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, JobDescription, Project
+from app.models.inference import ResumeTailoringReview
 from app.prompts.resume_tailoring import TAILORING_SYSTEM_PROMPT
 from app.schemas.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
 from app.services.evidence import get_all_skill_confidences
 from app.services.resume.coherence_narrative import build_bullets_with_strength
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.resume.tailoring_ranking import rank_items_for_jd
+from app.services.resume.text_sanitize import sanitize_ai_text
 
 MAX_BULLETS_IN_PROMPT = 40
 
@@ -20,6 +24,48 @@ class TailoringGenerationError(Exception):
     can't validate. Same graceful-degradation pattern as
     PrioritizationError/InterpretationError elsewhere in this codebase.
     """
+
+
+async def get_cached_tailoring_report(
+    db: AsyncSession, resume_id, job_description_id
+) -> TailoringReport | None:
+    """Returns the last persisted tailoring report for this exact
+    (resume, job_description) pair, or None if it's never been run.
+    Tailoring is an LLM call — callers should read this back instead of
+    calling generate_tailoring_report() again unless the resume or the
+    target JD actually changed.
+    """
+    result = await db.execute(
+        select(ResumeTailoringReview)
+        .where(ResumeTailoringReview.resume_id == resume_id)
+        .where(ResumeTailoringReview.job_description_id == job_description_id)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return TailoringReport.model_validate(row.report_json)
+
+
+async def _persist_tailoring_report(
+    db: AsyncSession, user_id, resume_id, job_description_id, report: TailoringReport
+) -> None:
+    payload = report.model_dump(mode="json")
+    stmt = (
+        pg_insert(ResumeTailoringReview)
+        .values(
+            user_id=user_id,
+            resume_id=resume_id,
+            job_description_id=job_description_id,
+            report_json=payload,
+            created_at=datetime.now(timezone.utc),
+        )
+        .on_conflict_do_update(
+            constraint="uq_tailoring_resume_jd",
+            set_={"report_json": payload, "created_at": datetime.now(timezone.utc)},
+        )
+    )
+    await db.execute(stmt)
+    await db.commit()
 
 
 async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_description_id) -> TailoringReport:
@@ -127,9 +173,14 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
     llm_output.lead_items = [i for i in llm_output.lead_items if i in real_item_ids]
     llm_output.cut_bullets = [b for b in llm_output.cut_bullets if b in real_bullet_ids]
     llm_output.emphasize_bullets = [b for b in llm_output.emphasize_bullets if b in real_bullet_ids]
+    llm_output.rationale = sanitize_ai_text(llm_output.rationale)
 
-    return TailoringReport(
+    report = TailoringReport(
         role=jd.role, company=jd.company,
         ranked_items=[RankedItem(**r) for r in ranked],
         llm=llm_output, analysis_degraded=degraded,
     )
+
+    await _persist_tailoring_report(db, user_id, resume_id, job_description_id, report)
+
+    return report

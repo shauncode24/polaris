@@ -26,7 +26,7 @@ from app.schemas.resume_review import (
 )
 from app.services.resume.ats_checks import run_ats_checks
 from app.services.resume.bullet_analysis import analyze_bullet
-
+from app.services.resume.text_sanitize import sanitize_ai_text as sanitize_ai_review_text
 
 class ReviewGenerationError(Exception):
     """Raised when the narrative/rewrite LLM call fails or returns
@@ -142,24 +142,24 @@ async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewr
         raise ReviewGenerationError(f"Resume review rewrites LLM call failed: {e}") from e
 
 
-def sanitize_ai_review_text(text: str) -> str:
-    if not text:
-        return text
-    # Match uuid-based keys like exp_uuid_idx or proj_uuid_idx (with optional quotes)
-    raw_id_pattern = r"['\"]?(?:exp|proj)_[a-fA-F0-9\-]{32,36}_\d+['\"]?"
-    # Replace list of IDs inside parentheses, e.g., (exp_1, exp_2)
-    text = re.sub(rf"\(\s*{raw_id_pattern}(?:\s*,\s*{raw_id_pattern})*\s*\)", "", text)
-    # Replace individual IDs
-    text = re.sub(raw_id_pattern, "", text)
-    # Clean up spaces & parentheses
-    text = re.sub(r"\s+", " ", text)
-    text = text.replace(" ( )", "").replace("()", "").strip()
-    # Clean up empty quotes/braces and double commas
-    text = re.sub(r"\s*,\s*,", ",", text)
-    text = re.sub(r",\s*\.", ".", text)
-    # If the text ends or starts with a comma/space
-    text = text.strip(", ")
-    return text
+# def sanitize_ai_review_text(text: str) -> str:
+#     if not text:
+#         return text
+#     # Match uuid-based keys like exp_uuid_idx or proj_uuid_idx (with optional quotes)
+#     raw_id_pattern = r"['\"]?(?:exp|proj)_[a-fA-F0-9\-]{32,36}_\d+['\"]?"
+#     # Replace list of IDs inside parentheses, e.g., (exp_1, exp_2)
+#     text = re.sub(rf"\(\s*{raw_id_pattern}(?:\s*,\s*{raw_id_pattern})*\s*\)", "", text)
+#     # Replace individual IDs
+#     text = re.sub(raw_id_pattern, "", text)
+#     # Clean up spaces & parentheses
+#     text = re.sub(r"\s+", " ", text)
+#     text = text.replace(" ( )", "").replace("()", "").strip()
+#     # Clean up empty quotes/braces and double commas
+#     text = re.sub(r"\s*,\s*,", ",", text)
+#     text = re.sub(r",\s*\.", ".", text)
+#     # If the text ends or starts with a comma/space
+#     text = text.strip(", ")
+#     return text
 
 
 async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewReport:

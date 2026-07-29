@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -141,6 +141,49 @@ class LeetcodePortfolioReview(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     review_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+class ResumeCoherenceReview(Base):
+    """Derived, recomputable narrative-coherence output (§5.5 'inference').
+    One row per (resume, target_role) — UPSERTED, not appended, since a
+    coherence read for a given resume + role is always safe to
+    regenerate and there's no value in accumulating stale duplicates.
+    This is what lets the Resume page load an existing report instantly
+    instead of re-running the LLM call every visit.
+    """
+    __tablename__ = "resume_coherence_reviews"
+    __table_args__ = (UniqueConstraint("resume_id", "target_role", name="uq_coherence_resume_role"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    resume_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"), index=True)
+    target_role: Mapped[str] = mapped_column(String(255), default="")
+    report_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class ResumeTailoringReview(Base):
+    """Derived, recomputable tailoring output (§5.5 'inference'). One row
+    per (resume, job_description) pair — UPSERTED so re-running tailoring
+    against the same JD replaces the stale recommendation instead of
+    accumulating duplicates.
+    """
+    __tablename__ = "resume_tailoring_reviews"
+    __table_args__ = (
+        UniqueConstraint("resume_id", "job_description_id", name="uq_tailoring_resume_jd"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    resume_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"), index=True)
+    job_description_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_descriptions.id"), index=True
+    )
+    report_json: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
