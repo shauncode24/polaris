@@ -5,3 +5,21 @@
 .lc-contest__label { font-size: 12px; color: var(--text-soft); }
 .lc-contest__benefits { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-left: 18px; font-size: 12.5px; color: var(--text-soft); }
 .lc-contest__benefits li { list-style: disc; }
+
+.lc-contest__trend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.lc-contest__trend-label { font-weight: 700; }
+.lc-contest__trend--improving .lc-contest__trend-label { color: var(--success); }
+.lc-contest__trend--flat .lc-contest__trend-label { color: var(--warning); }
+.lc-contest__trend--declining .lc-contest__trend-label { color: var(--danger); }
+.lc-contest__trend--insufficient_data .lc-contest__trend-label,
+.lc-contest__trend--no_contests .lc-contest__trend-label { color: var(--text-soft); }
+.lc-contest__trend-detail { color: var(--text-soft); }

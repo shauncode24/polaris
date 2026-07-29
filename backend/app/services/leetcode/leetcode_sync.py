@@ -5,12 +5,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import LeetcodeSnapshot
-from app.models.inference import ProfileSnapshot, SkillEvidence
+from app.models.inference import ProfileSnapshot, SkillEvidence, LeetcodePortfolioReview
 from app.services.resume.confidence import WEIGHTS
 from app.services.leetcode.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
-from app.services.leetcode.leetcode_insights import build_leetcode_insights
+from app.services.leetcode.leetcode_insights import build_leetcode_insights, build_plan_adherence
+from app.services.leetcode.leetcode_recency import compute_tag_last_progress, compute_topic_recency, days_since
+from app.services.leetcode.leetcode_taxonomy import topic_totals
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_skill
+
+# How many past syncs' contest ratings to pull for trajectory detection.
+# 12 is generous headroom for "flat for N weeks" without an unbounded query.
+CONTEST_HISTORY_LIMIT = 12
 
 
 async def _get_previous_tag_counts(db: AsyncSession, user_id) -> dict[str, int]:
@@ -51,6 +57,45 @@ async def _get_previous_leetcode_stats(db: AsyncSession, user_id) -> dict | None
     return None
 
 
+async def _get_contest_rating_history(db: AsyncSession, user_id, limit: int = CONTEST_HISTORY_LIMIT) -> list[dict]:
+    """Chronological (oldest first) list of real recorded contest ratings
+    from past syncs — the raw material for trend detection. Every point
+    here is a value LeetCode actually returned at sync time, never
+    interpolated or estimated.
+    """
+    result = await db.execute(
+        select(ProfileSnapshot)
+        .where(ProfileSnapshot.user_id == user_id)
+        .where(ProfileSnapshot.note.in_(["leetcode sync", "leetcode manual submission"]))
+        .order_by(ProfileSnapshot.taken_at.asc())
+        .limit(limit)
+    )
+    history = []
+    for snapshot in result.scalars().all():
+        stats = snapshot.skills_json.get("stats") if isinstance(snapshot.skills_json, dict) else None
+        rating = stats.get("contest_rating") if stats else None
+        history.append({"taken_at": snapshot.taken_at.isoformat(), "rating": rating})
+    return history
+
+
+async def _get_latest_recommended_topics(db: AsyncSession, user_id) -> tuple[list[str], str | None]:
+    """The most recent set of topics the LeetCode AI Coach told this user
+    to prioritize, plus when. Used to close the loop: did solved-problem
+    counts on those specific topics actually move since then?
+    """
+    result = await db.execute(
+        select(LeetcodePortfolioReview)
+        .where(LeetcodePortfolioReview.user_id == user_id)
+        .order_by(LeetcodePortfolioReview.created_at.desc())
+        .limit(1)
+    )
+    review = result.scalar_one_or_none()
+    if review is None or not isinstance(review.review_json, dict):
+        return [], None
+    topics = review.review_json.get("target_focus_topics", [])
+    return topics, review.created_at.isoformat()
+
+
 async def _persist_leetcode_data(
     db: AsyncSession,
     user,
@@ -61,6 +106,8 @@ async def _persist_leetcode_data(
     previous_tag_counts = await _get_previous_tag_counts(db, user.id)
     existing_evidence_skill_ids = await _get_existing_evidence_skill_ids(db)
     previous_stats = await _get_previous_leetcode_stats(db, user.id)
+    contest_rating_history = await _get_contest_rating_history(db, user.id)
+    recommended_topics, recommended_at = await _get_latest_recommended_topics(db, user.id)
 
     for tag, count in tag_counts.items():
         db.add(
@@ -103,6 +150,28 @@ async def _persist_leetcode_data(
 
     await db.flush()
 
+    # Recency is derived strictly from the leetcode_snapshots table, which
+    # now includes the rows just added above — so a topic pushed forward
+    # in THIS sync correctly reads as "just practiced," not stale.
+    tag_last_progress = await compute_tag_last_progress(db, user.id)
+    topic_recency = compute_topic_recency(tag_last_progress, tag_counts)
+    topic_days_since = {topic: days_since(dt) for topic, dt in topic_recency.items()}
+
+    current_topic_totals = topic_totals(tag_counts)
+    previous_topic_totals_for_adherence = topic_totals(previous_tag_counts) if previous_tag_counts else {}
+
+    # Include "now" as the freshest contest-rating point so the trajectory
+    # reflects this sync's real value, not just history up to the prior one.
+    if extra_stats and extra_stats.get("contest_rating") is not None:
+        contest_rating_history = contest_rating_history + [{
+            "taken_at": datetime.now(timezone.utc).isoformat(),
+            "rating": extra_stats.get("contest_rating"),
+        }]
+
+    plan_adherence = build_plan_adherence(
+        recommended_topics, recommended_at, current_topic_totals, previous_topic_totals_for_adherence
+    )
+
     insights = build_leetcode_insights(
         tag_counts=tag_counts,
         previous_tag_counts=previous_tag_counts or None,
@@ -121,6 +190,9 @@ async def _persist_leetcode_data(
         reinforced_skills=reinforced_skills,
         new_skills=new_skills,
         unchanged_skills=unchanged_skills,
+        topic_days_since=topic_days_since,
+        contest_rating_history=contest_rating_history,
+        plan_adherence=plan_adherence,
     )
 
     snapshot_skills_json = {"leetcode_tags_synced": list(tag_counts.keys()), "insights": insights}

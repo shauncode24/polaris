@@ -6,8 +6,10 @@ consumable by Career Planner, Skill Gap Analyzer, or Interview
 Response Agent later — if a field is just LeetCode metadata reshaped,
 it belongs in the raw snapshot, not here (same rule as github_insights.py).
 """
+from datetime import datetime
+
 from app.services.leetcode.leetcode_taxonomy import topic_totals
-from app.services.leetcode.leetcode_mastery import get_mastery_level
+from app.services.leetcode.leetcode_mastery import get_mastery_level, get_effective_mastery
 
 
 FUNDAMENTAL_TOPICS = {
@@ -19,13 +21,37 @@ ADVANCED_TOPICS = {
     "Bit Manipulation", "Intervals", "Design"
 }
 
+# Below this many new solved problems since a topic was recommended,
+# it's treated as "not meaningfully practiced" for plan-adherence purposes.
+MIN_NEW_PROBLEMS_FOR_ADHERENCE = 1
 
-def build_topic_mastery(tag_counts: dict[str, int]) -> list[dict]:
+# Contest rating trajectory thresholds (LeetCode's scale runs roughly
+# 1200-3000+, so a small absolute move is noise, not a real trend).
+CONTEST_TREND_FLAT_THRESHOLD = 15
+CONTEST_TREND_MIN_POINTS = 2
+
+
+def build_topic_mastery(
+    tag_counts: dict[str, int],
+    topic_days_since: dict[str, int | None] | None = None,
+) -> list[dict]:
     totals = topic_totals(tag_counts)
-    return [
-        {"topic": topic, "problems": count, "mastery": get_mastery_level(count)}
-        for topic, count in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
-    ]
+    topic_days_since = topic_days_since or {}
+
+    results = []
+    for topic, count in totals.items():
+        days_since_progress = topic_days_since.get(topic)
+        effective_mastery, is_stale = get_effective_mastery(count, days_since_progress)
+        results.append({
+            "topic": topic,
+            "problems": count,
+            "mastery": effective_mastery,
+            "raw_mastery": get_mastery_level(count),
+            "is_stale": is_stale,
+            "days_since_progress": days_since_progress,
+        })
+
+    return sorted(results, key=lambda t: t["problems"], reverse=True)
 
 
 def detect_blind_spots(topic_mastery: list[dict]) -> dict[str, list[str]]:
@@ -170,6 +196,19 @@ def build_recommendations(topic_mastery: list[dict], easy: int, medium: int, har
             "action": f"Solve 10 {topic} problems.",
         })
 
+    # 1b. High priority for topics that have gone stale — real progress
+    # history exists, but it's been dormant long enough to have decayed.
+    stale_topics_info = [
+        t for t in topic_mastery
+        if t.get("is_stale") and t["problems"] > 0
+    ]
+    for info in stale_topics_info[:2]:
+        recommendations.append({
+            "priority": "High",
+            "reason": f"{info['topic']} hasn't seen new solves in {info['days_since_progress']} days — mastery is decaying.",
+            "action": f"Revisit {info['topic']} with 3-5 fresh problems to keep it interview-ready.",
+        })
+
     # 2. Medium Priority for Easy-heavy split
     total = easy + medium + hard
     if total > 0 and (easy / total) >= 0.7:
@@ -199,6 +238,77 @@ def build_recommendations(topic_mastery: list[dict], easy: int, medium: int, har
     return recommendations
 
 
+def build_contest_trajectory(rating_history: list[dict]) -> dict:
+    """`rating_history`: chronological (oldest first) list of
+    {"taken_at": iso str, "rating": float|None}, pulled straight from
+    past profile_snapshots — real recorded values, never interpolated.
+    Filters out unrated points before computing a trend so a user who
+    only recently started competing isn't read as 'flat'.
+    """
+    rated_points = [p for p in rating_history if p.get("rating") is not None]
+
+    if len(rated_points) < CONTEST_TREND_MIN_POINTS:
+        return {
+            "trend": "insufficient_data" if rated_points else "no_contests",
+            "points": rated_points,
+            "change_since_first": None,
+            "weeks_tracked": 0,
+        }
+
+    first, last = rated_points[0], rated_points[-1]
+    change = round(last["rating"] - first["rating"], 1)
+
+    if abs(change) <= CONTEST_TREND_FLAT_THRESHOLD:
+        trend = "flat"
+    elif change > 0:
+        trend = "improving"
+    else:
+        trend = "declining"
+
+    try:
+        first_dt = datetime.fromisoformat(first["taken_at"])
+        last_dt = datetime.fromisoformat(last["taken_at"])
+        weeks_tracked = max(1, round((last_dt - first_dt).days / 7))
+    except (ValueError, TypeError):
+        weeks_tracked = None
+
+    return {
+        "trend": trend,
+        "points": rated_points,
+        "change_since_first": change,
+        "weeks_tracked": weeks_tracked,
+    }
+
+
+def build_plan_adherence(
+    recommended_topics: list[str],
+    recommended_at: str | None,
+    current_topic_totals: dict[str, int],
+    previous_topic_totals: dict[str, int] | None,
+) -> list[dict]:
+    """Closes the loop between what was recommended (the LeetCode AI
+    Coach's target_focus_topics from the last portfolio review) and
+    whether solved-problem counts on those specific topics actually
+    moved since. Purely a diff over real totals — no LLM judgment.
+    """
+    if not recommended_topics or recommended_at is None:
+        return []
+
+    previous_topic_totals = previous_topic_totals or {}
+    adherence = []
+    for topic in recommended_topics:
+        current = current_topic_totals.get(topic, 0)
+        previous = previous_topic_totals.get(topic, 0)
+        new_problems = max(0, current - previous)
+        adherence.append({
+            "topic": topic,
+            "recommended_at": recommended_at,
+            "new_problems_since_recommendation": new_problems,
+            "status": "followed" if new_problems >= MIN_NEW_PROBLEMS_FOR_ADHERENCE else "not_yet_followed",
+        })
+    return adherence
+
+
 def build_leetcode_insights(
     *,
     tag_counts: dict[str, int],
@@ -218,8 +328,11 @@ def build_leetcode_insights(
     reinforced_skills: list[str],
     new_skills: list[str],
     unchanged_skills: list[str],
+    topic_days_since: dict[str, int | None] | None = None,
+    contest_rating_history: list[dict] | None = None,
+    plan_adherence: list[dict] | None = None,
 ) -> dict:
-    topic_mastery = build_topic_mastery(tag_counts)
+    topic_mastery = build_topic_mastery(tag_counts, topic_days_since)
     blind_spots = detect_blind_spots(topic_mastery)
     practice_habits = build_practice_habits(
         active_days_last_30, submissions_last_30, easy, medium, hard, longest_gap_days
@@ -239,6 +352,7 @@ def build_leetcode_insights(
         topic_mastery,
     )
     recommendations = build_recommendations(topic_mastery, easy, medium, hard)
+    contest_trajectory = build_contest_trajectory(contest_rating_history or [])
 
     return {
         "topic_mastery": topic_mastery,
@@ -247,6 +361,8 @@ def build_leetcode_insights(
         "difficulty_insight": difficulty_insight,
         "progress": progress,
         "recommendations": recommendations,
+        "contest_trajectory": contest_trajectory,
+        "plan_adherence": plan_adherence or [],
         "skill_evidence_detail": {
             "reinforced": reinforced_skills,
             "new": new_skills,

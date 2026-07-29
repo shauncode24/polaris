@@ -13,6 +13,8 @@ from app.services.github.github_sync import sync_github
 from app.services.leetcode.leetcode_client import LeetCodeSyncError
 from app.services.leetcode.leetcode_sync import sync_leetcode, sync_leetcode_manual
 
+from app.models.inference import ProfileSnapshot, LeetcodePortfolioReview
+
 router = APIRouter(prefix="/sync", tags=["sync"])
 
 

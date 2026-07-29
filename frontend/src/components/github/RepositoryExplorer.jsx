@@ -27,6 +27,17 @@ function architectureLabel(depthLabel) {
 
 function RepositoryExplorer({ repositories }) {
   const [query, setQuery] = useState('')
+  const [expandedRepos, setExpandedRepos] = useState(new Set())
+
+  function toggleRepo(name) {
+    const next = new Set(expandedRepos)
+    if (next.has(name)) {
+      next.delete(name)
+    } else {
+      next.add(name)
+    }
+    setExpandedRepos(next)
+  }
 
   const filtered = useMemo(() => {
     const sorted = [...repositories].sort(
@@ -63,14 +74,15 @@ function RepositoryExplorer({ repositories }) {
         <ul className="gh-explorer__list">
           {filtered.map((repo) => {
             const score = repo.project_score?.overall ?? 0
-            const pills = [...(repo.languages || []), ...(repo.topics || [])].slice(0, 4)
+            const pills = [...(repo.languages || []), ...(repo.topics || [])]
             const nonContributedFork = repo.is_fork && repo.is_meaningful_fork_contribution === false
             const collabMode = repo.collaboration?.mode
             const archLabel = architectureLabel(repo.architecture_assessment?.depth_label)
+            const isExpanded = expandedRepos.has(repo.name)
 
             return (
               <li key={repo.name} className="gh-repo-item">
-                <div className="gh-repo-item__top">
+                <div className="gh-repo-item__top" onClick={() => toggleRepo(repo.name)} style={{ cursor: 'pointer' }}>
                   <span className="gh-repo-item__name">{repo.name}</span>
                   <span className={`gh-repo-item__visibility ${repo.private ? 'is-private' : 'is-public'}`}>
                     {repo.private ? 'Private' : 'Public'}
@@ -82,6 +94,24 @@ function RepositoryExplorer({ repositories }) {
                     </span>
                   )}
                   <span className={`gh-repo-item__score gh-repo-item__score--${scoreTone(score)}`}>{score}</span>
+                  <button className="gh-repo-item__toggle-btn" aria-label="Toggle details">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.15s ease',
+                      }}
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
                   <span className="gh-repo-item__updated">Updated {formatRelativeTime(repo.pushed_at)}</span>
                 </div>
                 {repo.description && <p className="gh-repo-item__desc">{repo.description}</p>}
@@ -106,16 +136,86 @@ function RepositoryExplorer({ repositories }) {
                     </span>
                   )}
                   {!nonContributedFork && collabMode && (
-                    <span className="gh-repo-item__signal-chip" title={`${repo.collaboration.pr_count} PR(s), ${repo.collaboration.reviewed_pr_count} reviewed`}>
+                    <span className="gh-repo-item__signal-chip">
                       {collaborationLabel(collabMode)}
                     </span>
                   )}
                   {!nonContributedFork && archLabel && (
-                    <span className="gh-repo-item__signal-chip" title={(repo.architecture_assessment.observations || []).join(' · ')}>
+                    <span className="gh-repo-item__signal-chip">
                       {archLabel}
                     </span>
                   )}
                 </div>
+
+                {isExpanded && (
+                  <div className="gh-repo-item__details">
+                    {/* Architecture details */}
+                    {!nonContributedFork && repo.architecture_assessment && (
+                      <div className="gh-repo-item__details-section">
+                        <div className="gh-repo-item__details-title">Architecture Assessment ({architectureLabel(repo.architecture_assessment.depth_label)})</div>
+                        {repo.architecture_assessment.observations?.length > 0 ? (
+                          <ul className="gh-repo-item__details-list">
+                            {repo.architecture_assessment.observations.map((obs, index) => (
+                              <li key={index} className="gh-repo-item__details-list-item">{obs}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="gh-repo-item__details-fallback">No observations generated.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Commit hygiene details */}
+                    {repo.commit_hygiene && repo.commit_hygiene.sample_size > 0 && (
+                      <div className="gh-repo-item__details-section">
+                        <div className="gh-repo-item__details-title">Commit Message Hygiene (Score: {repo.commit_hygiene.score}/100)</div>
+                        <div className="gh-repo-item__hygiene-stats">
+                          <div className="gh-repo-item__hygiene-stat">
+                            <span className="gh-repo-item__hygiene-stat-label">Conventional Commits</span>
+                            <span className="gh-repo-item__hygiene-stat-val">{repo.commit_hygiene.conventional_pct}%</span>
+                          </div>
+                          <div className="gh-repo-item__hygiene-stat">
+                            <span className="gh-repo-item__hygiene-stat-label">Generic Messages</span>
+                            <span className="gh-repo-item__hygiene-stat-val">{repo.commit_hygiene.generic_pct}%</span>
+                          </div>
+                          <div className="gh-repo-item__hygiene-stat">
+                            <span className="gh-repo-item__hygiene-stat-label">Avg message length</span>
+                            <span className="gh-repo-item__hygiene-stat-val">{repo.commit_hygiene.avg_length} chars</span>
+                          </div>
+                          {repo.commit_hygiene.burst_detected && (
+                            <div className="gh-repo-item__hygiene-alert">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                              Burst activity detected (commits dumped in a short window)
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Collaboration details */}
+                    {repo.collaboration && repo.collaboration.pr_count > 0 && (
+                      <div className="gh-repo-item__details-section">
+                        <div className="gh-repo-item__details-title">Collaboration & Pull Requests (Score: {repo.collaboration.score}/100)</div>
+                        <p className="gh-repo-item__details-text">
+                          {repo.collaboration.pr_count} pull request(s) found.
+                          {' '}{repo.collaboration.reviewed_pr_count} of them received peer review feedback.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Languages and topics */}
+                    {pills.length > 0 && (
+                      <div className="gh-repo-item__details-section">
+                        <div className="gh-repo-item__details-title">Tech Stack & Tags</div>
+                        <div className="gh-repo-item__pills">
+                          {pills.map((pill) => (
+                            <span key={pill} className="gh-repo-item__pill-tag">{pill}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </li>
             )
           })}

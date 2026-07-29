@@ -1,10 +1,11 @@
 import './RecentActivity.css'
 
-function RecentActivity({ skillEvidenceDetail, progress }) {
+function RecentActivity({ skillEvidenceDetail, progress, planAdherence }) {
   const reinforced = skillEvidenceDetail?.reinforced || []
   const newSkills = skillEvidenceDetail?.new || []
   const masteryChanges = progress?.mastery_changes || []
   const newProblems = progress?.new_problems
+  const adherence = planAdherence || []
 
   const events = []
   if (newProblems) events.push({ type: 'count', text: `+${newProblems} problem${newProblems === 1 ? '' : 's'} solved since last sync` })
@@ -32,6 +33,24 @@ function RecentActivity({ skillEvidenceDetail, progress }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {adherence.length > 0 && (
+        <div className="lc-adherence">
+          <span className="lc-adherence__label">Did you follow the coach's last advice?</span>
+          <ul className="lc-adherence__list">
+            {adherence.map((a) => (
+              <li key={a.topic} className={`lc-adherence__item lc-adherence__item--${a.status}`}>
+                <span className="lc-adherence__topic">{a.topic}</span>
+                <span className="lc-adherence__status">
+                  {a.status === 'followed'
+                    ? `+${a.new_problems_since_recommendation} solved since recommended`
+                    : 'Not practiced since recommended'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   )

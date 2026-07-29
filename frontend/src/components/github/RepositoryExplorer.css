@@ -90,3 +90,140 @@
   border: 1px solid var(--border);
   white-space: nowrap;
 }
+
+.gh-repo-item__toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s, color 0.1s;
+}
+
+.gh-repo-item__toggle-btn:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.gh-repo-item__details {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gh-repo-item__details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gh-repo-item__details-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-soft);
+}
+
+.gh-repo-item__details-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gh-repo-item__details-list-item {
+  font-size: 12.5px;
+  color: var(--ink);
+  line-height: 1.5;
+  position: relative;
+  padding-left: 14px;
+}
+
+.gh-repo-item__details-list-item::before {
+  content: "•";
+  position: absolute;
+  left: 2px;
+  color: var(--accent);
+}
+
+.gh-repo-item__details-text {
+  font-size: 12.5px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.gh-repo-item__details-fallback {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+/* Hygiene stat block */
+.gh-repo-item__hygiene-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.gh-repo-item__hygiene-stat {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gh-repo-item__hygiene-stat-label {
+  font-size: 10px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gh-repo-item__hygiene-stat-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.gh-repo-item__hygiene-alert {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--warning);
+  font-weight: 500;
+  background: var(--warning-soft);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  width: 100%;
+}
+
+.gh-repo-item__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gh-repo-item__pill-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  color: var(--ink);
+  border: 1px solid var(--border);
+}

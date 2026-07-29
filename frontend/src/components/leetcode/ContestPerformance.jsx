@@ -1,8 +1,17 @@
 // frontend/src/components/leetcode/ContestPerformance.jsx
 import './ContestPerformance.css'
 
-function ContestPerformance({ rating, globalRanking, attendedContestsCount }) {
+const TREND_LABEL = {
+  improving: 'Trending up',
+  flat: 'Flat',
+  declining: 'Trending down',
+  insufficient_data: 'Not enough contests tracked yet',
+  no_contests: 'No rated contests yet',
+}
+
+function ContestPerformance({ rating, globalRanking, attendedContestsCount, trajectory }) {
   const hasRating = rating != null
+  const trend = trajectory?.trend
 
   return (
     <section className="lc-card">
@@ -18,22 +27,36 @@ function ContestPerformance({ rating, globalRanking, attendedContestsCount }) {
           </ul>
         </div>
       ) : (
-        <div className="lc-contest__grid">
-          <div className="lc-contest__stat">
-            <span className="lc-contest__value">{Math.round(rating)}</span>
-            <span className="lc-contest__label">Current rating</span>
+        <>
+          <div className="lc-contest__grid">
+            <div className="lc-contest__stat">
+              <span className="lc-contest__value">{Math.round(rating)}</span>
+              <span className="lc-contest__label">Current rating</span>
+            </div>
+            <div className="lc-contest__stat">
+              <span className="lc-contest__value">{attendedContestsCount ?? 0}</span>
+              <span className="lc-contest__label">Contests attended</span>
+            </div>
+            {globalRanking != null && (
+              <div className="lc-contest__stat lc-contest__stat--wide">
+                <span className="lc-contest__value">#{globalRanking.toLocaleString()}</span>
+                <span className="lc-contest__label">Global rank</span>
+              </div>
+            )}
           </div>
-          <div className="lc-contest__stat">
-            <span className="lc-contest__value">{attendedContestsCount ?? 0}</span>
-            <span className="lc-contest__label">Contests attended</span>
-          </div>
-          {globalRanking != null && (
-            <div className="lc-contest__stat lc-contest__stat--wide">
-              <span className="lc-contest__value">#{globalRanking.toLocaleString()}</span>
-              <span className="lc-contest__label">Global rank</span>
+
+          {trend && (
+            <div className={`lc-contest__trend lc-contest__trend--${trend}`}>
+              <span className="lc-contest__trend-label">{TREND_LABEL[trend] || trend}</span>
+              {trajectory?.change_since_first != null && trajectory?.weeks_tracked ? (
+                <span className="lc-contest__trend-detail">
+                  {trajectory.change_since_first > 0 ? '+' : ''}
+                  {trajectory.change_since_first} rating over {trajectory.weeks_tracked} week{trajectory.weeks_tracked === 1 ? '' : 's'}
+                </span>
+              ) : null}
             </div>
           )}
-        </div>
+        </>
       )}
     </section>
   )
