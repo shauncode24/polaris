@@ -187,3 +187,23 @@ class ResumeTailoringReview(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+class ProjectIntelligenceReview(Base):
+    """LLM interpretation layer over a single project's real, verified
+    facts (resume description, resolved skills/capabilities, and — only
+    when explicitly linked — GithubProjectAnalysis evidence). One row per
+    explain/compare call, so a user can look back at how their pitch for
+    a project evolved. Never a source of truth: safe to regenerate any
+    time the prompt or knowledge-object shape changes.
+    """
+    __tablename__ = "project_intelligence_reviews"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), index=True)
+    framing: Mapped[str] = mapped_column(String(255))
+    comparison_target: Mapped[str | None] = mapped_column(String(255))
+    review_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

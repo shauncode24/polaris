@@ -3,8 +3,9 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import JobDescription, Note, Project
+from app.models.facts import JobDescription, Note, Project, Resume
 from app.models.goals import Goal
+from app.services.projects.linking import normalize_name
 from app.models.inference import ProfileSnapshot, ResumeReview, SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
@@ -117,12 +118,17 @@ async def _get_latest_ats_flags(db: AsyncSession, user_id) -> tuple[set[str], li
 
 async def _get_projects(db: AsyncSession, user_id) -> list[dict]:
     result = await db.execute(
-        select(Project).where(Project.user_id == user_id).limit(MAX_PROJECTS_IN_PROMPT)
+        select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
     )
-    return [
-        {"name": p.name, "description": p.description, "stack": p.stack or []}
-        for p in result.scalars().all()
-    ]
+    all_p = result.scalars().all()
+    seen = set()
+    projects = []
+    for p in all_p:
+        norm = normalize_name(p.name)
+        if norm not in seen:
+            seen.add(norm)
+            projects.append({"name": p.name, "description": p.description, "stack": p.stack or []})
+    return projects[:MAX_PROJECTS_IN_PROMPT]
 
 
 async def _get_latest_leetcode_insights(db: AsyncSession, user_id) -> dict:

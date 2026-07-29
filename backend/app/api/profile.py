@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models.facts import User, Experience, Project, Education
+from app.models.facts import User, Experience, Project, Education, Resume
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -16,20 +16,49 @@ async def get_profile_data(
 ):
     """Return the user's experiences, projects, and education records."""
 
+    from app.services.projects.linking import normalize_name
+
     exp_result = await db.execute(
-        select(Experience).where(Experience.user_id == current_user.id).order_by(Experience.start_date.desc().nullsfirst())
+        select(Experience)
+        .where(Experience.user_id == current_user.id)
+        .order_by(Experience.start_date.desc().nullsfirst(), Experience.created_at.desc())
     )
-    experiences = exp_result.scalars().all()
+    all_experiences = exp_result.scalars().all()
+    seen_exps = set()
+    experiences = []
+    for e in all_experiences:
+        key = f"{normalize_name(e.role)}@{normalize_name(e.company)}"
+        if key not in seen_exps:
+            seen_exps.add(key)
+            experiences.append(e)
 
     proj_result = await db.execute(
-        select(Project).where(Project.user_id == current_user.id).order_by(Project.created_at.desc())
+        select(Project)
+        .where(Project.user_id == current_user.id)
+        .order_by(Project.created_at.desc())
     )
-    projects = proj_result.scalars().all()
+    all_projects = proj_result.scalars().all()
+    seen_projs = set()
+    projects = []
+    for p in all_projects:
+        key = normalize_name(p.name)
+        if key not in seen_projs:
+            seen_projs.add(key)
+            projects.append(p)
 
     edu_result = await db.execute(
-        select(Education).where(Education.user_id == current_user.id).order_by(Education.end_date.desc().nullsfirst())
+        select(Education)
+        .where(Education.user_id == current_user.id)
+        .order_by(Education.end_date.desc().nullsfirst(), Education.created_at.desc())
     )
-    education = edu_result.scalars().all()
+    all_education = edu_result.scalars().all()
+    seen_edus = set()
+    education = []
+    for e in all_education:
+        key = f"{normalize_name(e.institution)}@{normalize_name(e.degree or '')}"
+        if key not in seen_edus:
+            seen_edus.add(key)
+            education.append(e)
 
     return {
         "experiences": [

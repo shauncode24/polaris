@@ -56,6 +56,8 @@ class Project(Base):
     tagline: Mapped[str | None] = mapped_column(String(255))
     stack: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     repo_url: Mapped[str | None] = mapped_column(String(500))
+    github_repo_name: Mapped[str | None] = mapped_column(String(255))
+    repo_link_status: Mapped[str] = mapped_column(String(30), default="unmatched")
     impact_metrics: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime | None] = mapped_column(

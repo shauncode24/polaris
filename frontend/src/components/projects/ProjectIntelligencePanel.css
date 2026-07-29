@@ -1,0 +1,30 @@
+.project-intel__tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.project-intel__tab {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.project-intel__tab--active { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
+
+.project-intel__input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.project-intel__error { font-size: 13px; color: var(--danger); margin-top: 8px; }
+
+.project-intel__result { margin-top: 14px; font-size: 13.5px; color: var(--text); display: flex; flex-direction: column; gap: 8px; }
+.project-intel__result h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-soft); margin-top: 6px; }
+.project-intel__result ul { padding-left: 18px; list-style: disc; display: flex; flex-direction: column; gap: 4px; }
+.project-intel__synthesis { font-weight: 600; color: var(--ink); line-height: 1.55; }

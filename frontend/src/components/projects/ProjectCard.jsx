@@ -8,6 +8,13 @@ const TIER_TONE = {
   'Archived': 'archived',
 }
 
+const LINK_STATUS_LABEL = {
+  confirmed: null, // no badge needed — this is the healthy state
+  broken_link: 'Link broken',
+  suggested_match: 'Unconfirmed match',
+  unmatched: null,
+}
+
 function formatUpdated(iso) {
   if (!iso) return ''
   const date = new Date(iso)
@@ -19,8 +26,9 @@ function formatUpdated(iso) {
   return `Updated ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
 }
 
-function ProjectCard({ project, onOpen }) {
+function ProjectCard({ project, onOpen, curationAction, onExplain }) {
   const tone = TIER_TONE[project.tier] || 'career'
+  const linkWarning = LINK_STATUS_LABEL[project.link_status]
 
   return (
     <article className="project-card">
@@ -31,6 +39,10 @@ function ProjectCard({ project, onOpen }) {
           <span className={`project-card__badge project-card__badge--${project.status}`}>
             {project.status === 'ongoing' ? 'Ongoing' : 'Completed'}
           </span>
+          {linkWarning && <span className="project-card__link-warning">{linkWarning}</span>}
+          {curationAction === 'hide_suggested' && (
+            <span className="project-card__curation-warning">Consider hiding</span>
+          )}
         </div>
       </div>
 
@@ -55,9 +67,16 @@ function ProjectCard({ project, onOpen }) {
 
       <div className="project-card__footer">
         <span className="project-card__updated">{formatUpdated(project.updated_at)}</span>
-        <button type="button" className="project-card__open" onClick={() => onOpen(project)}>
-          Open ↗
-        </button>
+        <div className="project-card__footer-actions">
+          {onExplain && (
+            <button type="button" className="project-card__open" onClick={() => onExplain(project)}>
+              Explain ✦
+            </button>
+          )}
+          <button type="button" className="project-card__open" onClick={() => onOpen(project)}>
+            Open ↗
+          </button>
+        </div>
       </div>
     </article>
   )

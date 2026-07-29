@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { listProjects, getProjectsInsights } from '../api/projects'
@@ -13,6 +13,8 @@ import CompareProjectsPanel from '../components/projects/CompareProjectsPanel'
 import AIRecommendationsPanel from '../components/projects/AIRecommendationsPanel'
 import RecentMilestonesPanel from '../components/projects/RecentMilestonesPanel'
 import EvidenceCoveragePanel from '../components/projects/EvidenceCoveragePanel'
+import LinkSuggestionsPanel from '../components/projects/LinkSuggestionsPanel'
+import ProjectIntelligencePanel from '../components/projects/ProjectIntelligencePanel'
 import './ProjectsPage.css'
 
 function ProjectsPage() {
@@ -24,6 +26,7 @@ function ProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState('')
+  const [intelProject, setIntelProject] = useState(null)
 
   const loadAll = useCallback(async () => {
     setError('')
@@ -67,6 +70,14 @@ function ProjectsPage() {
     (p) => p.tier === 'Flagship Project' || p.tier === 'Career Project'
   ).length
 
+  const curationByProjectId = useMemo(() => {
+    const map = {}
+    for (const item of insights?.curation?.items || []) {
+      map[item.project_id] = item.action
+    }
+    return map
+  }, [insights])
+
   return (
     <div className="projects-page">
       <Sidebar />
@@ -78,6 +89,12 @@ function ProjectsPage() {
 
           {error && <p className="projects-page__error">{error}</p>}
 
+          <LinkSuggestionsPanel onLinked={loadAll} />
+
+          {insights?.curation?.dilution_warning && (
+            <p className="projects-page__dilution-warning">{insights.curation.dilution_warning}</p>
+          )}
+
           <ProjectsStatsGrid stats={overview?.stats} />
 
           <div className="projects-page__columns">
@@ -88,8 +105,14 @@ function ProjectsPage() {
                   loading={loading}
                   onOpenProject={handleOpenProject}
                   onAddProject={() => navigate('/profile')}
+                  curationByProjectId={curationByProjectId}
+                  onExplainProject={setIntelProject}
                 />
               </CollapsibleSection>
+
+              {intelProject && (
+                <ProjectIntelligencePanel project={intelProject} />
+              )}
 
               {insights?.comparison && (
                 <CollapsibleSection title="Compare & Recommend" dense defaultOpen={true}>

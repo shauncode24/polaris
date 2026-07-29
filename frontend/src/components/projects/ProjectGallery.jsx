@@ -10,7 +10,7 @@ const FILTERS = [
   { key: 'completed', label: 'Completed' },
 ]
 
-function ProjectGallery({ projects, loading, onOpenProject, onAddProject }) {
+function ProjectGallery({ projects, loading, onOpenProject, onAddProject, curationByProjectId, onExplainProject }) {
   const [filter, setFilter] = useState('all')
 
   const filtered = useMemo(() => {
@@ -57,7 +57,13 @@ function ProjectGallery({ projects, loading, onOpenProject, onAddProject }) {
       ) : (
         <div className="project-gallery__grid">
           {filtered.map((project) => (
-            <ProjectCard key={project.id} project={project} onOpen={onOpenProject} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onOpen={onOpenProject}
+              curationAction={curationByProjectId?.[project.id]}
+              onExplain={onExplainProject}
+            />
           ))}
         </div>
       )}

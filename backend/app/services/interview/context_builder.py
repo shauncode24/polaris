@@ -7,7 +7,7 @@ not this module.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import CompanyNote, Education, Experience, Project
+from app.models.facts import CompanyNote, Education, Experience, Project, Resume
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
@@ -15,46 +15,74 @@ from app.services.interview.blueprints import get_blueprint_library, get_persona
 from app.services.resume.confidence import compute_skill_confidence
 
 
+from app.services.projects.linking import normalize_name
+
+
 async def _get_all_projects(db: AsyncSession, user_id) -> list[dict]:
-    result = await db.execute(select(Project).where(Project.user_id == user_id))
-    return [
-        {"type": "project", "name": p.name, "description": p.description or "", "stack": p.stack or []}
-        for p in result.scalars().all()
-    ]
+    result = await db.execute(
+        select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
+    )
+    all_p = result.scalars().all()
+    seen = set()
+    projects = []
+    for p in all_p:
+        norm = normalize_name(p.name)
+        if norm not in seen:
+            seen.add(norm)
+            projects.append({"type": "project", "name": p.name, "description": p.description or "", "stack": p.stack or []})
+    return projects
 
 
 async def _get_all_experiences(db: AsyncSession, user_id) -> list[dict]:
-    result = await db.execute(select(Experience).where(Experience.user_id == user_id))
-    return [
-        {
-            "type": "experience",
-            "label": f"{e.role} at {e.company}",
-            "role": e.role,
-            "company": e.company,
-            "start_date": e.start_date.isoformat() if e.start_date else None,
-            "end_date": e.end_date.isoformat() if e.end_date else None,
-            "bullets": e.bullets or [],
-            "stack": e.stack or [],
-        }
-        for e in result.scalars().all()
-    ]
+    result = await db.execute(
+        select(Experience)
+        .where(Experience.user_id == user_id)
+        .order_by(Experience.start_date.desc().nullsfirst(), Experience.created_at.desc())
+    )
+    all_e = result.scalars().all()
+    seen = set()
+    experiences = []
+    for e in all_e:
+        key = f"{normalize_name(e.role)}@{normalize_name(e.company)}"
+        if key not in seen:
+            seen.add(key)
+            experiences.append({
+                "type": "experience",
+                "label": f"{e.role} at {e.company}",
+                "role": e.role,
+                "company": e.company,
+                "start_date": e.start_date.isoformat() if e.start_date else None,
+                "end_date": e.end_date.isoformat() if e.end_date else None,
+                "bullets": e.bullets or [],
+                "stack": e.stack or [],
+            })
+    return experiences
 
 
 async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
-    result = await db.execute(select(Education).where(Education.user_id == user_id))
-    return [
-        {
-            "type": "education",
-            "institution": e.institution,
-            "degree": e.degree,
-            "field_of_study": e.field_of_study,
-            "start_date": e.start_date.isoformat() if e.start_date else None,
-            "end_date": e.end_date.isoformat() if e.end_date else None,
-            "is_current": e.is_current,
-            "details": e.details or [],
-        }
-        for e in result.scalars().all()
-    ]
+    result = await db.execute(
+        select(Education)
+        .where(Education.user_id == user_id)
+        .order_by(Education.end_date.desc().nullsfirst(), Education.created_at.desc())
+    )
+    all_edu = result.scalars().all()
+    seen = set()
+    education = []
+    for e in all_edu:
+        key = f"{normalize_name(e.institution)}@{normalize_name(e.degree or '')}"
+        if key not in seen:
+            seen.add(key)
+            education.append({
+                "type": "education",
+                "institution": e.institution,
+                "degree": e.degree,
+                "field_of_study": e.field_of_study,
+                "start_date": e.start_date.isoformat() if e.start_date else None,
+                "end_date": e.end_date.isoformat() if e.end_date else None,
+                "is_current": e.is_current,
+                "details": e.details or [],
+            })
+    return education
 
 
 async def _get_all_skills_with_evidence(db: AsyncSession, user_id) -> list[dict]:

@@ -2,6 +2,7 @@ from app.api import projects
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.projects.scoring import compute_rating, compute_status, compute_tier, derive_engineering_tags
+from app.services.projects.linking import normalize_name
 
 from app.models.facts import GithubSnapshot, Project
 from app.models.github_analysis import GithubProjectAnalysis
@@ -21,7 +22,16 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     projects_result = await db.execute(
         select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
     )
-    projects = list(projects_result.scalars().all())
+    all_projects = list(projects_result.scalars().all())
+
+    # De-duplicate by normalized project name, keeping the most recent one
+    seen_names = set()
+    projects = []
+    for p in all_projects:
+        norm = normalize_name(p.name)
+        if norm not in seen_names:
+            seen_names.add(norm)
+            projects.append(p)
 
     if not projects:
         return ProjectsOverviewResponse(stats=ProjectsStats(), projects=[])
@@ -53,9 +63,10 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     analysis_rows = await db.execute(
         select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user_id)
     )
-    # Best-effort match by name — there's no direct FK between a resume-sourced
-    # Project and a synced GitHub repo, so this is a heuristic, not a guarantee.
-    analysis_by_repo_name = {a.repo_name.lower(): a for a in analysis_rows.scalars().all()}
+    analysis_by_repo_name = {a.repo_name: a for a in analysis_rows.scalars().all()}
+    # Only used to flag an UNCONFIRMED possible match for the UI — never
+    # to enrich rating/tier/tags. See services/projects/linking.py.
+    normalized_repo_lookup = {normalize_name(name): name for name in analysis_by_repo_name}
 
     connected_repos_result = await db.execute(
         select(func.count(func.distinct(GithubSnapshot.repo_name))).where(GithubSnapshot.user_id == user_id)
@@ -66,7 +77,16 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     for p in projects:
         project_skills = skills_by_project.get(p.id, [])
         project_capabilities = capabilities_by_project.get(p.id, [])
-        matched_analysis = analysis_by_repo_name.get(p.name.lower())
+
+        # Explicit link only — this is the fix for the silent
+        # `.lower()` name-match failure mode described in linking.py.
+        matched_analysis = None
+        if p.github_repo_name:
+            matched_analysis = analysis_by_repo_name.get(p.github_repo_name)
+            link_status = "confirmed" if matched_analysis else "broken_link"
+        else:
+            guessed_repo = normalized_repo_lookup.get(normalize_name(p.name))
+            link_status = "suggested_match" if guessed_repo else "unmatched"
 
         rating = compute_rating(
             description_length=len(p.description or ""),
@@ -100,13 +120,11 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
                 updated_at=p.updated_at or p.created_at,
                 repo_url=p.repo_url,
                 has_repo=has_repo,
+                link_status=link_status,
+                github_repo_name=p.github_repo_name,
             )
         )
 
-
-    # Feature the top-rated projects (up to 4) — computed by rank rather than
-    # a stored flag, so "Featured" stays honest as new evidence comes in
-    # instead of drifting out of date like a manually-set flag would.
     featured_count = min(4, len(cards))
     ranked = sorted(cards, key=lambda c: c.rating, reverse=True)
     featured_ids = {c.id for c in ranked[:featured_count] if c.rating >= 3.0}

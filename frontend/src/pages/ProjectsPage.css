@@ -28,6 +28,15 @@
 }
 .projects-page__col { display: flex; flex-direction: column; gap: 14px; }
 
+.projects-page__dilution-warning {
+  font-size: 13px;
+  color: #a2760f;
+  background: var(--warning-soft);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+
 @media (max-width: 1080px) {
   .projects-page__columns { grid-template-columns: 1fr; }
 }

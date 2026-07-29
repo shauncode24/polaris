@@ -10,22 +10,25 @@ class ProjectCard(BaseModel):
     description: str | None = None
     stack: list[str] = []
     capabilities: list[str] = []
-    engineering_tags: list[str] = []      # NEW — replaces star rating as the headline signal
-    tier: str = "Career Project"          # NEW — Flagship / Career / Learning / Prototype / Archived
+    engineering_tags: list[str] = []
+    tier: str = "Career Project"
     is_featured: bool = False
     status: str = "completed"
-    rating: float = 3.0                   # kept internally for sorting only; not shown as stars anymore
+    rating: float = 3.0
     updated_at: datetime | None = None
     repo_url: str | None = None
     has_repo: bool = False
+    # NEW — explicit-linking fields
+    link_status: str = "unmatched"        # "confirmed" | "broken_link" | "suggested_match" | "unmatched"
+    github_repo_name: str | None = None
 
 
 class ProjectsStats(BaseModel):
     total: int = 0
-    flagship: int = 0                     # NEW
+    flagship: int = 0
     technologies: int = 0
-    resume_coverage_pct: float = 0.0      # NEW
-    github_coverage_pct: float = 0.0      # NEW
+    resume_coverage_pct: float = 0.0
+    github_coverage_pct: float = 0.0
     capabilities: int = 0
     connected_repositories: int = 0
 
@@ -37,7 +40,7 @@ class ProjectsOverviewResponse(BaseModel):
 
 class ComparisonMetric(BaseModel):
     label: str
-    winner: str  # a project name, or "Tie"
+    winner: str
 
 
 class ProjectComparison(BaseModel):
@@ -56,8 +59,35 @@ class MilestoneItem(BaseModel):
     occurred_at: datetime
 
 
+# NEW — curation (keep/feature/hide)
+class CurationItem(BaseModel):
+    project_id: str
+    project_name: str
+    action: str  # "feature" | "keep" | "hide_suggested"
+    reason: str
+
+
+class CurationResult(BaseModel):
+    items: list[CurationItem] = []
+    dilution_warning: str | None = None
+
+
+# NEW — link suggestions
+class LinkSuggestion(BaseModel):
+    project_id: str
+    project_name: str
+    candidate_repo: str | None = None
+    confidence: str = "none"  # "exact" | "fuzzy" | "none"
+    other_candidates: list[str] = []
+
+
+class LinkProjectRequest(BaseModel):
+    repo_name: str
+
+
 class ProjectsInsightsResponse(BaseModel):
     comparison: ProjectComparison | None = None
     recommendations: list[RecommendationItem] = []
     milestones: list[MilestoneItem] = []
     source_coverage: dict = {}
+    curation: CurationResult = CurationResult()

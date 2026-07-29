@@ -8,7 +8,8 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.models.facts import JobDescription, Project
+from app.models.facts import JobDescription, Project, Resume
+from app.services.projects.linking import normalize_name
 from app.schemas.interpretation import CategoryScore, OverallMatch, SkillGapAnalysisResponse
 from app.schemas.skill_gap import JDPasteRequest
 from app.services.jobs.gap_analysis import analyze_skill_gap
@@ -38,11 +39,18 @@ async def _fetch_profile_context(db, user_id, max_projects: int = 6) -> list[dic
     """Grounds resume_advice in real project data instead of letting the
     LLM guess at what the candidate has built.
     """
-    result = await db.execute(select(Project).where(Project.user_id == user_id).limit(max_projects))
-    return [
-        {"name": p.name, "description": p.description, "stack": p.stack or []}
-        for p in result.scalars().all()
-    ]
+    result = await db.execute(
+        select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
+    )
+    all_p = result.scalars().all()
+    seen = set()
+    projects = []
+    for p in all_p:
+        norm = normalize_name(p.name)
+        if norm not in seen:
+            seen.add(norm)
+            projects.append({"name": p.name, "description": p.description, "stack": p.stack or []})
+    return projects[:max_projects]
 
 
 async def _run_job_analysis(
