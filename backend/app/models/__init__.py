@@ -5,3 +5,4 @@ from app.models.inference import *  # noqa
 from app.models.evaluation import *  # noqa
 from app.models.retrieval import *  # noqa
 from app.models.github_analysis import *  # noqa
+from app.models.leetcode_analysis import *  # noqa

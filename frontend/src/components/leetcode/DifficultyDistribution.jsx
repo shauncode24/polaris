@@ -1,7 +1,12 @@
 // frontend/src/components/leetcode/DifficultyDistribution.jsx
 import './DifficultyDistribution.css'
 
-function DifficultyDistribution({ easy, medium, hard, insightText }) {
+// The templated insightText paragraph was removed here (LeetCode Module
+// Review §3): it was restating facts, not producing real inference. That
+// interpretation now lives in the AI Coach panel's "interview_coach"
+// narrative, which has the fuller context (quadrant, company readiness,
+// resume claims) to say something real about difficulty mix.
+function DifficultyDistribution({ easy, medium, hard }) {
   const total = (easy || 0) + (medium || 0) + (hard || 0)
   const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0)
 
@@ -33,8 +38,6 @@ function DifficultyDistribution({ easy, medium, hard, insightText }) {
               <span className="lc-diff__label">Hard</span>
             </div>
           </div>
-
-          {insightText && <p className="lc-diff__insight">{insightText}</p>}
         </>
       )}
     </section>

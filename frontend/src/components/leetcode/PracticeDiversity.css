@@ -1,0 +1,8 @@
+.pd-message { font-size: 12.5px; line-height: 1.55; padding: 10px 12px; border-radius: var(--radius-sm); margin-top: 4px; }
+.pd-message--good { background: var(--success-soft); color: var(--success); }
+.pd-message--warn { background: var(--warning-soft); color: #a2760f; }
+.pd-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pd-pill {
+  font-size: 12px; padding: 3px 10px; border-radius: var(--radius-pill);
+  background: var(--accent-soft); color: var(--accent-strong);
+}

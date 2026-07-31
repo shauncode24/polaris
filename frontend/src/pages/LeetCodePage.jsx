@@ -21,6 +21,11 @@ import RecruiterPerspective from '../components/leetcode/RecruiterPerspective'
 import RecentActivity from '../components/leetcode/RecentActivity'
 import ManualEntryModal from '../components/leetcode/ManualEntryModal'
 import LeetcodeReviewPanel from '../components/leetcode/LeetcodeReviewPanel'
+import EngineeringQuadrant from '../components/leetcode/EngineeringQuadrant'
+import CompanyReadiness from '../components/leetcode/CompanyReadiness'
+import ResumeClaimsCheck from '../components/leetcode/ResumeClaimsCheck'
+import PracticeDiversity from '../components/leetcode/PracticeDiversity'
+import DataCeilingNote from '../components/leetcode/DataCeilingNote'
 
 import './LeetCodePage.css'
 
@@ -67,7 +72,11 @@ function LeetCodePage() {
       if (data.status === 'degraded') {
         setError(data.reason || 'LeetCode sync is temporarily unavailable — try manual entry.')
       } else {
-        setResult('leetcode', { ...data, username })
+        // Re-fetch the workspace so cross-module fields (engineering
+        // quadrant, company readiness, resume claims) refresh alongside
+        // the raw sync data.
+        const workspace = await getLeetcodeWorkspace(token)
+        setResult('leetcode', workspace && workspace.has_data ? workspace : { ...data, username })
       }
     } catch (err) {
       setError(err.message || 'Sync failed.')
@@ -77,8 +86,9 @@ function LeetCodePage() {
   }
 
   async function handleManualSubmit(tagCounts) {
-    const data = await submitLeetcodeManual(token, tagCounts)
-    setResult('leetcode', { ...data, username })
+    await submitLeetcodeManual(token, tagCounts)
+    const workspace = await getLeetcodeWorkspace(token)
+    setResult('leetcode', workspace && workspace.has_data ? workspace : { username })
     setShowManual(false)
   }
 
@@ -142,6 +152,8 @@ function LeetCodePage() {
                 contestRating={summary?.contest_rating}
               />
 
+              <DataCeilingNote note={insights?.data_ceiling_note} />
+
               <div className="leetcode-columns">
                 <div className="leetcode-col leetcode-col--main">
                   <CollapsibleSection title="AI LeetCode Coach" defaultOpen={true}>
@@ -150,6 +162,18 @@ function LeetCodePage() {
                       onRun={handleRunReview}
                       loading={reviewLoading}
                     />
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Engineering maturity quadrant" subtitle="LeetCode vs. GitHub, fused into one signal" defaultOpen={true}>
+                    <EngineeringQuadrant quadrant={leetcode?.engineering_quadrant} />
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Company readiness" defaultOpen={true}>
+                    <CompanyReadiness companyReadiness={leetcode?.company_readiness} />
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Resume vs. LeetCode evidence" defaultOpen={false}>
+                    <ResumeClaimsCheck resumeClaims={leetcode?.resume_claims} />
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Topic breakdown" subtitle="What your problem-solving history can genuinely support" defaultOpen={true}>
@@ -166,12 +190,12 @@ function LeetCodePage() {
                         easy={summary?.easy}
                         medium={summary?.medium}
                         hard={summary?.hard}
-                        insightText={insights?.difficulty_insight}
                       />
                       <ContestPerformance
                         rating={summary?.contest_rating}
                         globalRanking={summary?.global_ranking}
                         attendedContestsCount={summary?.attended_contests_count}
+                        trajectory={insights?.contest_trajectory}
                       />
                     </div>
                   </CollapsibleSection>
@@ -180,6 +204,7 @@ function LeetCodePage() {
                     <RecentActivity
                       skillEvidenceDetail={insights?.skill_evidence_detail}
                       progress={insights?.progress}
+                      planAdherence={insights?.plan_adherence}
                     />
                   </CollapsibleSection>
 
@@ -199,6 +224,10 @@ function LeetCodePage() {
                       topicMastery={topicMastery}
                       attendedContestsCount={summary?.attended_contests_count}
                     />
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Practice diversity" dense defaultOpen={true}>
+                    <PracticeDiversity diversity={insights?.practice_diversity} />
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Practice heatmap" dense defaultOpen={false}>

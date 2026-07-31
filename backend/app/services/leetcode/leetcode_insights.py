@@ -10,6 +10,7 @@ from datetime import datetime
 
 from app.services.leetcode.leetcode_taxonomy import topic_totals
 from app.services.leetcode.leetcode_mastery import get_mastery_level, get_effective_mastery
+from app.services.leetcode.leetcode_diversity import compute_practice_diversity
 
 
 FUNDAMENTAL_TOPICS = {
@@ -21,14 +22,22 @@ ADVANCED_TOPICS = {
     "Bit Manipulation", "Intervals", "Design"
 }
 
-# Below this many new solved problems since a topic was recommended,
-# it's treated as "not meaningfully practiced" for plan-adherence purposes.
 MIN_NEW_PROBLEMS_FOR_ADHERENCE = 1
 
-# Contest rating trajectory thresholds (LeetCode's scale runs roughly
-# 1200-3000+, so a small absolute move is noise, not a real trend).
 CONTEST_TREND_FLAT_THRESHOLD = 15
 CONTEST_TREND_MIN_POINTS = 2
+
+# Honest disclosure of what solved-count-derived insight can and can't
+# claim, per LeetCode Module Review §3F — a trust move, not a feature.
+# The unofficial LeetCode API exposes counts, not process (no attempt
+# count, no time-to-solve, no editorial usage), so mastery labels here
+# are a proxy for practice volume/recency, never a guarantee of live
+# interview performance.
+DATA_CEILING_NOTE = (
+    "This reads solved-problem counts and recency only — the unofficial LeetCode API doesn't "
+    "expose attempt count, time-to-solve, or whether the editorial was used. Treat mastery "
+    "labels as a proxy for practice volume, not a guarantee of interview performance."
+)
 
 
 def build_topic_mastery(
@@ -105,6 +114,10 @@ def build_practice_habits(
 
 
 def build_difficulty_insight(easy: int, medium: int, hard: int) -> str:
+    """Kept as a fact string fed to the AI Coach narrative (leetcode_review.py's
+    prompt) — per LeetCode Module Review §3, this is deliberately NOT
+    surfaced as a standalone UI insight anymore (it was templated
+    sentences with no real inference); it's now only prompt context."""
     total = easy + medium + hard
     if total == 0:
         return "No problems solved yet — start with Easy problems to build fundamentals."
@@ -112,8 +125,7 @@ def build_difficulty_insight(easy: int, medium: int, hard: int) -> str:
     easy_pct = easy / total
     medium_pct = medium / total
 
-    sentences = []
-    sentences.append(f"{round(easy_pct * 100)}% of your solved problems are Easy.")
+    sentences = [f"{round(easy_pct * 100)}% of your solved problems are Easy."]
 
     if medium_pct >= 0.4:
         sentences.append("Your Medium coverage is strong.")
@@ -184,7 +196,6 @@ def build_progress(
 def build_recommendations(topic_mastery: list[dict], easy: int, medium: int, hard: int) -> list[dict]:
     recommendations = []
 
-    # 1. High Priority for blind spots in fundamentals
     unpracticed_fundamentals = [
         t["topic"] for t in topic_mastery
         if t["topic"] in FUNDAMENTAL_TOPICS and t["mastery"] == "Not Practiced"
@@ -196,12 +207,7 @@ def build_recommendations(topic_mastery: list[dict], easy: int, medium: int, har
             "action": f"Solve 10 {topic} problems.",
         })
 
-    # 1b. High priority for topics that have gone stale — real progress
-    # history exists, but it's been dormant long enough to have decayed.
-    stale_topics_info = [
-        t for t in topic_mastery
-        if t.get("is_stale") and t["problems"] > 0
-    ]
+    stale_topics_info = [t for t in topic_mastery if t.get("is_stale") and t["problems"] > 0]
     for info in stale_topics_info[:2]:
         recommendations.append({
             "priority": "High",
@@ -209,7 +215,6 @@ def build_recommendations(topic_mastery: list[dict], easy: int, medium: int, har
             "action": f"Revisit {info['topic']} with 3-5 fresh problems to keep it interview-ready.",
         })
 
-    # 2. Medium Priority for Easy-heavy split
     total = easy + medium + hard
     if total > 0 and (easy / total) >= 0.7:
         recommendations.append({
@@ -218,7 +223,6 @@ def build_recommendations(topic_mastery: list[dict], easy: int, medium: int, har
             "action": "Aim for 15 Medium problems this month.",
         })
 
-    # 3. Low Priority for highly represented areas
     extensively_practiced = [
         t["topic"] for t in topic_mastery
         if t["mastery"] in ("Consistent Practice", "Extensive Practice")
@@ -239,12 +243,6 @@ def build_recommendations(topic_mastery: list[dict], easy: int, medium: int, har
 
 
 def build_contest_trajectory(rating_history: list[dict]) -> dict:
-    """`rating_history`: chronological (oldest first) list of
-    {"taken_at": iso str, "rating": float|None}, pulled straight from
-    past profile_snapshots — real recorded values, never interpolated.
-    Filters out unrated points before computing a trend so a user who
-    only recently started competing isn't read as 'flat'.
-    """
     rated_points = [p for p in rating_history if p.get("rating") is not None]
 
     if len(rated_points) < CONTEST_TREND_MIN_POINTS:
@@ -286,11 +284,6 @@ def build_plan_adherence(
     current_topic_totals: dict[str, int],
     previous_topic_totals: dict[str, int] | None,
 ) -> list[dict]:
-    """Closes the loop between what was recommended (the LeetCode AI
-    Coach's target_focus_topics from the last portfolio review) and
-    whether solved-problem counts on those specific topics actually
-    moved since. Purely a diff over real totals — no LLM judgment.
-    """
     if not recommended_topics or recommended_at is None:
         return []
 
@@ -354,15 +347,21 @@ def build_leetcode_insights(
     recommendations = build_recommendations(topic_mastery, easy, medium, hard)
     contest_trajectory = build_contest_trajectory(contest_rating_history or [])
 
+    # New: practice-diversity / anti-grind signal (§3D), computed from the
+    # exact same current/previous topic totals already derived above.
+    practice_diversity = compute_practice_diversity(current_topic_totals, previous_topic_totals)
+
     return {
         "topic_mastery": topic_mastery,
         "blind_spots": blind_spots,
         "practice_habits": practice_habits,
-        "difficulty_insight": difficulty_insight,
+        "difficulty_insight": difficulty_insight,  # prompt-context only now, not a standalone UI card
         "progress": progress,
         "recommendations": recommendations,
         "contest_trajectory": contest_trajectory,
         "plan_adherence": plan_adherence or [],
+        "practice_diversity": practice_diversity,
+        "data_ceiling_note": DATA_CEILING_NOTE,
         "skill_evidence_detail": {
             "reinforced": reinforced_skills,
             "new": new_skills,

@@ -12,6 +12,7 @@ from app.services.github.github_client import GithubSyncError
 from app.services.github.github_sync import sync_github
 from app.services.leetcode.leetcode_client import LeetCodeSyncError
 from app.services.leetcode.leetcode_sync import sync_leetcode, sync_leetcode_manual
+from app.services.leetcode.leetcode_knowledge import build_leetcode_knowledge_object
 
 from app.models.inference import ProfileSnapshot, LeetcodePortfolioReview
 
@@ -33,7 +34,6 @@ async def trigger_github_sync(
             content={"status": "error", "reason": "GitHub username and personal access token are required."},
         )
 
-    # Save so the user doesn't have to retype the PAT on every future sync.
     current_user.github_username = username
     current_user.github_token = token
     await db.commit()
@@ -81,7 +81,13 @@ async def get_leetcode_workspace(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Restore Leetcode workspace sync snapshot & portfolio review review_json from database."""
+    """Restore LeetCode workspace sync snapshot & portfolio review from
+    database, plus the on-the-fly cross-module inferences (Engineering
+    Maturity Quadrant, company readiness, resume-claim check) that
+    require both LeetCode and GitHub/Resume data together — these are
+    intentionally computed live rather than persisted, since either
+    source syncing again should shift them immediately.
+    """
     snapshot = await db.execute(
         select(ProfileSnapshot)
         .where(ProfileSnapshot.user_id == current_user.id)
@@ -94,8 +100,7 @@ async def get_leetcode_workspace(
         return {"has_data": False}
 
     payload = snapshot.skills_json
-    
-    # Get latest LeetCode review
+
     review_result = await db.execute(
         select(LeetcodePortfolioReview)
         .where(LeetcodePortfolioReview.user_id == current_user.id)
@@ -105,6 +110,8 @@ async def get_leetcode_workspace(
     review_row = review_result.scalar_one_or_none()
     portfolio_review = review_row.review_json if review_row else None
 
+    knowledge = await build_leetcode_knowledge_object(db, current_user.id)
+
     return {
         "has_data": True,
         "username": current_user.leetcode_username,
@@ -112,6 +119,9 @@ async def get_leetcode_workspace(
         "summary": payload.get("stats", {}),
         "insights": payload.get("insights", {}),
         "portfolio_review": portfolio_review,
+        "engineering_quadrant": knowledge.get("engineering_quadrant") if knowledge else None,
+        "company_readiness": knowledge.get("company_readiness") if knowledge else None,
+        "resume_claims": knowledge.get("resume_claims") if knowledge else None,
     }
 
 
@@ -123,9 +133,9 @@ async def run_leetcode_portfolio_review(
     """Trigger an LLM-powered review of the user's LeetCode performance."""
     from fastapi import HTTPException
     from app.services.leetcode.leetcode_reviewer import generate_leetcode_portfolio_review
-    
+
     try:
         report = await generate_leetcode_portfolio_review(db, current_user.id)
         return report
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))

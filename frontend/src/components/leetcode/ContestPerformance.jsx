@@ -9,6 +9,9 @@ const TREND_LABEL = {
   no_contests: 'No rated contests yet',
 }
 
+// global_ranking demoted per LeetCode Module Review §3: no career-actionable
+// signal in isolation, so it now renders as a small footnote rather than
+// a headline stat in the main grid.
 function ContestPerformance({ rating, globalRanking, attendedContestsCount, trajectory }) {
   const hasRating = rating != null
   const trend = trajectory?.trend
@@ -37,13 +40,11 @@ function ContestPerformance({ rating, globalRanking, attendedContestsCount, traj
               <span className="lc-contest__value">{attendedContestsCount ?? 0}</span>
               <span className="lc-contest__label">Contests attended</span>
             </div>
-            {globalRanking != null && (
-              <div className="lc-contest__stat lc-contest__stat--wide">
-                <span className="lc-contest__value">#{globalRanking.toLocaleString()}</span>
-                <span className="lc-contest__label">Global rank</span>
-              </div>
-            )}
           </div>
+
+          {globalRanking != null && (
+            <p className="lc-contest__footnote">Global rank: #{globalRanking.toLocaleString()} (context only — not weighted in readiness)</p>
+          )}
 
           {trend && (
             <div className={`lc-contest__trend lc-contest__trend--${trend}`}>
