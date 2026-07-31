@@ -17,6 +17,9 @@ class SkillEvidence(Base):
     source_type: Mapped[str] = mapped_column(String(50))
     source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     weight: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
 
 class ProfileSnapshot(Base):

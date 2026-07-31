@@ -99,4 +99,11 @@ async def build_github_knowledge_object(db: AsyncSession, user_id) -> dict | Non
         "all_technologies": all_technologies,
         "all_capabilities": all_capabilities,
         "repositories": repo_summaries,
+        # Deterministic rollups (see github_skill_depth.py and the
+        # architecture_maturity function in github_insights.py) — real,
+        # already-computed facts, same trust boundary as everything else
+        # in this object. Lets engineering_assessment/growth_story cite
+        # specific depth/maturity numbers instead of only per-repo facts.
+        "architecture_maturity": insights.get("architecture_maturity", {}),
+        "technology_depth": insights.get("technology_depth", {}),
     }

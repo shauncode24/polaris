@@ -28,6 +28,8 @@ from app.services.resume.ats_checks import run_ats_checks
 from app.services.resume.bullet_analysis import analyze_bullet
 from app.services.resume.text_sanitize import sanitize_ai_text as sanitize_ai_review_text
 
+from app.models.inference import ResumeAnalysis
+
 class ReviewGenerationError(Exception):
     """Raised when the narrative/rewrite LLM call fails or returns
     something we can't validate. Same graceful-degradation pattern as
@@ -161,6 +163,26 @@ async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewr
 #     text = text.strip(", ")
 #     return text
 
+async def _get_canonical_analysis_score(db: AsyncSession, resume_id) -> float | None:
+    """Single source of truth for 'how good is this resume': the
+    deterministic Analysis Engine's overall_score (analysis/engine.py,
+    via analyze_ats_v2). Resume Review used to compute its own
+    independent formula here — 100 - ats_penalty - bullet_penalty — which
+    meant the ATS Score panel and the AI Review panel could show two
+    different numbers for the same resume at the same time. There is now
+    exactly one deterministic scorer; Resume Review reads its number
+    instead of recomputing one.
+    """
+    result = await db.execute(
+        select(ResumeAnalysis)
+        .where(ResumeAnalysis.resume_id == resume_id)
+        .order_by(ResumeAnalysis.created_at.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if row is None or not isinstance(row.analysis_json, dict):
+        return None
+    return row.analysis_json.get("overall_score")
 
 async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewReport:
     resume = await _get_latest_resume(db, user_id)
@@ -270,7 +292,14 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
             br.rewrite = match.rewrite
             br.rewrite_rationale = match.rationale
 
-    score = _compute_score(len(flagged_for_llm), len(units), ats_flags)
+    canonical_score = await _get_canonical_analysis_score(db, resume.id)
+    if canonical_score is None:
+        # No Analysis Engine run yet for this resume — fall back to the
+        # local estimate rather than blocking the review. Once
+        # POST /resume/analyze has run once for this resume, this branch
+        # stops being hit and both panels agree on one number.
+        canonical_score = _compute_score(len(flagged_for_llm), len(units), ats_flags)
+    score = canonical_score
 
     stats = ResumeReviewStats(
         total_bullets=len(units),

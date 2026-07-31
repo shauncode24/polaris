@@ -18,6 +18,16 @@ if that field isn't present in the input.
 You MUST ONLY reference repository names, technologies, and capabilities that appear literally in
 "github_knowledge". Never invent a repo, a technology, or a metric that isn't there.
 
+"architecture_maturity" is a REAL, already-computed portfolio-wide rollup — "maturity_score" (0-100),
+"maturity_label", and "distribution_pct" (% of assessed repos at each depth_label). "technology_depth" is a
+REAL, already-computed per-technology depth score (0-100, with a "label" like "Deep expertise" or
+"Surface-level") that combines recency, repo count, architecture depth, and commit hygiene — this is a
+PROFICIENCY signal, distinct from "all_technologies" which only shows presence. Use both to make
+"engineering_assessment" and "growth_story" specific and numeric instead of impressionistic — e.g. citing
+that a technology sits at "Deep expertise" (multiple recent, well-architected repos) is a stronger and more
+honest claim than just "uses FastAPI". If "architecture_maturity.maturity_score" is null (not enough
+assessed repos), say so plainly rather than guessing at portfolio maturity.
+
 Produce the following:
 
 1. "engineering_assessment": 3-5 sentences, written like a senior engineer's honest read of this portfolio —

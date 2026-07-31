@@ -1,0 +1,349 @@
+/* PortfolioDepthMaturity.css */
+
+.gh-depth {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.gh-depth__grid {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 960px) {
+  .gh-depth__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gh-depth__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.gh-depth__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 16px;
+  letter-spacing: -0.2px;
+}
+
+.gh-depth__empty {
+  padding: 40px 20px;
+  font-size: 13px;
+  color: var(--text-soft);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  margin-top: 10px;
+}
+
+/* Architecture Maturity styling */
+.gh-depth__arch-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+}
+
+.gh-depth__radial-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gh-depth__radial {
+  transform: rotate(-90deg);
+}
+
+.gh-depth__radial-bg {
+  fill: none;
+  stroke: var(--surface-soft);
+}
+
+.gh-depth__radial-fill {
+  fill: none;
+  stroke: url(#archMaturityGradient);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Fallback stroke if svg gradient isn't in scope (we use a robust color instead) */
+.gh-depth__radial-fill {
+  stroke: var(--accent);
+}
+
+.gh-depth__radial-label {
+  position: absolute;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  font-family: var(--font-sans);
+}
+
+.gh-depth__radial-score {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.gh-depth__radial-max {
+  font-size: 13px;
+  color: var(--text-soft);
+  font-weight: 500;
+  margin-left: 1px;
+}
+
+.gh-depth__arch-info {
+  text-align: center;
+}
+
+.gh-depth__maturity-label {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.gh-depth__maturity-count {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.gh-depth__dist {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 4px;
+}
+
+.gh-depth__dist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.gh-depth__dist-label {
+  width: 130px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.gh-depth__dist-bar-wrap {
+  flex: 1;
+  margin-inline: 12px;
+}
+
+.gh-depth__dist-bar-track {
+  height: 6px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.gh-depth__dist-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  border-radius: var(--radius-pill);
+}
+
+.gh-depth__dist-pct {
+  width: 32px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+
+/* Technology Depth styling */
+.gh-depth__subtitle {
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-top: -8px;
+  margin-bottom: 16px;
+}
+
+.gh-depth__tech-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gh-depth__row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gh-depth__row:hover {
+  border-color: var(--accent);
+  background: var(--surface-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.gh-depth__row--expanded {
+  border-color: var(--accent);
+  background: var(--surface-soft);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.gh-depth__row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gh-depth__tech-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gh-depth__tech-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.gh-depth__badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.gh-depth__badge--deep {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+.gh-depth__badge--working {
+  background: #f0fdfa;
+  color: #0f766e;
+  border: 1px solid #ccfbf1;
+}
+
+.gh-depth__badge--applied {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #ffedd5;
+}
+
+.gh-depth__badge--surface {
+  background: var(--surface-soft);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.gh-depth__score-box {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+}
+
+.gh-depth__score-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.gh-depth__score-lbl {
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-right: 8px;
+}
+
+.gh-depth__chevron {
+  color: var(--text-soft);
+  transition: transform 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.gh-depth__chevron--rotated {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.gh-depth__breakdown {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.gh-depth__breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 20px;
+}
+
+@media (max-width: 600px) {
+  .gh-depth__breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gh-depth__breakdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gh-depth__b-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.gh-depth__b-bar-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.gh-depth__b-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}
+
+.gh-depth__b-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-soft);
+  align-self: flex-end;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

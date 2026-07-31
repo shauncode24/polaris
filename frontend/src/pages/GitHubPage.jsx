@@ -19,6 +19,7 @@ import GitHubResumeCoverage from '../components/github/GitHubResumeCoverage'
 import SyncHistory from '../components/github/SyncHistory'
 import GitHubConnectPanel from '../components/github/GitHubConnectPanel'
 import CollapsibleSection from '../components/common/CollapsibleSection'
+import PortfolioDepthMaturity from '../components/github/PortfolioDepthMaturity'
 import './GitHubPage.css'
 
 function scoreLabel(score) {
@@ -236,6 +237,10 @@ function GitHubPage() {
                   onRun={handleRunReview}
                   loading={reviewLoading}
                 />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Portfolio Depth & Maturity" defaultOpen={true}>
+                <PortfolioDepthMaturity insights={insights} />
               </CollapsibleSection>
 
               <CollapsibleSection title="Stats" dense defaultOpen={false}>

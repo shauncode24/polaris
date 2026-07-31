@@ -49,6 +49,9 @@ class GithubProjectAnalysis(Base):
     collaboration_mode: Mapped[str] = mapped_column(String(20), server_default="solo")
     collaboration_score: Mapped[float] = mapped_column(Float, default=0.0)
     architecture_assessment: Mapped[dict | None] = mapped_column(JSONB)
+    # Real GitHub repo creation date (from the API's own repo.created_at)
+    # — powers timeline_plausibility.py's advisory resume↔GitHub date check.
+    repo_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

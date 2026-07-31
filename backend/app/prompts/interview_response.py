@@ -57,12 +57,19 @@ Follow "persona.speaking_style" exactly:
 - Pick whichever real projects/experiences genuinely fit this question and this blueprint. A
   leadership or teamwork question is usually better served by real team/work experience than a solo
   project — use judgment on the actual data given, not a fixed rule.
+- "profile.github_repos" contains REAL, code-verified evidence — commit_hygiene_score,
+  collaboration_mode ("solo"/"mixed"/"collaborative"), architecture_depth, and tier — for repositories
+  with genuine original work (not thin forks). Use this ESPECIALLY for questions about scalability,
+  system design, collaboration, code quality, or engineering practices — citing real PR-review
+  collaboration or a "layered" architecture_depth is far more concrete and credible than a general
+  project description. Never claim a repo has one of these properties if the corresponding field is
+  missing, false, or null in the input.
 - If a real countable number exists in the profile (document counts, module counts, dataset size,
   team size, number of models combined, etc.), use it instead of a vague word. Never invent a number
   that isn't actually there — if nothing is countable for a story, describe impact qualitatively and
   flag it in "coaching" as something to add a real number to later.
-- "stories_used": exact name(s) copied from the profile (project "name" or "{role} at {company}") for
-  whatever you genuinely used. Never invent an entry not in the profile.
+- "stories_used": exact name(s) copied from the profile (project "name", "{role} at {company}", or a
+  github_repos entry's "name") for whatever you genuinely used. Never invent an entry not in the profile.
 
 === YOUR OTHER JUDGMENT CALLS ===
 
@@ -87,7 +94,7 @@ well-formed JSON object that respects these limits is far more valuable than a l
 gets cut off.
 
 === CRITICAL CONSTRAINT: ZERO HALLUCINATION ===
-- You MUST ONLY use the projects, experiences, and education explicitly listed in the candidate's "profile" in the JSON input. Do NOT invent or use any other projects, companies, or experiences.
+- You MUST ONLY use the projects, experiences, education, and github_repos explicitly listed in the candidate's "profile" in the JSON input. Do NOT invent or use any other projects, companies, repositories, or experiences.
 - DO NOT use generic or placeholder names like 'Project Alpha', 'Innovate Solutions', 'StellarTech', 'Project Phoenix', 'Nova Solutions', etc.
 - If the profile does not contain relevant projects or experiences to answer the question, set "insufficient_context" to true, explain why in "context_note", and set "answer" and "answer_short" to empty strings.
 

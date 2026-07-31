@@ -6,14 +6,15 @@ export default function CoverageGapsPanel({ coverage }) {
   const leetcodeGaps = coverage?.leetcode_gaps || []
   const certGaps = coverage?.certificate_gaps || []
   const projectSuggestions = coverage?.project_suggestions || []
+  const timelineNotes = coverage?.timeline_plausibility_notes || []
   
-  const totalGaps = githubGaps.length + leetcodeGaps.length + certGaps.length + projectSuggestions.length
+  const totalGaps = githubGaps.length + leetcodeGaps.length + certGaps.length + projectSuggestions.length + timelineNotes.length
 
   if (totalGaps === 0) {
     return (
-      <CollapsibleSection title="Coverage gaps" subtitle="Evidenced elsewhere, missing from your resume" defaultOpen={false} className="cgap">
+      <CollapsibleSection title="Coverage gaps & timeline" subtitle="Evidenced elsewhere, missing from your resume" defaultOpen={false} className="cgap">
         <div className="cgap__empty">
-          No coverage gaps! Your resume covers all skills evidenced in GitHub, LeetCode, and Certificates.
+          No coverage gaps or timeline advisories detected!
         </div>
       </CollapsibleSection>
     )
@@ -29,13 +30,22 @@ export default function CoverageGapsPanel({ coverage }) {
 
   return (
     <CollapsibleSection
-      title="Coverage gaps"
-      subtitle="Evidenced elsewhere, missing from your resume"
+      title="Coverage gaps & timeline"
+      subtitle="Evidenced elsewhere, missing from your resume or conflicting with claims"
       defaultOpen={true}
       badge={<span className="cgap__badge">{totalGaps}</span>}
       className="cgap"
     >
       <div className="cgap__list">
+        {timelineNotes.map((note, idx) => (
+          <div className="cgap__row cgap__row--advisory" key={`timeline-${idx}-${note.skill}`}>
+            <div className="cgap__text-col">
+              <span className="cgap__skill">{note.skill.replace(/_/g, ' ')}</span>
+              <p className="cgap__reason">{note.detail}</p>
+            </div>
+            <span className="cgap__source cgap__source--advisory">Timeline Advisory</span>
+          </div>
+        ))}
         {githubGaps.map(gap => (
           <div className="cgap__row" key={gap.skill}>
             <div className="cgap__text-col">

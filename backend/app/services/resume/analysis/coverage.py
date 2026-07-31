@@ -10,6 +10,7 @@ from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
 from app.services.resume.skill_classifier import resolve_skills
+from app.services.resume.timeline_plausibility import build_timeline_plausibility_notes
 
 async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.UUID) -> dict:
     # ── 1. Skills on the CURRENT resume ─────────────────────────────────────
@@ -197,9 +198,12 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
             "reason": reason
         })
 
+    timeline_plausibility_notes = await build_timeline_plausibility_notes(db, user_id, resume_id)
+
     return {
         "github_gaps": github_gap_details,
         "leetcode_gaps": leetcode_gap_details,
         "certificate_gaps": cert_gap_details,
-        "project_suggestions": project_suggestions
+        "project_suggestions": project_suggestions,
+        "timeline_plausibility_notes": timeline_plausibility_notes,
     }

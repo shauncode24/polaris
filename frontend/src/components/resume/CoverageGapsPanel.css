@@ -141,3 +141,14 @@
   background: var(--surface-soft);
 }
 
+.cgap__row--advisory {
+  background: var(--warning-soft);
+}
+
+.cgap__source--advisory {
+  background-color: #ffedd5;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+

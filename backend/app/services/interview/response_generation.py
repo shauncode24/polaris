@@ -76,8 +76,9 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
     has_projects = bool(profile.get("projects"))
     has_experiences = bool(profile.get("experiences"))
     has_education = bool(profile.get("education"))
+    has_github_repos = bool(profile.get("github_repos"))
 
-    if not (has_projects or has_experiences or has_education):
+    if not (has_projects or has_experiences or has_education or has_github_repos):
         print("[TRACING] Candidate profile is completely empty. Returning insufficient context.", flush=True)
         return InterviewLLMOutput(
             question_type="insufficient_context",

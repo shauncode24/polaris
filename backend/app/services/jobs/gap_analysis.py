@@ -10,7 +10,7 @@ from app.schemas.skill_gap import HaveSkill, MissingSkill, PartialSkill, SkillGa
 from app.services.jobs.effort_estimation import estimate_weeks
 from app.services.jobs.prioritization import PrioritizationError, prioritize_missing_skills
 from app.services.jobs.skill_categories import get_curriculum_phase, get_curriculum_rank
-from app.services.resume.confidence import compute_skill_confidence
+from app.services.resume.confidence import compute_decayed_skill_confidence
 from app.services.resume.review import classify_match
 from app.services.evidence import build_evidence_details
 
@@ -101,7 +101,7 @@ async def analyze_skill_gap(
             )
             continue
 
-        confidence = compute_skill_confidence([e.weight for e in evidence_rows])
+        confidence = compute_decayed_skill_confidence(evidence_rows)
         bucket = classify_match(confidence)
 
         if bucket == "missing":

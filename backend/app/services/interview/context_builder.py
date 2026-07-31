@@ -12,11 +12,12 @@ from app.models.inference import SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
 from app.services.interview.blueprints import get_blueprint_library, get_persona
-from app.services.resume.confidence import compute_skill_confidence
+from app.services.resume.confidence import compute_decayed_skill_confidence
 
 
 from app.services.projects.linking import normalize_name
 
+from app.models.github_analysis import GithubProjectAnalysis
 
 async def _get_all_projects(db: AsyncSession, user_id) -> list[dict]:
     result = await db.execute(
@@ -119,7 +120,7 @@ async def _get_all_skills_with_evidence(db: AsyncSession, user_id) -> list[dict]
         if not filtered_rows:
             continue
 
-        confidence = compute_skill_confidence([e.weight for e in filtered_rows])
+        confidence = compute_decayed_skill_confidence(filtered_rows)
         details = await build_evidence_details(db, filtered_rows)
         out.append({"skill": skill.canonical_name, "confidence": confidence, "evidence": details})
 
@@ -146,6 +147,7 @@ async def build_interview_context(
     experiences = await _get_all_experiences(db, user_id)
     education = await _get_all_education(db, user_id)
     skills = await _get_all_skills_with_evidence(db, user_id)
+    github_repos = await _get_github_repo_evidence(db, user_id)
     company_notes = await _get_company_notes(db, user_id, target_company)
 
     return {
@@ -157,8 +159,52 @@ async def build_interview_context(
             "experiences": experiences,
             "education": education,
             "skills": skills,
+            "github_repos": github_repos,
         },
         "company_notes": company_notes,
         "blueprint_library": get_blueprint_library(),
         "persona": get_persona(),
     }
+
+async def _get_github_repo_evidence(db: AsyncSession, user_id, limit: int = 6) -> list[dict]:
+    """Real, verified GitHub repository evidence — commit hygiene,
+    collaboration mode, architecture depth — so the Interview Response
+    Agent can cite concrete, checkable details (e.g. real PR-review
+    collaboration, a "layered" architecture assessment) instead of only
+    ever drawing on resume-described projects. Previously this context
+    builder never queried GithubProjectAnalysis at all, so questions
+    about scalability, collaboration, or code quality had nothing real
+    from GitHub to cite even when strong evidence existed.
+
+    Non-contributed forks are excluded — same rule applied everywhere
+    else GitHub evidence is surfaced (github_knowledge.py, coverage.py).
+    Ranked by quality+activity and capped so the prompt payload stays
+    small, same approach as github_knowledge.py.
+    """
+    result = await db.execute(
+        select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user_id)
+    )
+    eligible = [
+        a for a in result.scalars().all()
+        if not (a.is_fork and not a.is_meaningful_fork_contribution)
+    ]
+    ranked = sorted(eligible, key=lambda a: a.quality_score * 0.6 + a.activity_score * 0.4, reverse=True)
+
+    return [
+        {
+            "type": "github_repo",
+            "name": a.repo_name,
+            "category": a.category,
+            "technologies": a.technologies,
+            "capabilities": a.capabilities,
+            "tier": a.tier,
+            "quality_score": a.quality_score,
+            "activity_score": a.activity_score,
+            "has_tests": a.has_tests,
+            "has_ci": a.has_ci,
+            "commit_hygiene_score": a.commit_hygiene_score,
+            "collaboration_mode": a.collaboration_mode,
+            "architecture_depth": (a.architecture_assessment or {}).get("depth_label"),
+        }
+        for a in ranked[:limit]
+    ]

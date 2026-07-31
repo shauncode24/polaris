@@ -13,6 +13,12 @@ WEIGHTS: dict[str, float] = {
 
 
 def compute_overall_score(module_scores: dict[str, int | float]) -> int:
+    """DEPRECATED — do not call this. analyze_ats_v2() in ats_scorer_v2.py
+    is now the single canonical "how good is this resume" score; every
+    surface (Resume Analysis Engine, Resume Review) reads that one number.
+    This function is kept only so old callers/tests referencing it don't
+    hard-crash on import; it is intentionally unused in engine.py.
+    """
     total = 0.0
     weight_sum = 0.0
     for key, weight in WEIGHTS.items():

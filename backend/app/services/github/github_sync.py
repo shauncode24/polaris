@@ -150,6 +150,10 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
             forks = repo.get("forks_count", 0)
             topics = repo.get("topics", []) or []
             default_branch = repo.get("default_branch", "main")
+            raw_created_at = repo.get("created_at")
+            repo_created_at = (
+                datetime.fromisoformat(raw_created_at.replace("Z", "+00:00")) if raw_created_at else None
+            )
 
             # --- Cheap per-repo calls: always refetched, every sync ---
             languages_task = fetch_languages(client, username, repo_name, token)
@@ -345,6 +349,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 "collaboration_mode": collaboration_result["mode"],
                 "collaboration_score": collaboration_result["score"],
                 "architecture_assessment": architecture_result,
+                "repo_created_at": repo_created_at,
                 "computed_at": datetime.now(timezone.utc),
             }
 
@@ -361,6 +366,33 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
     for row in snapshot_rows:
         db.add(row)
     await db.flush()
+
+    from app.services.github.github_evidence import sync_github_skill_evidence
+    evidence_result = await sync_github_skill_evidence(db, user)
+    print(f"[TRACING] GitHub-derived skill evidence rebuilt: {evidence_result}", flush=True)
+
+    # Technology depth (skill-depth, not just skill-presence) — queries the
+    # just-upserted GithubProjectAnalysis rows fresh, since they already
+    # carry technologies/architecture/hygiene in the exact shape
+    # github_skill_depth.py needs.
+    from app.services.github.github_skill_depth import build_technology_depth_map
+    analysis_rows_result = await db.execute(
+        select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user.id)
+    )
+    eligible_for_depth = [
+        a for a in analysis_rows_result.scalars().all()
+        if not (a.is_fork and not a.is_meaningful_fork_contribution)
+    ]
+    technology_depth = build_technology_depth_map([
+        {
+            "technologies": a.technologies,
+            "last_activity_days": a.last_activity_days,
+            "commit_hygiene_score": a.commit_hygiene_score,
+            "architecture_assessment": a.architecture_assessment,
+            "quality_score": a.quality_score,
+        }
+        for a in eligible_for_depth
+    ])
 
     print(f"[TRACING] GitHub sync cache: {cache_hits} hits, {cache_misses} misses.", flush=True)
 
@@ -396,6 +428,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         repositories_report, scores, tech_distribution, total_language_bytes, prev_insights
     )
     insights["recommendations"] = build_ranked_recommendations(repositories_report)
+    insights["technology_depth"] = technology_depth
 
     summary = {
         "repos_synced": len(repositories_report),

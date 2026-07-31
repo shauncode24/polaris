@@ -77,6 +77,73 @@ def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
     candidates.sort(key=lambda c: c["impact"], reverse=True)
     return candidates[:6]
 
+ARCHITECTURE_MATURITY_ORDER = ["flat_script", "basic_structure", "layered", "well_architected"]
+_MATURITY_LABEL_POINTS = {"flat_script": 0, "basic_structure": 33, "layered": 67, "well_architected": 100}
+
+
+def build_architecture_maturity_rollup(repositories: list[dict]) -> dict:
+    """Portfolio-wide architecture-maturity metric — previously
+    assess_architecture_depth's output (github_architecture_analyzer.py)
+    was computed per-repo and never rolled up into a single headline
+    number Career Planner or Skill Gap Analyzer could act on. This
+    answers "what % of your real portfolio is well-architected", not
+    just "here's one repo's read."
+
+    Only repos that got a confident (non-"low") architecture read are
+    counted in the percentage breakdown — repos with no assessment or a
+    low-confidence one are reported separately as "unassessed" rather
+    than silently excluded or silently counted as the weakest label.
+    """
+    eligible = [
+        r for r in repositories
+        if not (r.get("is_fork") and r.get("is_meaningful_fork_contribution") is False)
+    ]
+
+    assessed = []
+    unassessed_count = 0
+    for r in eligible:
+        arch = r.get("architecture_assessment")
+        if arch and arch.get("confidence") == "high" and arch.get("depth_label") in ARCHITECTURE_MATURITY_ORDER:
+            assessed.append(arch["depth_label"])
+        else:
+            unassessed_count += 1
+
+    total_assessed = len(assessed)
+    if total_assessed == 0:
+        return {
+            "total_repos_considered": len(eligible),
+            "assessed_repos": 0,
+            "unassessed_repos": unassessed_count,
+            "distribution_pct": {},
+            "maturity_score": None,
+            "maturity_label": "Not enough data",
+        }
+
+    counts = {label: assessed.count(label) for label in ARCHITECTURE_MATURITY_ORDER}
+    distribution_pct = {
+        label: round((count / total_assessed) * 100) for label, count in counts.items() if count > 0
+    }
+    maturity_score = round(
+        sum(_MATURITY_LABEL_POINTS[label] * count for label, count in counts.items()) / total_assessed
+    )
+
+    if maturity_score >= 75:
+        maturity_label = "Consistently well-architected"
+    elif maturity_score >= 50:
+        maturity_label = "Generally layered, some rough edges"
+    elif maturity_score >= 25:
+        maturity_label = "Mostly basic structure"
+    else:
+        maturity_label = "Mostly flat/script-style"
+
+    return {
+        "total_repos_considered": len(eligible),
+        "assessed_repos": total_assessed,
+        "unassessed_repos": unassessed_count,
+        "distribution_pct": distribution_pct,
+        "maturity_score": maturity_score,
+        "maturity_label": maturity_label,
+    }
 
 def build_github_insights(
     repositories: list[dict],
@@ -245,4 +312,5 @@ def build_github_insights(
         "recommendations": recommendations,
         "technology_distribution": tech_distribution,
         "strengths": strengths_list,
+        "architecture_maturity": build_architecture_maturity_rollup(repositories),
     }
