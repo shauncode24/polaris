@@ -197,6 +197,21 @@ function GitHubPage() {
         <TopBar section="Profile" page="GitHub" />
 
         <div className="github-content">
+          {/* Page hero */}
+          <div className="github-hero">
+            <div>
+              <p className="github-hero__eyebrow">How strong is your open source footprint?</p>
+              <h1 className="github-hero__title">GitHub</h1>
+              {hasData && (
+                <div className="github-hero__meta">
+                  <span>Your GitHub workspace</span>
+                  <span className="github-hero__meta-dot" />
+                  <span>{repositories.length} repositor{repositories.length === 1 ? 'y' : 'ies'} synced</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           <GitHubHeader
             username={workspace?.username || user?.github_username}
             repoCount={repositories.length}
@@ -205,6 +220,8 @@ function GitHubPage() {
             syncing={syncing}
             onSync={handleSync}
             onAnalyze={handleSync}
+            avgScore={avgScore}
+            commits30d={summary.total_commits_last_30_days ?? 0}
           />
 
           {error && <p className="github-error">{error}</p>}

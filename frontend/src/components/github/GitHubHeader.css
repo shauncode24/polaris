@@ -1,32 +1,182 @@
+/* GitHubHeader.css */
 .gh-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
 }
-.gh-header__title-row { display: flex; align-items: center; gap: 10px; }
-.gh-header__title-row h1 { font-size: 26px; }
+
+.gh-header__left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.gh-header__divider {
+  width: 1px;
+  height: 36px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.gh-header__meta {
+  min-width: 0;
+}
+
+.gh-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.gh-header__username {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .gh-header__badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--success);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
   background: var(--success-soft);
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
+  border: 1px solid rgba(22, 163, 74, 0.2);
+  color: var(--success);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
-.gh-header__badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
-.gh-header__meta {
-  font-size: 13px;
+
+.gh-header__badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.gh-header__sub {
+  font-size: 12px;
   color: var(--text-soft);
-  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gh-header__sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.gh-header__stats-strip {
+  display: grid;
+  grid-template-rows: auto auto;
+  grid-auto-flow: column;
+  gap: 2px 20px;
+  align-items: baseline;
+  margin-top: 0;
+}
+
+.gh-header__stat-item {
+  display: contents;
+}
+
+.gh-header__stat-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-soft);
+  line-height: 1;
+}
+
+.gh-header__stat-lbl {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gh-header__stat-item--primary .gh-header__stat-val {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.gh-header__stat-item--primary .gh-header__stat-lbl {
+  font-size: 10px;
+}
+
+.gh-header__stat-item.tone-strong .gh-header__stat-val,
+.gh-header__stat-item--primary.tone-strong .gh-header__stat-lbl {
+  color: var(--success);
+}
+
+.gh-header__stat-item.tone-partial .gh-header__stat-val,
+.gh-header__stat-item--primary.tone-partial .gh-header__stat-lbl {
+  color: var(--warning);
+}
+
+.gh-header__stat-item.tone-weak .gh-header__stat-val,
+.gh-header__stat-item--primary.tone-weak .gh-header__stat-lbl {
+  color: var(--danger);
+}
+
+.gh-header__right {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-shrink: 0;
 }
-.gh-header__dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border); }
-.gh-header__actions { display: flex; gap: 10px; flex-shrink: 0; }
+
+.gh-header__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.gh-header__btn:hover {
+  background: var(--surface-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gh-header__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.gh-header__btn--primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--text-on-accent);
+}
+
+.gh-header__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

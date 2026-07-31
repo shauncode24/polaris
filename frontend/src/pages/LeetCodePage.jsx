@@ -124,6 +124,21 @@ function LeetCodePage() {
         <BreadcrumbBar section="Profile" page="LeetCode" />
 
         <div className="leetcode-content">
+          {/* Page hero */}
+          <div className="leetcode-hero">
+            <div>
+              <p className="leetcode-hero__eyebrow">How robust is your data structures & algorithms practice?</p>
+              <h1 className="leetcode-hero__title">LeetCode</h1>
+              {leetcode && (
+                <div className="leetcode-hero__meta">
+                  <span>Your LeetCode workspace</span>
+                  <span className="leetcode-hero__meta-dot" />
+                  <span>{summary?.total_solved || 0} solved problems</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           <LeetCodeHeader
             username={username}
             syncedAt={leetcode?.synced_at}
@@ -132,6 +147,8 @@ function LeetCodePage() {
             onManualEntry={() => setShowManual(true)}
             onDisconnect={handleDisconnect}
             syncing={syncing}
+            totalSolved={summary?.total_solved}
+            contestRating={summary?.contest_rating}
           />
 
           {error && <p className="leetcode-error">{error}</p>}

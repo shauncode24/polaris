@@ -78,7 +78,27 @@ function ProjectsPage() {
         <BreadcrumbBar section="Projects" page="Overview" />
 
         <div className="projects-page__content">
-          <ProjectsHeader onAnalyzeAll={handleAnalyzeAll} analyzing={analyzing} />
+          {/* Page hero */}
+          <div className="projects-hero">
+            <div>
+              <p className="projects-hero__eyebrow">What proves your hands-on engineering capability?</p>
+              <h1 className="projects-hero__title">Projects</h1>
+              {projects.length > 0 && (
+                <div className="projects-hero__meta">
+                  <span>Your project workspace</span>
+                  <span className="projects-hero__meta-dot" />
+                  <span>{projects.length} project{projects.length === 1 ? '' : 's'} on record</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <ProjectsHeader
+            onAnalyzeAll={handleAnalyzeAll}
+            analyzing={analyzing}
+            projectCount={projects.length}
+            interviewReadyCount={interviewReadyCount}
+          />
 
           {error && <p className="projects-page__error">{error}</p>}
 

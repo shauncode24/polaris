@@ -1,33 +1,75 @@
+// frontend/src/components/projects/ProjectsHeader.jsx
 import { useNavigate } from 'react-router-dom'
 import Button from '../common/Button'
 import { IconGithub } from '../icons/Icons'
 import { IconSparkle } from '../icons/DashboardIcons'
 import './ProjectsHeader.css'
 
-function ProjectsHeader({ onAnalyzeAll, analyzing }) {
+export default function ProjectsHeader({
+  onAnalyzeAll,
+  analyzing,
+  projectCount,
+  interviewReadyCount,
+}) {
   const navigate = useNavigate()
 
   return (
     <div className="projects-header">
-      <div>
-        <h1 className="projects-header__title">Projects</h1>
-        <p className="projects-header__sub">
-          What you built — and what each project proves about your engineering ability.
-        </p>
+      <div className="projects-header__left">
+        <div className="projects-header__meta" style={{ paddingLeft: 0 }}>
+          <div className="projects-header__title-row">
+            <span className="projects-header__portfolio-title">Project Portfolio</span>
+          </div>
+          <div className="projects-header__sub">
+            <span>What you built — and what each project proves about your engineering ability</span>
+          </div>
+        </div>
+
+        {projectCount != null && (
+          <>
+            <div className="projects-header__divider" />
+            <div className="projects-header__stats-strip">
+              <div className="projects-header__stat-item projects-header__stat-item--primary">
+                <span className="projects-header__stat-val">{projectCount}</span>
+                <span className="projects-header__stat-lbl">TOTAL PROJECTS</span>
+              </div>
+              {interviewReadyCount != null && (
+                <div className="projects-header__stat-item">
+                  <span className="projects-header__stat-val">{interviewReadyCount}</span>
+                  <span className="projects-header__stat-lbl">INTERVIEW READY</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
-      <div className="projects-header__actions">
-        <Button variant="outline" size="sm" icon={<IconGithub size={16} />} onClick={() => navigate('/build-profile')}>
+
+      <div className="projects-header__right">
+        <button
+          type="button"
+          className="projects-header__btn"
+          onClick={() => navigate('/build-profile')}
+        >
+          <IconGithub size={13} />
           Import from GitHub
-        </Button>
-        <Button variant="outline" size="sm" icon={<IconSparkle size={16} />} onClick={onAnalyzeAll} disabled={analyzing}>
+        </button>
+        <button
+          type="button"
+          className="projects-header__btn"
+          onClick={onAnalyzeAll}
+          disabled={analyzing}
+        >
+          <IconSparkle size={13} />
           {analyzing ? 'Analyzing…' : 'Analyze all'}
-        </Button>
-        <Button variant="primary" size="sm" onClick={() => navigate('/profile')}>
+        </button>
+        <button
+          type="button"
+          className="projects-header__btn projects-header__btn--primary"
+          onClick={() => navigate('/profile')}
+        >
           + New project
-        </Button>
+        </button>
       </div>
     </div>
   )
 }
-
-export default ProjectsHeader
