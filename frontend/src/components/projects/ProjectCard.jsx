@@ -8,12 +8,8 @@ const TIER_TONE = {
   'Archived': 'archived',
 }
 
-const LINK_STATUS_LABEL = {
-  confirmed: null, // no badge needed — this is the healthy state
-  broken_link: 'Link broken',
-  suggested_match: 'Unconfirmed match',
-  unmatched: null,
-}
+const CLAIM_RISK_LABEL = { high: 'Unsupported claims', medium: 'Claim mismatch', undersold: 'Undersold' }
+const ABANDONMENT_LABEL = { resume_it: 'Resume this', retire_it: 'Consider retiring' }
 
 function formatUpdated(iso) {
   if (!iso) return ''
@@ -26,12 +22,11 @@ function formatUpdated(iso) {
   return `Updated ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
 }
 
-function ProjectCard({ project, onOpen, curationAction, onExplain }) {
+function ProjectCard({ project, onOpen, onViewDetails }) {
   const tone = TIER_TONE[project.tier] || 'career'
-  const linkWarning = LINK_STATUS_LABEL[project.link_status]
 
   return (
-    <article className="project-card">
+    <article className="project-card" onClick={() => onViewDetails?.(project)} role="button" tabIndex={0}>
       <div className="project-card__top">
         <div className="project-card__title-row">
           <h3 className="project-card__name">{project.name}</h3>
@@ -39,12 +34,23 @@ function ProjectCard({ project, onOpen, curationAction, onExplain }) {
           <span className={`project-card__badge project-card__badge--${project.status}`}>
             {project.status === 'ongoing' ? 'Ongoing' : 'Completed'}
           </span>
-          {linkWarning && <span className="project-card__link-warning">{linkWarning}</span>}
-          {curationAction === 'hide_suggested' && (
-            <span className="project-card__curation-warning">Consider hiding</span>
-          )}
         </div>
       </div>
+
+      {(project.claim_risk || project.abandonment_status) && (
+        <div className="project-card__flags">
+          {project.claim_risk && (
+            <span className={`project-card__flag project-card__flag--${project.claim_risk}`}>
+              {CLAIM_RISK_LABEL[project.claim_risk] || project.claim_risk}
+            </span>
+          )}
+          {project.abandonment_status && (
+            <span className={`project-card__flag project-card__flag--${project.abandonment_status}`}>
+              {ABANDONMENT_LABEL[project.abandonment_status] || project.abandonment_status}
+            </span>
+          )}
+        </div>
+      )}
 
       <p className="project-card__tagline">{project.tagline}</p>
       {project.description && <p className="project-card__desc">{project.description}</p>}
@@ -67,16 +73,16 @@ function ProjectCard({ project, onOpen, curationAction, onExplain }) {
 
       <div className="project-card__footer">
         <span className="project-card__updated">{formatUpdated(project.updated_at)}</span>
-        <div className="project-card__footer-actions">
-          {onExplain && (
-            <button type="button" className="project-card__open" onClick={() => onExplain(project)}>
-              Explain ✦
-            </button>
-          )}
-          <button type="button" className="project-card__open" onClick={() => onOpen(project)}>
-            Open ↗
-          </button>
-        </div>
+        <button
+          type="button"
+          className="project-card__open"
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpen(project)
+          }}
+        >
+          Open ↗
+        </button>
       </div>
     </article>
   )

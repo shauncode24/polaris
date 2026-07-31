@@ -99,3 +99,19 @@
 }
 
 .project-card__footer-actions { display: flex; align-items: center; gap: 12px; }
+
+.project-card { cursor: pointer; }
+
+.project-card__flags { display: flex; flex-wrap: wrap; gap: 6px; }
+.project-card__flag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.project-card__flag--high { background: var(--danger-soft); color: var(--danger); }
+.project-card__flag--medium { background: var(--warning-soft); color: #a2760f; }
+.project-card__flag--undersold { background: var(--info-soft); color: var(--info); }
+.project-card__flag--resume_it { background: var(--warning-soft); color: #a2760f; }
+.project-card__flag--retire_it { background: var(--surface-soft); color: var(--text-soft); }

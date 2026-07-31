@@ -1,13 +1,16 @@
-import re
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.projects.scoring import compute_rating, compute_status, compute_tier, derive_engineering_tags
+from app.services.projects.repo_linking import build_repo_lookup
+from app.services.projects.claim_audit import audit_project_claims
 
-from app.models.facts import GithubSnapshot, Project, Resume, User
+from app.models.facts import GithubSnapshot, Project
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.structure import Capability, ProjectCapability, ProjectSkill, Skill
 from app.schemas.projects import ProjectCard, ProjectsOverviewResponse, ProjectsStats
+
+ABANDONMENT_STALE_DAYS = 60
+ABANDONMENT_QUALITY_FLOOR = 45
 
 
 def _fallback_tagline(name: str, description: str | None) -> str:
@@ -18,209 +21,148 @@ def _fallback_tagline(name: str, description: str | None) -> str:
     return name
 
 
-def _normalize_name(name: str) -> str:
-    """Strips everything but letters/digits and lowercases, so 'Campus Intel',
-    'campus-intelligence', and 'Project 1: Campus Intel' all reduce to a
-    comparable token instead of requiring an exact match.
+def _compute_abandonment_status(matched_analysis) -> str | None:
+    """Cross is_active/last_activity_days against quality_score: a
+    high-quality-but-stale project is a "resume it" nudge; a
+    low-quality-and-stale project is a "quietly retire it" nudge.
+    Previously both looked identical ("not recently active").
     """
-    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
-
-
-def _names_match(resume_name: str, repo_name: str, repo_url: str | None) -> bool:
-    """Fuzzy match: a resume project counts as 'the same thing' as a synced
-    repo if their normalized names overlap in either direction, or if the
-    repo name literally appears in the project's stored repo_url. This is
-    deliberately generous — a false negative here just means the repo shows
-    up as its own (harmless, extra) card; a false positive would wrongly
-    hide a real repo, which is the worse failure mode.
-    """
-    normalized_resume = _normalize_name(resume_name)
-    normalized_repo = _normalize_name(repo_name)
-    if normalized_resume and normalized_repo:
-        if normalized_resume == normalized_repo:
-            return True
-        if normalized_repo in normalized_resume or normalized_resume in normalized_repo:
-            return True
-    if repo_url and repo_name.lower() in repo_url.lower():
-        return True
-    return False
-
-
-def _card_from_resume_project(p: Project, project_skills: list[dict], project_capabilities: list[str], matched_analysis) -> ProjectCard:
-    rating = compute_rating(
-        description_length=len(p.description or ""),
-        skill_count=len(project_skills),
-        capability_count=len(project_capabilities),
-        github_quality_score=matched_analysis.quality_score if matched_analysis else None,
-        github_activity_score=matched_analysis.activity_score if matched_analysis else None,
-    )
-    status = compute_status(matched_analysis.is_active if matched_analysis else None)
-    has_repo = matched_analysis is not None or bool(p.repo_url)
-
-    engineering_tags = derive_engineering_tags(
-        p.stack or [s["name"] for s in project_skills],
-        extra_capabilities=list(project_capabilities) + (matched_analysis.capabilities if matched_analysis else []),
-    )
-    tier = compute_tier(rating, has_repo=has_repo, github_tier=matched_analysis.tier if matched_analysis else None)
-
-    return ProjectCard(
-        id=str(p.id),
-        name=p.name,
-        tagline=p.tagline or _fallback_tagline(p.name, p.description),
-        description=p.description,
-        stack=(p.stack or [s["name"] for s in project_skills])[:6],
-        capabilities=list(project_capabilities),
-        engineering_tags=engineering_tags,
-        tier=tier,
-        is_featured=False,
-        status=status,
-        rating=rating,
-        updated_at=p.updated_at or p.created_at,
-        repo_url=p.repo_url or (f"https://github.com/{matched_analysis.repo_name}" if False else p.repo_url),
-        has_repo=has_repo,
-    )
-
-
-def _card_from_github_only(a: GithubProjectAnalysis, github_username: str | None) -> ProjectCard:
-    """A synced GitHub repo that doesn't correspond to any resume-listed
-    project. Built purely from GithubProjectAnalysis — no Project row
-    backs this card, so `id` is prefixed to stay distinguishable and
-    `repo_url` is reconstructed from the known username since
-    GithubProjectAnalysis itself doesn't store one.
-    """
-    rating = compute_rating(
-        description_length=0,
-        skill_count=len(a.technologies or []),
-        capability_count=len(a.capabilities or []),
-        github_quality_score=a.quality_score,
-        github_activity_score=a.activity_score,
-    )
-    status = compute_status(a.is_active)
-    engineering_tags = derive_engineering_tags(a.technologies or [], extra_capabilities=a.capabilities or [])
-    tier = compute_tier(rating, has_repo=True, github_tier=a.tier)
-    repo_url = f"https://github.com/{github_username}/{a.repo_name}" if github_username else None
-
-    return ProjectCard(
-        id=f"gh-{a.id}",
-        name=a.repo_name,
-        tagline=f"{a.category} project on GitHub" if a.category else a.repo_name,
-        description=None,
-        stack=(a.technologies or [])[:6],
-        capabilities=list(a.capabilities or []),
-        engineering_tags=engineering_tags,
-        tier=tier,
-        is_featured=False,
-        status=status,
-        rating=rating,
-        updated_at=a.computed_at,
-        repo_url=repo_url,
-        has_repo=True,
-    )
+    if matched_analysis is None or matched_analysis.is_active:
+        return None
+    stale = (matched_analysis.last_activity_days or 0) > ABANDONMENT_STALE_DAYS
+    if not stale:
+        return None
+    return "resume_it" if matched_analysis.quality_score >= ABANDONMENT_QUALITY_FLOOR else "retire_it"
 
 
 async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverviewResponse:
-    # Only pull resume-sourced projects from the MOST RECENT resume (plus
-    # any manually-added project with no resume_id at all). Every past
-    # resume upload permanently leaves its Project rows behind, and the
-    # old query pulled every resume's projects at once — that's what was
-    # producing the repeated/near-duplicate cards ("Flood Alert" and
-    # "Project 2: Flood Alert" both existing simultaneously).
-    latest_resume_result = await db.execute(
-        select(Resume.id).where(Resume.user_id == user_id).order_by(Resume.created_at.desc()).limit(1)
+    projects_result = await db.execute(
+        select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
     )
-    latest_resume_id = latest_resume_result.scalar_one_or_none()
-
-    projects_query = select(Project).where(Project.user_id == user_id)
-    if latest_resume_id is not None:
-        projects_query = projects_query.where(
-            (Project.resume_id == latest_resume_id) | (Project.resume_id.is_(None))
-        )
-    projects_result = await db.execute(projects_query.order_by(Project.created_at.desc()))
     projects = list(projects_result.scalars().all())
 
-    user_result = await db.execute(select(User).where(User.id == user_id))
-    user = user_result.scalar_one_or_none()
-    github_username = user.github_username if user else None
+    if not projects:
+        return ProjectsOverviewResponse(stats=ProjectsStats(), projects=[])
+
+    project_ids = [p.id for p in projects]
 
     skill_rows = await db.execute(
         select(ProjectSkill.project_id, Skill.name, Skill.canonical_name)
         .join(Skill, ProjectSkill.skill_id == Skill.id)
-        .where(ProjectSkill.project_id.in_([p.id for p in projects]))
-    ) if projects else None
+        .where(ProjectSkill.project_id.in_(project_ids))
+    )
     skills_by_project: dict = {}
     all_skill_canonicals: set[str] = set()
-    if skill_rows is not None:
-        for project_id, name, canonical in skill_rows.all():
-            skills_by_project.setdefault(project_id, []).append({"name": name, "canonical": canonical})
-            all_skill_canonicals.add(canonical)
+    for project_id, name, canonical in skill_rows.all():
+        skills_by_project.setdefault(project_id, []).append({"name": name, "canonical": canonical})
+        all_skill_canonicals.add(canonical)
 
     capability_rows = await db.execute(
         select(ProjectCapability.project_id, Capability.name)
         .join(Capability, ProjectCapability.capability_id == Capability.id)
-        .where(ProjectCapability.project_id.in_([p.id for p in projects]))
-    ) if projects else None
+        .where(ProjectCapability.project_id.in_(project_ids))
+    )
     capabilities_by_project: dict = {}
     all_capability_names: set[str] = set()
-    if capability_rows is not None:
-        for project_id, name in capability_rows.all():
-            capabilities_by_project.setdefault(project_id, []).append(name)
-            all_capability_names.add(name)
+    for project_id, name in capability_rows.all():
+        capabilities_by_project.setdefault(project_id, []).append(name)
+        all_capability_names.add(name)
 
     analysis_rows = await db.execute(
         select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user_id)
     )
-    all_analysis = list(analysis_rows.scalars().all())
+    analysis_by_repo_name = {a.repo_name: a for a in analysis_rows.scalars().all()}
+
+    # Deterministic repo-url-first, slug-fallback linkage — fixes the
+    # silent-drop-on-name-mismatch bug the old lowercased-exact-match
+    # lookup had (see repo_linking.py).
+    repo_lookup = build_repo_lookup(analysis_by_repo_name, projects)
 
     connected_repos_result = await db.execute(
         select(func.count(func.distinct(GithubSnapshot.repo_name))).where(GithubSnapshot.user_id == user_id)
     )
     connected_repositories = connected_repos_result.scalar_one() or 0
 
-    # ── Fuzzy-match each resume project to at most one repo, and track
-    # which repos got claimed so the leftover pass below never repeats one. ──
-    matched_repo_names: set[str] = set()
     cards: list[ProjectCard] = []
-
+    claim_risk_count = 0
     for p in projects:
         project_skills = skills_by_project.get(p.id, [])
         project_capabilities = capabilities_by_project.get(p.id, [])
+        matched_repo_name = repo_lookup.get(p.id)
+        matched_analysis = analysis_by_repo_name.get(matched_repo_name) if matched_repo_name else None
 
-        matched_analysis = None
-        for a in all_analysis:
-            if a.repo_name.lower() in matched_repo_names:
-                continue
-            if _names_match(p.name, a.repo_name, p.repo_url):
-                matched_analysis = a
-                matched_repo_names.add(a.repo_name.lower())
-                break
+        rating = compute_rating(
+            description_length=len(p.description or ""),
+            skill_count=len(project_skills),
+            capability_count=len(project_capabilities),
+            github_quality_score=matched_analysis.quality_score if matched_analysis else None,
+            github_activity_score=matched_analysis.activity_score if matched_analysis else None,
+        )
+        status = compute_status(matched_analysis.is_active if matched_analysis else None)
+        has_repo = matched_analysis is not None or bool(p.repo_url)
 
-        cards.append(_card_from_resume_project(p, project_skills, project_capabilities, matched_analysis))
+        engineering_tags = derive_engineering_tags(
+            p.stack or [s["name"] for s in project_skills],
+            extra_capabilities=list(project_capabilities) + (matched_analysis.capabilities if matched_analysis else []),
+        )
+        tier = compute_tier(rating, has_repo=has_repo, github_tier=matched_analysis.tier if matched_analysis else None)
 
-    # ── Every synced repo not claimed above becomes its own card, so
-    # `sync now` results are never silently dropped just because they
-    # weren't also listed on the resume. Non-contributed forks are
-    # excluded — they're not this person's original work. ──
-    for a in all_analysis:
-        if a.repo_name.lower() in matched_repo_names:
-            continue
-        if a.tier == "fork":
-            continue
-        cards.append(_card_from_github_only(a, github_username))
-        matched_repo_names.add(a.repo_name.lower())
+        # Claim-vs-implementation audit — the single highest-value gap
+        # flagged in the Projects module review. Only runs when a real
+        # GitHub match exists (nothing to audit against otherwise).
+        claim_risk = None
+        if matched_analysis is not None:
+            audit = audit_project_claims(
+                project_name=p.name,
+                project_stack=p.stack or [],
+                project_description=p.description,
+                repo_technologies=matched_analysis.technologies or [],
+                repo_capabilities=matched_analysis.capabilities or [],
+                architecture_assessment=matched_analysis.architecture_assessment,
+                has_tests=matched_analysis.has_tests,
+                has_ci=matched_analysis.has_ci,
+                quality_score=matched_analysis.quality_score,
+                activity_score=matched_analysis.activity_score,
+            )
+            if audit["unsupported_claims"]:
+                claim_risk = "high" if len(audit["unsupported_claims"]) > 1 else "medium"
+                claim_risk_count += 1
+            elif audit["undersold_work"]:
+                claim_risk = "undersold"
 
-    if not cards:
-        return ProjectsOverviewResponse(stats=ProjectsStats(), projects=[])
+        abandonment_status = _compute_abandonment_status(matched_analysis)
 
-    # Feature the top-rated projects (up to 4) — computed by rank rather than
-    # a stored flag, so "Featured" stays honest as new evidence comes in
-    # instead of drifting out of date like a manually-set flag would.
+        cards.append(
+            ProjectCard(
+                id=str(p.id),
+                name=p.name,
+                tagline=p.tagline or _fallback_tagline(p.name, p.description),
+                description=p.description,
+                stack=(p.stack or [s["name"] for s in project_skills])[:6],
+                capabilities=list(project_capabilities),
+                engineering_tags=engineering_tags,
+                tier=tier,
+                is_featured=False,
+                status=status,
+                rating=rating,
+                updated_at=p.updated_at or p.created_at,
+                repo_url=p.repo_url,
+                has_repo=has_repo,
+                matched_repo_name=matched_repo_name,
+                claim_risk=claim_risk,
+                abandonment_status=abandonment_status,
+                collaboration_mode=matched_analysis.collaboration_mode if matched_analysis else None,
+                commit_hygiene_score=matched_analysis.commit_hygiene_score if matched_analysis else None,
+            )
+        )
+
     featured_count = min(4, len(cards))
     ranked = sorted(cards, key=lambda c: c.rating, reverse=True)
     featured_ids = {c.id for c in ranked[:featured_count] if c.rating >= 3.0}
     for c in cards:
         c.is_featured = c.id in featured_ids
 
-    cards.sort(key=lambda c: c.updated_at or c.updated_at, reverse=True)
+    cards.sort(key=lambda c: c.updated_at, reverse=True)
 
     resume_backed = sum(1 for p in projects if p.resume_id is not None)
     github_backed = sum(1 for c in cards if c.has_repo)
@@ -229,11 +171,12 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     stats = ProjectsStats(
         total=len(cards),
         flagship=flagship_count,
-        technologies=len(all_skill_canonicals | {t for a in all_analysis for t in (a.technologies or [])}),
+        technologies=len(all_skill_canonicals),
         resume_coverage_pct=round((resume_backed / len(cards)) * 100) if cards else 0.0,
         github_coverage_pct=round((github_backed / len(cards)) * 100) if cards else 0.0,
         capabilities=len(all_capability_names),
         connected_repositories=connected_repositories,
+        claim_risk_count=claim_risk_count,
     )
 
     return ProjectsOverviewResponse(stats=stats, projects=cards)

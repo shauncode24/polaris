@@ -1,0 +1,25 @@
+.garp__loading, .garp__error, .garp__empty { font-size: 13px; color: var(--text-soft); }
+.garp__error { color: var(--danger); }
+
+.garp__body { display: flex; flex-direction: column; gap: 12px; }
+.garp__recommendation {
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--accent-soft);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.garp__list { display: flex; flex-direction: column; gap: 8px; counter-reset: garp; }
+.garp__item {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+.garp__item--lead { border-color: var(--accent); background: var(--accent-soft); }
+
+.garp__item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.garp__item-name { font-size: 13px; font-weight: 700; color: var(--ink); }
+.garp__item-score { font-size: 11.5px; font-weight: 700; color: var(--text-soft); }
+.garp__item-reason { font-size: 12px; color: var(--text-soft); margin-top: 3px; }

@@ -24,40 +24,34 @@ export function getProjectsInsights(token) {
   }).then(handle)
 }
 
-export function getLinkSuggestions(token) {
-  return fetch(`${API_BASE_URL}/projects/link-suggestions`, {
+export function getGoalAwareRanking(token) {
+  return fetch(`${API_BASE_URL}/projects/ranking`, {
     headers: authHeaders(token),
   }).then(handle)
 }
 
-export function confirmProjectLink(token, projectId, repoName) {
-  return fetch(`${API_BASE_URL}/projects/${projectId}/link`, {
-    method: 'POST',
-    headers: {
-      ...authHeaders(token),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ repo_name: repoName }),
-  }).then(handle)
+export function getPortfolioNarrative(token, regenerate = false) {
+  const url = new URL(`${API_BASE_URL}/projects/portfolio-narrative`)
+  if (regenerate) url.searchParams.append('regenerate', 'true')
+  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
-export function removeProjectLink(token, projectId) {
-  return fetch(`${API_BASE_URL}/projects/${projectId}/link`, {
-    method: 'DELETE',
-    headers: authHeaders(token),
-  }).then(handle)
+export function getProjectClaimAudit(token, projectId, regenerate = false) {
+  const url = new URL(`${API_BASE_URL}/projects/${projectId}/claim-audit`)
+  if (regenerate) url.searchParams.append('regenerate', 'true')
+  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
-export function explainProject(token, projectId, framing = 'general') {
-  return fetch(`${API_BASE_URL}/projects/${projectId}/intelligence/explain?framing=${encodeURIComponent(framing)}`, {
-    method: 'POST',
-    headers: authHeaders(token),
-  }).then(handle)
+export function getProjectIntelligence(token, projectId, { framing, comparisonTarget, regenerate = false } = {}) {
+  const url = new URL(`${API_BASE_URL}/projects/${projectId}/intelligence`)
+  if (framing) url.searchParams.append('framing', framing)
+  if (comparisonTarget) url.searchParams.append('comparison_target', comparisonTarget)
+  if (regenerate) url.searchParams.append('regenerate', 'true')
+  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
-export function compareProject(token, projectId, comparisonTarget) {
-  return fetch(`${API_BASE_URL}/projects/${projectId}/intelligence/compare?comparison_target=${encodeURIComponent(comparisonTarget)}`, {
-    method: 'POST',
-    headers: authHeaders(token),
-  }).then(handle)
+export function getProjectInterviewQuestions(token, projectId, regenerate = false) {
+  const url = new URL(`${API_BASE_URL}/projects/${projectId}/interview-questions`)
+  if (regenerate) url.searchParams.append('regenerate', 'true')
+  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }

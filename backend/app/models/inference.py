@@ -17,9 +17,6 @@ class SkillEvidence(Base):
     source_type: Mapped[str] = mapped_column(String(50))
     source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     weight: Mapped[float] = mapped_column(Float)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
 
 
 class ProfileSnapshot(Base):
@@ -191,22 +188,80 @@ class ResumeTailoringReview(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
-class ProjectIntelligenceReview(Base):
-    """LLM interpretation layer over a single project's real, verified
-    facts (resume description, resolved skills/capabilities, and — only
-    when explicitly linked — GithubProjectAnalysis evidence). One row per
-    explain/compare call, so a user can look back at how their pitch for
-    a project evolved. Never a source of truth: safe to regenerate any
-    time the prompt or knowledge-object shape changes.
+
+class ProjectClaimAuditReview(Base):
+    """Derived, recomputable claim-vs-implementation audit (§5.5
+    'inference'). UPSERTED, one row per project — a claim audit for a
+    given project is always safe to regenerate (the resume text and
+    GitHub-verified facts it diffs are the real source of truth), and
+    there's no value in keeping stale duplicates around. Lets the
+    Projects page load an existing audit instantly instead of re-running
+    the LLM call every visit.
     """
-    __tablename__ = "project_intelligence_reviews"
+    __tablename__ = "project_claim_audit_reviews"
+    __table_args__ = (UniqueConstraint("project_id", name="uq_claim_audit_project"),)
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), index=True)
-    framing: Mapped[str] = mapped_column(String(255))
-    comparison_target: Mapped[str | None] = mapped_column(String(255))
-    review_json: Mapped[dict] = mapped_column(JSONB)
+    report_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class ProjectIntelligenceReview(Base):
+    """Derived, recomputable Project Intelligence output (§5.5
+    'inference'). UPSERTED by (project_id, framing, comparison_target) —
+    the same framing asked twice should return the same cached read
+    instead of spending another LLM call, but a different framing (or a
+    different comparison target) is a genuinely different question and
+    gets its own cached row.
+    """
+    __tablename__ = "project_intelligence_reviews"
+    __table_args__ = (
+        UniqueConstraint("project_id", "framing", "comparison_target", name="uq_intelligence_project_framing"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), index=True)
+    framing: Mapped[str] = mapped_column(String(500), default="")
+    comparison_target: Mapped[str] = mapped_column(String(255), default="")
+    report_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class ProjectInterviewQuestionsReview(Base):
+    """Derived, recomputable per-project interview-question set (§5.5
+    'inference'). UPSERTED, one row per project.
+    """
+    __tablename__ = "project_interview_questions_reviews"
+    __table_args__ = (UniqueConstraint("project_id", name="uq_interview_questions_project"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), index=True)
+    report_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class PortfolioNarrativeReview(Base):
+    """LLM portfolio-wide engineering-maturity narrative (§5.5
+    'inference'). APPEND-ONLY, same pattern as GithubPortfolioReview —
+    one row per generation, read back as "latest" by default so a
+    returning user sees history accumulate rather than a single
+    overwritten row.
+    """
+    __tablename__ = "portfolio_narrative_reviews"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    report_json: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

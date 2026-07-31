@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.models.facts import GithubSnapshot
 from app.models.inference import ProfileSnapshot
-from app.models.github_analysis import GithubProjectAnalysis
+from app.models.github_analysis import GithubProjectAnalysis, PortfolioAnalysis
 from app.services.github.github_client import (
     GithubSyncError,
     fetch_commit_count_last_30d,
@@ -29,7 +29,7 @@ from app.services.github.github_client import (
 from app.services.github.github_insights import build_github_insights, build_repo_headline, build_ranked_recommendations
 from app.services.github.github_scoring import score_repository
 from app.services.github.github_taxonomy import categorize_technologies
-from app.services.github.github_analyzer import analyze_repo
+from app.services.github.github_analyzer import analyze_repo, build_portfolio_analysis
 from app.services.github.github_commit_hygiene import score_commit_hygiene
 from app.services.github.github_collaboration import score_collaboration
 from app.services.github.github_architecture_analyzer import (
@@ -457,6 +457,34 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         note="github sync",
     )
     db.add(snapshot)
+    await db.flush()
+    # --- Portfolio-wide rollup, now actually wired up. This table and
+    # build_portfolio_analysis() already existed but were never called —
+    # every sync from here on writes one real, diffable row. ---
+    prev_portfolio_result = await db.execute(
+        select(PortfolioAnalysis)
+        .where(PortfolioAnalysis.user_id == user.id)
+        .order_by(PortfolioAnalysis.computed_at.desc())
+        .limit(1)
+    )
+    prev_portfolio = prev_portfolio_result.scalar_one_or_none()
+    prev_tech_distribution = prev_portfolio.technology_distribution if prev_portfolio else None
+
+    portfolio_data = build_portfolio_analysis(repositories_report, prev_tech_distribution)
+
+    portfolio_row = PortfolioAnalysis(
+        user_id=user.id,
+        snapshot_id=snapshot.id,
+        computed_at=datetime.now(timezone.utc),
+        active_projects=portfolio_data["active_projects"],
+        neglected_projects=portfolio_data["neglected_projects"],
+        strongest_projects=portfolio_data["strongest_projects"],
+        recently_active_projects=portfolio_data["recently_active_projects"],
+        technology_distribution=portfolio_data["technology_distribution"],
+        quality_metrics=portfolio_data["quality_metrics"],
+        observations=portfolio_data["observations"],
+    )
+    db.add(portfolio_row)
     await db.flush()
     await db.commit()
 

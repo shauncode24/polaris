@@ -10,7 +10,7 @@ const FILTERS = [
   { key: 'completed', label: 'Completed' },
 ]
 
-function ProjectGallery({ projects, loading, onOpenProject, onAddProject, curationByProjectId, onExplainProject }) {
+function ProjectGallery({ projects, loading, onOpenProject, onAddProject, onViewDetails }) {
   const [filter, setFilter] = useState('all')
 
   const filtered = useMemo(() => {
@@ -61,8 +61,7 @@ function ProjectGallery({ projects, loading, onOpenProject, onAddProject, curati
               key={project.id}
               project={project}
               onOpen={onOpenProject}
-              curationAction={curationByProjectId?.[project.id]}
-              onExplain={onExplainProject}
+              onViewDetails={onViewDetails}
             />
           ))}
         </div>

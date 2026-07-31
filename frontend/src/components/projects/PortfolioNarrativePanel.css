@@ -1,0 +1,23 @@
+.pnp__loading, .pnp__error, .pnp__ineligible { font-size: 13px; color: var(--text-soft); }
+.pnp__error { color: var(--danger); }
+
+.pnp__body { display: flex; flex-direction: column; gap: 12px; }
+.pnp__narrative { font-size: 13.5px; color: var(--ink); line-height: 1.55; }
+
+.pnp__row { display: flex; flex-direction: column; gap: 2px; }
+.pnp__row span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-soft); }
+.pnp__row p { font-size: 13px; color: var(--ink); line-height: 1.5; }
+.pnp__row--weakness p { color: var(--warning); }
+
+.pnp__regenerate {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pnp__regenerate:hover { border-color: var(--accent); color: var(--accent-strong); }
