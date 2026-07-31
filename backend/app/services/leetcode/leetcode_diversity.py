@@ -6,6 +6,7 @@ repeating the same comfortable ones? See LeetCode Module Review §2/§3D.
 
 REPEAT_SHARE_HIGH = 0.7
 ALREADY_STRONG_FLOOR = 10  # roughly "Some Practice"+ per leetcode_mastery thresholds
+MIN_SOLVES_FOR_GRINDING = 5  # avoid noisy flags on light sync cadences (e.g. 1 solve)
 
 
 def compute_practice_diversity(
@@ -52,7 +53,11 @@ def compute_practice_diversity(
         delta for topic, delta in deltas_by_topic.items() if topic in already_strong_topics
     )
     repeat_share = solves_in_already_strong / total_new_solves
-    is_grinding = repeat_share >= REPEAT_SHARE_HIGH and len(newly_touched) == 0
+    is_grinding = (
+        total_new_solves >= MIN_SOLVES_FOR_GRINDING
+        and repeat_share >= REPEAT_SHARE_HIGH
+        and len(newly_touched) == 0
+    )
 
     diversity_ratio = round(len(newly_touched) / max(1, len(deltas_by_topic)), 2)
 

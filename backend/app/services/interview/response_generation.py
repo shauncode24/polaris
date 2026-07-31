@@ -18,8 +18,12 @@ not a content decision. If generation genuinely fails, we surface that
 failure rather than writing a fallback answer ourselves.
 """
 import json
+import logging
 
 from app.core.llm import chat_completion, MODEL
+
+logger = logging.getLogger(__name__)
+
 from app.prompts.interview_response import (
     BLUEPRINT_CLASSIFICATION_PROMPT,
     INTERVIEW_RESPONSE_SYSTEM_PROMPT,
@@ -59,14 +63,14 @@ async def classify_blueprint(question: str) -> str:
             max_tokens=2000,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw blueprint classification JSON:\n{content}", flush=True)
+        logger.debug("Raw blueprint classification JSON: %s", content)
         parsed = BlueprintClassification.model_validate(json.loads(content))
         if parsed.blueprint_key in BLUEPRINTS:
-            print(f"[TRACING] Classified blueprint: {parsed.blueprint_key} ({parsed.reason})", flush=True)
+            logger.info("Classified blueprint: %s (%s)", parsed.blueprint_key, parsed.reason)
             return parsed.blueprint_key
-        print(f"[TRACING] Classifier returned unknown key '{parsed.blueprint_key}', defaulting", flush=True)
+        logger.warning("Classifier returned unknown key '%s', defaulting", parsed.blueprint_key)
     except Exception as e:
-        print(f"[TRACING] Blueprint classification failed, defaulting to {DEFAULT_BLUEPRINT}: {e}", flush=True)
+        logger.warning("Blueprint classification failed, defaulting to %s: %s", DEFAULT_BLUEPRINT, e)
 
     return DEFAULT_BLUEPRINT
 
@@ -79,7 +83,7 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
     has_github_repos = bool(profile.get("github_repos"))
 
     if not (has_projects or has_experiences or has_education or has_github_repos):
-        print("[TRACING] Candidate profile is completely empty. Returning insufficient context.", flush=True)
+        logger.warning("Candidate profile is completely empty. Returning insufficient context.")
         return InterviewLLMOutput(
             question_type="insufficient_context",
             blueprint_used="",
@@ -104,19 +108,21 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
     }
 
     prompt_size_chars = len(INTERVIEW_RESPONSE_SYSTEM_PROMPT) + len(json.dumps(scoped_context))
-    print(
-        f"[TRACING] Interview generation prompt size: ~{prompt_size_chars} chars "
-        f"(~{prompt_size_chars // 4} tokens)",
-        flush=True,
+    logger.info(
+        "Interview generation prompt size: ~%d chars (~%d tokens)",
+        prompt_size_chars,
+        prompt_size_chars // 4,
     )
 
     last_error: Exception | None = None
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        print(
-            f"[TRACING] Requesting interview response (attempt {attempt}/{MAX_ATTEMPTS}) "
-            f"for question={context['question']!r} using blueprint={blueprint_key!r}...",
-            flush=True,
+        logger.info(
+            "Requesting interview response (attempt %d/%d) for question=%r using blueprint=%r...",
+            attempt,
+            MAX_ATTEMPTS,
+            context['question'],
+            blueprint_key,
         )
         try:
             response = await chat_completion(
@@ -130,12 +136,12 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
                 max_tokens=3000,
             )
             content = response.choices[0].message.content
-            print(f"[TRACING] Raw interview response JSON:\n{content}", flush=True)
+            logger.debug("Raw interview response JSON: %s", content)
             parsed = InterviewLLMOutput.model_validate(json.loads(content))
-            print(f"[TRACING] Blueprint used: {parsed.blueprint_used}", flush=True)
+            logger.info("Blueprint used: %s", parsed.blueprint_used)
             return parsed
         except Exception as e:
-            print(f"[TRACING] Attempt {attempt}/{MAX_ATTEMPTS} failed to parse: {e}", flush=True)
+            logger.warning("Attempt %d/%d failed to parse: %s", attempt, MAX_ATTEMPTS, e)
             last_error = e
 
     raise InterviewGenerationError(

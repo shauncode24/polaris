@@ -35,6 +35,13 @@ COMPANY_TOPIC_WEIGHTS: dict[str, dict[str, float]] = {
     },
 }
 
+# Mastery score for COMPANY READINESS weighted-average computation.
+# NOT the same as engineering_quadrant.MASTERY_SCORE_MAP — that map
+# produces a 0-100 classification score; this one produces a 0-1
+# weight for a per-company weighted average against topic importance
+# weights. Values here are intentionally higher (e.g. Introduced=0.3
+# vs 0.25) to give small amounts of practice non-trivial readiness
+# credit at company/tier matching resolution.
 MASTERY_SCORE_MAP = {
     "Not Practiced": 0.0, "Introduced": 0.3, "Some Practice": 0.6,
     "Consistent Practice": 0.85, "Extensive Practice": 1.0,

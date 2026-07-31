@@ -93,3 +93,10 @@ def weighted_topic_totals(
         weight = TIER_WEIGHTS.get(tier, DEFAULT_TIER_WEIGHT)
         totals[topic] += count * weight
     return {topic: round(value, 1) for topic, value in totals.items()}
+
+
+def log_unmapped_tags(tag_counts: dict[str, int]) -> set[str]:
+    """Returns all tags in tag_counts that are not mapped in TAG_TO_TOPIC.
+    This provides visibility for taxonomy maintenance.
+    """
+    return {tag for tag in tag_counts if tag not in TAG_TO_TOPIC}

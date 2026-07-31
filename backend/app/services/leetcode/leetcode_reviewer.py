@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +8,9 @@ from app.models.inference import LeetcodePortfolioReview
 from app.prompts.leetcode_review import LEETCODE_REVIEW_SYSTEM_PROMPT
 from app.schemas.leetcode_review import LeetcodePortfolioReviewLLMOutput, LeetcodePortfolioReviewReport
 from app.services.leetcode.leetcode_knowledge import build_leetcode_knowledge_object
+from app.services.leetcode.leetcode_taxonomy import CANONICAL_TOPICS
+
+logger = logging.getLogger(__name__)
 
 
 def _fallback_report(knowledge: dict) -> LeetcodePortfolioReviewLLMOutput:
@@ -41,7 +45,7 @@ async def generate_leetcode_portfolio_review(db: AsyncSession, user_id) -> Leetc
 
     degraded = False
     try:
-        print("[TRACING] Requesting LeetCode portfolio review from LLM...", flush=True)
+        logger.info("Requesting LeetCode portfolio review from LLM...")
         response = await chat_completion(
             model=MODEL,
             messages=[
@@ -50,27 +54,24 @@ async def generate_leetcode_portfolio_review(db: AsyncSession, user_id) -> Leetc
             ],
             response_format={"type": "json_object"},
             temperature=0.4,
+            max_tokens=2000,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw LeetCode portfolio review JSON:\n{content}", flush=True)
+        logger.debug("Raw LeetCode portfolio review JSON: %s", content)
         llm_output = LeetcodePortfolioReviewLLMOutput.model_validate(json.loads(content))
     except Exception as e:
-        print(f"[TRACING] LeetCode portfolio review degraded, using fallback: {e}", flush=True)
+        logger.warning("LeetCode portfolio review degraded, using fallback: %s", e)
         llm_output = _fallback_report(knowledge)
         degraded = True
 
-    # Validate target focus topics against a set of allowed values to avoid LLM hallucination
-    allowed_topics = {
-        "Arrays & Hashing", "Strings", "Sliding Window", "Stack", "Queue",
-        "Linked List", "Trees", "Graphs", "Binary Search", "Sorting", "Recursion",
-        "Math", "Heap", "Trie", "Dynamic Programming", "Greedy", "Backtracking",
-        "Bit Manipulation", "Intervals", "Design"
-    }
+    # Validate target focus topics against the exact set of canonical topics to avoid LLM hallucination
+    allowed_topics = set(CANONICAL_TOPICS.keys())
     validated_topics = []
     for topic in llm_output.target_focus_topics:
-        topic_lower = topic.lower()
-        if any(allowed.lower() in topic_lower or topic_lower in allowed.lower() for allowed in allowed_topics):
+        if topic in allowed_topics:
             validated_topics.append(topic)
+        else:
+            logger.warning("Dropped non-canonical target focus topic: %s", topic)
     llm_output.target_focus_topics = validated_topics
 
     report = LeetcodePortfolioReviewReport(

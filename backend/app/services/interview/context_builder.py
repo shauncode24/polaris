@@ -3,12 +3,19 @@ blueprint library and persona config, and hands all of it to the LLM
 untouched. No scoring, no filtering, no pre-selection of stories or
 blueprints: the model decides what's relevant and which blueprint fits,
 not this module.
+
+Evidence sources in the context object:
+  - resume/projects/experiences/education: structured from DB
+  - skills: confidence-weighted SkillEvidence pool (all sources)
+  - github_repos: top GithubProjectAnalysis rows (architecture, hygiene, etc.)
+  - leetcode_evidence: latest LeetCode snapshot summary (solve depth, top topics)
+  - company_notes: any saved research notes for the target company
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import CompanyNote, Education, Experience, Project, Resume
-from app.models.inference import SkillEvidence
+from app.models.inference import ProfileSnapshot, SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
 from app.services.interview.blueprints import get_blueprint_library, get_persona
@@ -136,6 +143,46 @@ async def _get_company_notes(db: AsyncSession, user_id, target_company: str | No
     return [{"company": n.company, "notes": n.pasted_content} for n in result.scalars().all()]
 
 
+async def _get_leetcode_evidence(db: AsyncSession, user_id) -> dict | None:
+    """Loads a lightweight summary from the latest LeetCode ProfileSnapshot.
+    Returns None if no sync has happened (agent gracefully skips the field).
+    Capped to top 5 topics to stay well under 300 tokens of prompt payload.
+    """
+    result = await db.execute(
+        select(ProfileSnapshot)
+        .where(ProfileSnapshot.user_id == user_id)
+        .where(ProfileSnapshot.note.in_(["leetcode sync", "leetcode manual submission"]))
+        .order_by(ProfileSnapshot.taken_at.desc())
+        .limit(1)
+    )
+    snapshot = result.scalar_one_or_none()
+    if snapshot is None or not isinstance(snapshot.skills_json, dict):
+        return None
+
+    stats = snapshot.skills_json.get("stats", {})
+    insights = snapshot.skills_json.get("insights", {})
+    topic_mastery = insights.get("topic_mastery", [])
+
+    # Top topics: strong mastery labels first, then by solve count
+    mastery_order = {
+        "Extensive Practice": 0, "Consistent Practice": 1,
+        "Some Practice": 2, "Introduced": 3, "Not Practiced": 4,
+    }
+    top_topics = sorted(
+        [t for t in topic_mastery if t["problems"] > 0],
+        key=lambda t: (mastery_order.get(t["mastery"], 5), -t["problems"]),
+    )[:5]
+
+    return {
+        "total_solved": stats.get("total_solved", 0),
+        "easy": stats.get("easy", 0),
+        "medium": stats.get("medium", 0),
+        "hard": stats.get("hard", 0),
+        "top_topics": [{"topic": t["topic"], "mastery": t["mastery"], "problems": t["problems"]} for t in top_topics],
+        "blind_spots": insights.get("blind_spots", {}).get("missing_fundamentals", []),
+    }
+
+
 async def build_interview_context(
     db: AsyncSession,
     user_id,
@@ -148,6 +195,7 @@ async def build_interview_context(
     education = await _get_all_education(db, user_id)
     skills = await _get_all_skills_with_evidence(db, user_id)
     github_repos = await _get_github_repo_evidence(db, user_id)
+    leetcode_evidence = await _get_leetcode_evidence(db, user_id)
     company_notes = await _get_company_notes(db, user_id, target_company)
 
     return {
@@ -160,6 +208,7 @@ async def build_interview_context(
             "education": education,
             "skills": skills,
             "github_repos": github_repos,
+            "leetcode_evidence": leetcode_evidence,
         },
         "company_notes": company_notes,
         "blueprint_library": get_blueprint_library(),

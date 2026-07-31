@@ -1,7 +1,8 @@
 # backend/app/services/leetcode/leetcode_sync.py
+import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import LeetcodeSnapshot
@@ -10,11 +11,30 @@ from app.services.resume.confidence import WEIGHTS
 from app.services.leetcode.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
 from app.services.leetcode.leetcode_insights import build_leetcode_insights, build_plan_adherence
 from app.services.leetcode.leetcode_recency import compute_tag_last_progress, compute_topic_recency, days_since
-from app.services.leetcode.leetcode_taxonomy import topic_totals
+from app.services.leetcode.leetcode_taxonomy import topic_totals, weighted_topic_totals, TAG_TO_TOPIC, log_unmapped_tags
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_skill
 
+logger = logging.getLogger(__name__)
+
 CONTEST_HISTORY_LIMIT = 12
+
+# Depth multiplier bounds for LeetCode-tag SkillEvidence weights. A topic
+# with more difficulty-weighted solves earns a proportionally higher weight
+# in the shared confidence pool — a user with 200 Graph solves should read
+# more confidently than one with 1. Formula: min(MAX, 1.0 + score / SCALE).
+# Results in weight range [WEIGHTS["leetcode_tag"] * 1.0 .. * MAX_DEPTH_MULTIPLIER].
+# Tune DEPTH_SCALE if thresholds shift with real snapshot history.
+_DEPTH_SCALE = 50.0    # weighted_score at which multiplier reaches 2.0
+_MAX_DEPTH_MULTIPLIER = 2.0  # cap — never inflate beyond 2x the base weight
+
+
+def _depth_multiplier_for_score(weighted_score: float) -> float:
+    """Converts a difficulty-weighted topic score into a SkillEvidence weight
+    multiplier. Score=0 → 1.0 (baseline, unchanged). Score=25 → 1.5.
+    Score>=50 → 2.0 (cap). Always explainable in one sentence.
+    """
+    return min(_MAX_DEPTH_MULTIPLIER, 1.0 + weighted_score / _DEPTH_SCALE)
 
 
 async def _get_previous_tag_counts(db: AsyncSession, user_id) -> dict[str, int]:
@@ -101,6 +121,10 @@ async def _persist_leetcode_data(
     contest_rating_history = await _get_contest_rating_history(db, user.id)
     recommended_topics, recommended_at = await _get_latest_recommended_topics(db, user.id)
 
+    unmapped = log_unmapped_tags(tag_counts)
+    if unmapped:
+        logger.debug("Found %d unmapped LeetCode tags: %s", len(unmapped), sorted(unmapped))
+
     for tag, count in tag_counts.items():
         db.add(
             LeetcodeSnapshot(
@@ -108,6 +132,17 @@ async def _persist_leetcode_data(
                 tag=tag, solved_count=count, difficulty=None,
             )
         )
+
+    # Build per-topic weighted scores now so we can derive depth multipliers
+    # for SkillEvidence weights before entering the tag loop below.
+    weighted_totals_by_topic = weighted_topic_totals(tag_counts, tag_difficulty_tier)
+    # Map tag → weighted_score via the canonical-topic rollup so each
+    # tag inherits its topic's aggregate depth, not just its raw count.
+    tag_weighted_score: dict[str, float] = {}
+    for tag in tag_counts:
+        topic = TAG_TO_TOPIC.get(tag)
+        if topic is not None:
+            tag_weighted_score[tag] = weighted_totals_by_topic.get(topic, 0.0)
 
     resolved = await resolve_skills(set(tag_counts.keys()), db)
 
@@ -123,16 +158,29 @@ async def _persist_leetcode_data(
         if canonical is not None:
             skill = await get_or_create_skill(db, canonical, tag)
             prev_count = previous_tag_counts.get(tag)
+            # depth-weighted evidence weight: grows with practice depth so
+            # downstream consumers (Skill Gap, Career Planner, Interview
+            # Agent) distinguish heavy practice from a single solve.
+            weighted_score = tag_weighted_score.get(tag, 0.0)
+            depth_weight = WEIGHTS["leetcode_tag"] * _depth_multiplier_for_score(weighted_score)
 
             if skill.id not in existing_evidence_skill_ids:
                 db.add(SkillEvidence(
                     skill_id=skill.id, source_type="leetcode_tag",
-                    source_id=None, weight=WEIGHTS["leetcode_tag"],
+                    source_id=None, weight=depth_weight,
                 ))
                 existing_evidence_skill_ids.add(skill.id)
                 new_skills.append(canonical)
                 skill_updated = True
             elif prev_count is not None and count > prev_count:
+                # Self-correct any previously flat weight to the current
+                # depth-weighted value — the next sync always converges.
+                await db.execute(
+                    update(SkillEvidence)
+                    .where(SkillEvidence.skill_id == skill.id)
+                    .where(SkillEvidence.source_type == "leetcode_tag")
+                    .values(weight=depth_weight)
+                )
                 reinforced_skills.append(canonical)
                 skill_updated = True
             else:
@@ -217,21 +265,21 @@ async def _persist_leetcode_data(
 
 
 async def sync_leetcode(db: AsyncSession, user, username: str) -> dict:
-    print(f"[TRACING] Starting LeetCode sync for {username}...", flush=True)
+    logger.info("Starting LeetCode sync for %s...", username)
     profile = await fetch_leetcode_profile(username)
-    print(f"[TRACING] LeetCode sync fetched {len(profile['tag_counts'])} tags.", flush=True)
+    logger.info("LeetCode sync fetched %d tags.", len(profile["tag_counts"]))
     tag_difficulty_tier = profile.get("tag_difficulty_tier", {})
     extra_stats = {k: v for k, v in profile.items() if k not in ("tag_counts", "tag_difficulty_tier")}
     result = await _persist_leetcode_data(
         db, user, profile["tag_counts"], note="leetcode sync",
         extra_stats=extra_stats, tag_difficulty_tier=tag_difficulty_tier,
     )
-    print("[TRACING] LeetCode sync complete.", flush=True)
+    logger.info("LeetCode sync complete.")
     return result
 
 
 async def sync_leetcode_manual(db: AsyncSession, user, tag_counts: dict[str, int]) -> dict:
-    print(f"[TRACING] Persisting manual LeetCode submission ({len(tag_counts)} tags)...", flush=True)
+    logger.info("Persisting manual LeetCode submission (%d tags)...", len(tag_counts))
     result = await _persist_leetcode_data(db, user, tag_counts, note="leetcode manual submission")
-    print("[TRACING] Manual LeetCode submission persisted.", flush=True)
+    logger.info("Manual LeetCode submission persisted.")
     return result

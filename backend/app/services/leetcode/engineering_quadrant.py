@@ -5,6 +5,12 @@ engineering score into one of four quadrants. Fully deterministic; the
 LLM (leetcode_reviewer.py) only narrates the placement, never decides it.
 """
 
+# Normalized mastery score for QUADRANT CLASSIFICATION only — maps labels
+# to a 0-1 scale used to compute a single per-user LeetCode score (0-100)
+# that is compared against a STRONG_THRESHOLD. These values are NOT shared
+# with company_readiness.py, which uses a different scale (0.0-1.0 as a
+# weighted-average readiness %) for a completely different computation.
+# Having two maps is intentional: they answer different questions.
 MASTERY_SCORE_MAP = {
     "Not Practiced": 0.0, "Introduced": 0.25, "Some Practice": 0.5,
     "Consistent Practice": 0.8, "Extensive Practice": 1.0,
