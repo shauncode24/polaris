@@ -2,29 +2,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inference import ProfileSnapshot
-from app.models.facts import Resume
 from app.services.github.github_knowledge import build_github_knowledge_object
-from app.services.leetcode.engineering_quadrant import compute_engineering_quadrant
-from app.services.leetcode.company_readiness import compute_company_readiness
-from app.services.leetcode.resume_claim_check import check_resume_claims
-
-
-async def _get_latest_resume_text(db: AsyncSession, user_id) -> str:
-    result = await db.execute(
-        select(Resume).where(Resume.user_id == user_id).order_by(Resume.created_at.desc()).limit(1)
-    )
-    resume = result.scalar_one_or_none()
-    return resume.raw_text if resume else ""
+from app.services.leetcode.engineering_snapshot import compute_engineering_snapshot
 
 
 async def build_leetcode_knowledge_object(db: AsyncSession, user_id) -> dict | None:
     """Aggregates a user's latest LeetCode snapshot data with a high-level
-    summary of their GitHub engineering profile. This combined object is
-    passed to the LLM to provide holistic coaching comparing algorithmic
-    readiness with practical engineering evidence — including whether
-    prior coaching advice was actually acted on, whether contest rating
-    is trending anywhere, the cross-module Engineering Maturity Quadrant,
-    company-specific readiness, and resume-claim verification.
+    summary of their GitHub engineering profile, for the on-demand AI
+    Coach review call. The cross-module inferences (Engineering Maturity
+    Quadrant, company readiness, resume-claim check) are computed fresh
+    via engineering_snapshot.compute_engineering_snapshot() — the exact
+    same function used to persist historical trend rows at sync time —
+    so the coach always reasons over the same deterministic facts the
+    page shows, never a separately-derived copy.
     """
     result = await db.execute(
         select(ProfileSnapshot)
@@ -45,18 +35,7 @@ async def build_leetcode_knowledge_object(db: AsyncSession, user_id) -> dict | N
     topic_mastery = insights.get("topic_mastery", [])
     repositories = gh_knowledge.get("repositories", []) if gh_knowledge else []
 
-    # New cross-module inferences (LeetCode Module Review §5) — all
-    # deterministic; only their narration is left to the LLM.
-    engineering_quadrant = compute_engineering_quadrant(topic_mastery, repositories)
-    company_readiness = compute_company_readiness(topic_mastery)
-
-    resume_text = await _get_latest_resume_text(db, user_id)
-    resume_claims = check_resume_claims(
-        resume_text,
-        total_solved=stats.get("total_solved", 0),
-        contest_rating=stats.get("contest_rating"),
-        topic_mastery=topic_mastery,
-    )
+    engineering = await compute_engineering_snapshot(db, user_id)
 
     return {
         "leetcode_summary": {
@@ -66,8 +45,6 @@ async def build_leetcode_knowledge_object(db: AsyncSession, user_id) -> dict | N
             "hard": stats.get("hard", 0),
             "contest_rating": stats.get("contest_rating"),
             "active_days_last_30": stats.get("active_days_last_30", 0),
-            # global_ranking deliberately omitted from the LLM-facing
-            # summary — demoted per §3, not a career-actionable headline stat.
         },
         "topic_mastery": topic_mastery,
         "blind_spots": insights.get("blind_spots", {}),
@@ -77,9 +54,17 @@ async def build_leetcode_knowledge_object(db: AsyncSession, user_id) -> dict | N
         "practice_diversity": insights.get("practice_diversity", {}),
         "data_ceiling_note": insights.get("data_ceiling_note", ""),
         "difficulty_insight": insights.get("difficulty_insight", ""),
-        "engineering_quadrant": engineering_quadrant,
-        "company_readiness": company_readiness,
-        "resume_claims": resume_claims,
+        "engineering_quadrant": (
+            {
+                "leetcode_score": engineering["leetcode_score"],
+                "github_score": engineering["github_score"],
+                "quadrant_label": engineering["quadrant_label"],
+                "description": engineering["description"],
+            }
+            if engineering else None
+        ),
+        "company_readiness": engineering["company_readiness"] if engineering else [],
+        "resume_claims": engineering["resume_claims"] if engineering else {},
         "github_summary": {
             "all_technologies": gh_knowledge.get("all_technologies", []) if gh_knowledge else [],
             "all_capabilities": gh_knowledge.get("all_capabilities", []) if gh_knowledge else [],

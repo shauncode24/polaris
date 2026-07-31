@@ -22,6 +22,7 @@ import RecentActivity from '../components/leetcode/RecentActivity'
 import ManualEntryModal from '../components/leetcode/ManualEntryModal'
 import LeetcodeReviewPanel from '../components/leetcode/LeetcodeReviewPanel'
 import EngineeringQuadrant from '../components/leetcode/EngineeringQuadrant'
+import QuadrantHistory from '../components/leetcode/QuadrantHistory'
 import CompanyReadiness from '../components/leetcode/CompanyReadiness'
 import ResumeClaimsCheck from '../components/leetcode/ResumeClaimsCheck'
 import PracticeDiversity from '../components/leetcode/PracticeDiversity'
@@ -73,8 +74,8 @@ function LeetCodePage() {
         setError(data.reason || 'LeetCode sync is temporarily unavailable — try manual entry.')
       } else {
         // Re-fetch the workspace so cross-module fields (engineering
-        // quadrant, company readiness, resume claims) refresh alongside
-        // the raw sync data.
+        // quadrant, company readiness, resume claims, history) refresh
+        // alongside the raw sync data.
         const workspace = await getLeetcodeWorkspace(token)
         setResult('leetcode', workspace && workspace.has_data ? workspace : { ...data, username })
       }
@@ -166,6 +167,10 @@ function LeetCodePage() {
 
                   <CollapsibleSection title="Engineering maturity quadrant" subtitle="LeetCode vs. GitHub, fused into one signal" defaultOpen={true}>
                     <EngineeringQuadrant quadrant={leetcode?.engineering_quadrant} />
+                  </CollapsibleSection>
+
+                  <CollapsibleSection title="Quadrant history" subtitle="How the quadrant has moved across syncs" defaultOpen={false}>
+                    <QuadrantHistory history={leetcode?.engineering_history} />
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Company readiness" defaultOpen={true}>

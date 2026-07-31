@@ -9,6 +9,14 @@ LEETCODE_GRAPHQL_URL = "https://leetcode.com/graphql"
 # easy/medium/hard breakdown, contest standing, and the raw submission
 # calendar (used below to derive streaks). Unofficial and undocumented —
 # this is exactly why every call is funneled through LeetCodeSyncError.
+#
+# tagProblemCounts buckets each tag the user has solved problems in into
+# "fundamental" / "intermediate" / "advanced" — LeetCode's own difficulty-
+# tier classification for that tag, not per-problem Easy/Medium/Hard.
+# This is the only per-tag difficulty-adjacent signal the unofficial API
+# actually exposes, so it's what difficulty-weighted mastery is built on
+# (see leetcode_taxonomy.TIER_WEIGHTS) rather than inventing a signal the
+# API doesn't provide.
 PROFILE_QUERY = """
 query userProfile($username: String!) {
   matchedUser(username: $username) {
@@ -91,6 +99,7 @@ async def fetch_leetcode_profile(username: str, graphql_url: str = LEETCODE_GRAP
     """Returns:
     {
         "tag_counts": {tag_slug: solved_count, ...},
+        "tag_difficulty_tier": {tag_slug: "fundamental"|"intermediate"|"advanced", ...},
         "total_solved": int, "easy": int, "medium": int, "hard": int,
         "contest_rating": float | None, "global_ranking": int | None,
         "active_days_last_30": int, "longest_streak": int, "current_streak": int,
@@ -121,9 +130,11 @@ async def fetch_leetcode_profile(username: str, graphql_url: str = LEETCODE_GRAP
 
         tag_buckets = matched_user["tagProblemCounts"]
         tag_counts: dict[str, int] = {}
+        tag_difficulty_tier: dict[str, str] = {}
         for bucket_name in ("fundamental", "intermediate", "advanced"):
             for entry in tag_buckets.get(bucket_name, []):
                 tag_counts[entry["tagSlug"]] = entry["problemsSolved"]
+                tag_difficulty_tier[entry["tagSlug"]] = bucket_name
 
         difficulty_counts = {"All": 0, "Easy": 0, "Medium": 0, "Hard": 0}
         for entry in matched_user["submitStats"]["acSubmissionNum"]:
@@ -145,6 +156,7 @@ async def fetch_leetcode_profile(username: str, graphql_url: str = LEETCODE_GRAP
 
     return {
         "tag_counts": tag_counts,
+        "tag_difficulty_tier": tag_difficulty_tier,
         "total_solved": difficulty_counts["All"],
         "easy": difficulty_counts["Easy"],
         "medium": difficulty_counts["Medium"],
@@ -180,14 +192,11 @@ def _longest_gap_last_30(submission_calendar: dict[int, int]) -> int:
     )
 
     gaps = []
-    # Gap before the first submission in the last 30 days
     gaps.append(max(0, (active_days[0] - cutoff_ts) // 86400))
 
-    # Gaps between submissions
     for prev, curr in zip(active_days, active_days[1:]):
         gaps.append(max(0, (curr - prev) // 86400))
 
-    # Gap after the last submission
     gaps.append(max(0, (today_ts - active_days[-1]) // 86400))
 
     return max(gaps) if gaps else 0

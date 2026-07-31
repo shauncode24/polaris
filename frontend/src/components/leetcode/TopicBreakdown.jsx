@@ -7,6 +7,7 @@ function TopicRow({ topic, maxProblems }) {
   const [expanded, setExpanded] = useState(false)
   const tier = confidenceTier(topic.mastery)
   const pct = maxProblems > 0 ? Math.max(4, Math.round((topic.problems / maxProblems) * 100)) : 0
+  const isWeighted = typeof topic.weighted_score === 'number' && topic.weighted_score !== topic.problems
 
   return (
     <li className="lc-topic">
@@ -21,7 +22,8 @@ function TopicRow({ topic, maxProblems }) {
       </button>
       {expanded && (
         <div className="lc-topic__detail">
-          Mastery level: <strong>{topic.mastery}</strong> — {topic.problems} problem{topic.problems === 1 ? '' : 's'} solved in this topic.
+          Mastery level: <strong>{topic.mastery}</strong> — {topic.problems} problem{topic.problems === 1 ? '' : 's'} solved in this topic
+          {isWeighted && <> (difficulty-weighted score: {topic.weighted_score}, based on LeetCode's own fundamental/intermediate/advanced tag tiers)</>}.
         </div>
       )}
     </li>

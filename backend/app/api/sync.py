@@ -12,7 +12,12 @@ from app.services.github.github_client import GithubSyncError
 from app.services.github.github_sync import sync_github
 from app.services.leetcode.leetcode_client import LeetCodeSyncError
 from app.services.leetcode.leetcode_sync import sync_leetcode, sync_leetcode_manual
-from app.services.leetcode.leetcode_knowledge import build_leetcode_knowledge_object
+from app.services.leetcode.engineering_snapshot import (
+    persist_engineering_snapshot,
+    get_latest_engineering_snapshot,
+    get_engineering_snapshot_history,
+    compute_engineering_snapshot,
+)
 
 from app.models.inference import ProfileSnapshot, LeetcodePortfolioReview
 
@@ -39,9 +44,17 @@ async def trigger_github_sync(
     await db.commit()
 
     try:
-        return await sync_github(db, current_user, username, token)
+        result = await sync_github(db, current_user, username, token)
     except GithubSyncError as e:
         return JSONResponse(status_code=502, content={"status": "error", "reason": str(e)})
+
+    # A GitHub sync can move the Engineering Maturity Quadrant (its
+    # github_score half) even if LeetCode data hasn't changed — append a
+    # new trend row. No-op (returns None) if the user has no LeetCode
+    # data synced yet, since the quadrant needs both sides to exist.
+    await persist_engineering_snapshot(db, current_user.id, "github sync")
+
+    return result
 
 
 @router.post("/leetcode")
@@ -58,13 +71,17 @@ async def trigger_leetcode_sync(
     await db.commit()
 
     try:
-        return await sync_leetcode(db, current_user, username)
+        result = await sync_leetcode(db, current_user, username)
     except LeetCodeSyncError as e:
         print(f"[TRACING] LeetCode sync degraded: {e}", flush=True)
         return JSONResponse(
             status_code=200,
             content={"status": "degraded", "reason": str(e), "fallback_form_required": True},
         )
+
+    await persist_engineering_snapshot(db, current_user.id, "leetcode sync")
+
+    return result
 
 
 @router.post("/leetcode/manual")
@@ -73,7 +90,9 @@ async def submit_leetcode_manual(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await sync_leetcode_manual(db, current_user, payload.tag_counts)
+    result = await sync_leetcode_manual(db, current_user, payload.tag_counts)
+    await persist_engineering_snapshot(db, current_user.id, "leetcode manual submission")
+    return result
 
 
 @router.get("/leetcode/workspace")
@@ -82,11 +101,13 @@ async def get_leetcode_workspace(
     db: AsyncSession = Depends(get_db),
 ):
     """Restore LeetCode workspace sync snapshot & portfolio review from
-    database, plus the on-the-fly cross-module inferences (Engineering
-    Maturity Quadrant, company readiness, resume-claim check) that
-    require both LeetCode and GitHub/Resume data together — these are
-    intentionally computed live rather than persisted, since either
-    source syncing again should shift them immediately.
+    database. The Engineering Maturity Quadrant, company readiness, and
+    resume-claim check are read from the persisted, append-only history
+    (LeetcodeEngineeringSnapshot) so the quadrant carries real trend
+    across syncs. If no row has ever been persisted yet (e.g. the very
+    first load after this feature shipped, before the next sync), a
+    read-only live computation fills the gap so the page isn't empty —
+    this never writes a row; only an explicit sync action does that.
     """
     snapshot = await db.execute(
         select(ProfileSnapshot)
@@ -110,7 +131,20 @@ async def get_leetcode_workspace(
     review_row = review_result.scalar_one_or_none()
     portfolio_review = review_row.review_json if review_row else None
 
-    knowledge = await build_leetcode_knowledge_object(db, current_user.id)
+    latest_engineering = await get_latest_engineering_snapshot(db, current_user.id)
+    if latest_engineering is None:
+        live = await compute_engineering_snapshot(db, current_user.id)
+        if live is not None:
+            latest_engineering = {
+                "leetcode_score": live["leetcode_score"],
+                "github_score": live["github_score"],
+                "quadrant_label": live["quadrant_label"],
+                "description": live["description"],
+                "company_readiness": live["company_readiness"],
+                "resume_claims": live["resume_claims"],
+            }
+
+    engineering_history = await get_engineering_snapshot_history(db, current_user.id)
 
     return {
         "has_data": True,
@@ -119,9 +153,18 @@ async def get_leetcode_workspace(
         "summary": payload.get("stats", {}),
         "insights": payload.get("insights", {}),
         "portfolio_review": portfolio_review,
-        "engineering_quadrant": knowledge.get("engineering_quadrant") if knowledge else None,
-        "company_readiness": knowledge.get("company_readiness") if knowledge else None,
-        "resume_claims": knowledge.get("resume_claims") if knowledge else None,
+        "engineering_quadrant": (
+            {
+                "leetcode_score": latest_engineering["leetcode_score"],
+                "github_score": latest_engineering["github_score"],
+                "quadrant_label": latest_engineering["quadrant_label"],
+                "description": latest_engineering["description"],
+            }
+            if latest_engineering else None
+        ),
+        "company_readiness": latest_engineering["company_readiness"] if latest_engineering else None,
+        "resume_claims": latest_engineering["resume_claims"] if latest_engineering else None,
+        "engineering_history": engineering_history,
     }
 
 
@@ -130,7 +173,11 @@ async def run_leetcode_portfolio_review(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger an LLM-powered review of the user's LeetCode performance."""
+    """Trigger an LLM-powered review of the user's LeetCode performance.
+    No new underlying data is synced here, so no new engineering-snapshot
+    trend row is written — re-running the coach on unchanged data
+    shouldn't fabricate a new trend point.
+    """
     from fastapi import HTTPException
     from app.services.leetcode.leetcode_reviewer import generate_leetcode_portfolio_review
 

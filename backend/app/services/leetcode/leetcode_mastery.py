@@ -3,11 +3,19 @@
 (dsa_profile, interview_readiness, topic_mastery) uses one vocabulary
 instead of each re-inventing its own cutoffs.
 
+As of the difficulty-weighting change, these thresholds are evaluated
+against a difficulty-weighted score (leetcode_taxonomy.weighted_topic_totals),
+not the raw solved-problem count — a topic with heavier advanced-tier
+solving reaches a mastery label sooner than the same raw count made up
+entirely of fundamental-tier solves. The functions below don't care
+whether the number they receive is weighted or raw; that decision is
+made once, by the caller (leetcode_insights.build_topic_mastery).
+
 Tune these over time as you gather more real snapshot history — per
 the design doc's own guidance in §4.3 for confidence scoring.
 """
 
-MASTERY_THRESHOLDS: list[tuple[int, str]] = [
+MASTERY_THRESHOLDS: list[tuple[float, str]] = [
     (0, "Not Practiced"),
     (3, "Introduced"),
     (10, "Some Practice"),
@@ -28,11 +36,16 @@ MAX_DECAY_LEVELS = 2  # beyond ~4 months: downgrade two levels
 FLOOR_LEVEL_IF_EVER_PRACTICED = "Introduced"  # never decay below this if problems_solved > 0
 
 
-def get_mastery_level(problems_solved: int) -> str:
-    if problems_solved <= 0:
+def get_mastery_level(weighted_score: float) -> str:
+    """`weighted_score`: a difficulty-weighted topic score (see
+    leetcode_taxonomy.weighted_topic_totals). Accepts a plain raw count
+    too — the thresholds work identically either way, they just mean
+    slightly different things depending on what the caller passed in.
+    """
+    if weighted_score <= 0:
         return "Not Practiced"
     for ceiling, label in MASTERY_THRESHOLDS[1:]:
-        if problems_solved <= ceiling:
+        if weighted_score <= ceiling:
             return label
     return MASTERY_MAX_LABEL
 
@@ -44,18 +57,18 @@ def _decay_levels_for(days_since_progress: int) -> int:
     return MAX_DECAY_LEVELS
 
 
-def get_effective_mastery(problems_solved: int, days_since_progress: int | None) -> tuple[str, bool]:
+def get_effective_mastery(weighted_score: float, days_since_progress: int | None) -> tuple[str, bool]:
     """Returns (effective_mastery_label, is_stale).
 
-    `days_since_progress` is the number of days since this topic's
-    solved-count last increased, derived from real leetcode_snapshots
-    history (see leetcode_recency.py) — never a guess. If it's None
-    (no history to derive it from yet, e.g. a topic solved for the
-    first time on the very first sync), no decay is applied since we
-    can't fairly penalize what we can't measure.
+    `weighted_score` is the difficulty-weighted topic score. `days_since_progress`
+    is the number of days since this topic's RAW solved-count last increased,
+    derived from real leetcode_snapshots history (see leetcode_recency.py) —
+    never a guess. If it's None (no history to derive it from yet, e.g. a
+    topic solved for the first time on the very first sync), no decay is
+    applied since we can't fairly penalize what we can't measure.
     """
-    base = get_mastery_level(problems_solved)
-    if problems_solved <= 0 or days_since_progress is None:
+    base = get_mastery_level(weighted_score)
+    if weighted_score <= 0 or days_since_progress is None:
         return base, False
 
     downgrade = _decay_levels_for(days_since_progress)
