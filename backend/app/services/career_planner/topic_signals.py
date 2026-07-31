@@ -4,6 +4,15 @@ appear to have any real evidence touching it? This is intentionally loose
 — a rough signal for the LLM to reason over, not an authoritative judgment.
 Nothing downstream trusts this as ground truth or uses it to filter what
 the LLM is allowed to write about.
+
+Evidence priority order per topic:
+  1. Resume/evidence skills (skills_by_confidence)
+  2. LeetCode topic mastery
+  3. GitHub technology depth map (technology_depth from github sync insights)
+     — a score >=30 counts as partial, >=60 as strong. This is the weakest
+     signal (breadth proxy, not a direct skill confirmation) but is better
+     than reporting "no evidence" when the user has multiple repos using
+     the relevant technology.
 """
 
 # topic name -> substrings to look for in the user's canonical skill
@@ -50,6 +59,7 @@ def _coverage_for_topic(
     topic: str,
     skills_by_confidence: list[dict],
     leetcode_topic_mastery: list[dict],
+    technology_depth: dict[str, dict] | None = None,
 ) -> dict:
     aliases = TOPIC_EVIDENCE_ALIASES.get(topic, [])
     if not aliases:
@@ -77,6 +87,31 @@ def _coverage_for_topic(
                 "reasons": [f"LeetCode mastery for '{lc['topic']}': {mastery} ({lc['problems']} solved)"],
             }
 
+    # 3rd-priority: GitHub technology depth map — weakest signal (breadth,
+    # not direct skill confirmation) but better than reporting "no evidence"
+    # when the user has real repos using the relevant technology.
+    if technology_depth:
+        for alias in aliases:
+            # technology_depth keys are the exact technology names from github
+            # (e.g. "FastAPI", "React") — case-sensitive. Try both forms.
+            for key in (alias, alias.title(), alias.upper()):
+                depth_entry = technology_depth.get(key)
+                if depth_entry and isinstance(depth_entry, dict):
+                    score = depth_entry.get("score", 0)
+                    label_str = depth_entry.get("label", "")
+                    if score >= 60:
+                        return {
+                            "coverage": "strong",
+                            "confidence": None,
+                            "reasons": [f"GitHub depth signal: '{key}' at {score}/100 ({label_str})"],
+                        }
+                    if score >= 30:
+                        return {
+                            "coverage": "partial",
+                            "confidence": None,
+                            "reasons": [f"GitHub depth signal: '{key}' at {score}/100 ({label_str})"],
+                        }
+
     return {"coverage": "none", "confidence": None, "reasons": ["no evidence found in your profile for this topic"]}
 
 
@@ -86,11 +121,14 @@ def build_topic_signals(
     leetcode_topic_mastery: list[dict],
     jd_missing_skills: set[str],
     ats_missing_keywords: set[str],
+    technology_depth: dict[str, dict] | None = None,
 ) -> list[dict]:
     signals = []
     for entry in curriculum_topics:
         topic = entry["topic"]
-        coverage_info = _coverage_for_topic(topic, skills_by_confidence, leetcode_topic_mastery)
+        coverage_info = _coverage_for_topic(
+            topic, skills_by_confidence, leetcode_topic_mastery, technology_depth
+        )
 
         extra_reasons = []
         aliases = TOPIC_EVIDENCE_ALIASES.get(topic, [])

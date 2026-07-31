@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import ProfileSnapshot
+from app.services.github.github_analyzer import combined_repo_score
 
 MAX_REPOS_IN_KNOWLEDGE = 15
 
@@ -55,7 +56,7 @@ async def build_github_knowledge_object(db: AsyncSession, user_id) -> dict | Non
         a = analysis_by_repo.get(repo["name"])
         if a is None:
             return repo.get("project_score", {}).get("overall", 0)
-        return a.quality_score * 0.6 + a.activity_score * 0.4
+        return combined_repo_score(a.quality_score, a.activity_score)
 
     ranked = sorted(eligible, key=_rank_key, reverse=True)[:MAX_REPOS_IN_KNOWLEDGE]
 

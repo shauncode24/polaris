@@ -150,6 +150,26 @@ async def _get_latest_leetcode_insights(db: AsyncSession, user_id) -> dict:
     }
 
 
+async def _get_github_technology_depth(db: AsyncSession, user_id) -> dict[str, dict] | None:
+    """Loads the technology_depth map from the latest GitHub sync snapshot.
+    Returns None if no sync has happened yet (career planner gracefully
+    treats None as no GitHub evidence).
+    """
+    result = await db.execute(
+        select(ProfileSnapshot)
+        .where(ProfileSnapshot.user_id == user_id)
+        .where(ProfileSnapshot.note == "github sync")
+        .order_by(ProfileSnapshot.taken_at.desc())
+        .limit(1)
+    )
+    snapshot = result.scalar_one_or_none()
+    if snapshot is None or not isinstance(snapshot.skills_json, dict):
+        return None
+    insights = snapshot.skills_json.get("insights", {})
+    depth = insights.get("technology_depth")
+    return depth if isinstance(depth, dict) else None
+
+
 async def _get_recent_notes(db: AsyncSession, user_id, limit: int = 5) -> list[dict]:
     result = await db.execute(
         select(Note).where(Note.user_id == user_id).order_by(Note.date.desc()).limit(limit)
@@ -185,6 +205,7 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
         leetcode_topic_mastery=leetcode["topic_mastery"],
         jd_missing_skills=jd_missing_skills,
         ats_missing_keywords=ats_missing_keywords,
+        technology_depth=await _get_github_technology_depth(db, user_id),
     )
 
     projects = await _get_projects(db, user_id)

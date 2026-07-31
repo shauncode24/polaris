@@ -14,7 +14,12 @@ from app.services.projects.overview import build_projects_overview
 
 RAG_CAPABILITY_HINTS = {"rag", "vector search", "ai integration"}
 
-IMPACT_MISSING_README = 5
+# Impact constants mirror the EXACT point values awarded by score_repository()
+# in github_scoring.py — keep in sync with github_insights._IMPACT_* constants:
+#   documentation: has_readme -> +10 pts  (score_repository: documentation += 10.0)
+#   engineering:   has_tests  -> +12 pts  (score_repository: engineering += 12.0)
+#   engineering:   has_ci     -> +8 pts   (score_repository: engineering += 8.0)
+IMPACT_MISSING_README = 10
 IMPACT_MISSING_TESTS = 12
 IMPACT_MISSING_CI = 8
 IMPACT_CLAIM_RISK = 10

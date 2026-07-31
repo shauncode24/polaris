@@ -11,14 +11,15 @@ order:
 Every match is still 100% deterministic — no LLM, no embeddings. Same
 "cheap and explainable" philosophy as skill_categories.py and
 github_taxonomy.py elsewhere in this codebase.
+
+_slugify() delegates to linking.normalize_name() so that the auto-display
+flow (build_repo_lookup) and the confirm-a-link flow (suggest_repo_links in
+linking.py) are guaranteed to use identical normalization — including
+"Project N:" prefix stripping and parenthetical removal. A mismatch here
+was the root cause of the two flows disagreeing on the same project name.
 """
-import re
 
-_SLUG_STRIP_RE = re.compile(r"[^a-z0-9]+")
-
-
-def _slugify(text: str) -> str:
-    return _SLUG_STRIP_RE.sub("", text.lower())
+from app.services.projects.linking import normalize_name as _slugify
 
 
 def _repo_name_from_url(url: str | None) -> str | None:

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -37,6 +38,8 @@ from app.services.github.github_architecture_analyzer import (
     assess_architecture_depth,
 )
 from app.services.github.github_cache import get_repo_cache, cache_is_fresh, upsert_repo_cache
+
+logger = logging.getLogger(__name__)
 
 
 async def _get_previously_synced_repo_names(db: AsyncSession, user_id) -> set[str]:
@@ -127,12 +130,13 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
     if not username or not token:
         raise GithubSyncError("GitHub username and token must both be provided")
 
-    print(f"[TRACING] Starting GitHub sync for {username}...", flush=True)
+    logger.info("Starting GitHub sync for %s...", username)
     previously_synced = await _get_previously_synced_repo_names(db, user.id)
 
     repo_language_map: dict[str, dict] = {}
     repo_topics_map: dict[str, list[str]] = {}
     repositories_report: list[dict] = []
+    repo_analyses_list: list[dict] = []
     snapshot_rows: list[GithubSnapshot] = []
 
     total_stars = total_forks = total_commits = new_count = archived_count = 0
@@ -140,7 +144,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
 
     async with httpx.AsyncClient(timeout=20.0) as client:
         repos = await fetch_repos(client, username, token)
-        print(f"[TRACING] Found {len(repos)} repos for {username}.", flush=True)
+        logger.info("Found %d repos for %s.", len(repos), username)
 
         for repo in repos:
             repo_name = repo["name"]
@@ -202,7 +206,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 collaboration_result = cache_row.collaboration
                 fork_contribution_commits = cache_row.fork_contribution_commits
                 cached_architecture_result = cache_row.architecture_assessment
-                print(f"[TRACING] Cache HIT for {repo_name} (sha={current_sha[:8] if current_sha else None})", flush=True)
+                logger.debug("Cache HIT for %s (sha=%s)", repo_name, current_sha[:8] if current_sha else None)
             else:
                 cache_misses += 1
                 slow_signals = await _compute_slow_repo_signals(
@@ -213,7 +217,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 collaboration_result = slow_signals["collaboration"]
                 fork_contribution_commits = slow_signals["fork_contribution_commits"]
                 cached_architecture_result = None  # computed fresh below, after quality_score exists
-                print(f"[TRACING] Cache MISS for {repo_name} (sha={current_sha[:8] if current_sha else None})", flush=True)
+                logger.debug("Cache MISS for %s (sha=%s)", repo_name, current_sha[:8] if current_sha else None)
 
             repo_language_map[repo_name] = languages
             repo_topics_map[repo_name] = topics
@@ -322,6 +326,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 "has_ci": has_ci
             })
             repositories_report.append(repo_entry)
+            repo_analyses_list.append(analysis)
 
             insert_vals = {
                 "user_id": user.id,
@@ -369,7 +374,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
 
     from app.services.github.github_evidence import sync_github_skill_evidence
     evidence_result = await sync_github_skill_evidence(db, user)
-    print(f"[TRACING] GitHub-derived skill evidence rebuilt: {evidence_result}", flush=True)
+    logger.info("GitHub-derived skill evidence rebuilt: %s", evidence_result)
 
     # Technology depth (skill-depth, not just skill-presence) — queries the
     # just-upserted GithubProjectAnalysis rows fresh, since they already
@@ -394,7 +399,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         for a in eligible_for_depth
     ])
 
-    print(f"[TRACING] GitHub sync cache: {cache_hits} hits, {cache_misses} misses.", flush=True)
+    logger.info("GitHub sync cache: %d hits, %d misses.", cache_hits, cache_misses)
 
     current_repo_names = {r["name"] for r in repositories_report}
     removed_repo_names = previously_synced - current_repo_names
@@ -470,7 +475,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
     prev_portfolio = prev_portfolio_result.scalar_one_or_none()
     prev_tech_distribution = prev_portfolio.technology_distribution if prev_portfolio else None
 
-    portfolio_data = build_portfolio_analysis(repositories_report, prev_tech_distribution)
+    portfolio_data = build_portfolio_analysis(repo_analyses_list, prev_tech_distribution)
 
     portfolio_row = PortfolioAnalysis(
         user_id=user.id,
@@ -488,7 +493,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
     await db.flush()
     await db.commit()
 
-    print(f"[TRACING] GitHub sync complete. {len(snapshot_rows)} repo snapshots written.", flush=True)
+    logger.info("GitHub sync complete. %d repo snapshots written.", len(snapshot_rows))
 
     return {
         "status": "success",

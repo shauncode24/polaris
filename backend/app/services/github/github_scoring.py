@@ -1,8 +1,19 @@
-"""Rule-based repository scoring (0-100). Answers 'which projects are
-actually strongest' instead of conflating strength with recent commit
-volume, and now also folds in three signals that used to be invisible:
-fork contribution, commit-message hygiene, and PR/review collaboration.
-Still a fully explainable formula — no LLM anywhere in this file.
+"""Rich, user-facing per-repo score (0-100) with a full breakdown.
+Answers 'which projects are actually strongest' instead of conflating
+strength with recent commit volume, and folds in three signals that used
+to be invisible: fork contribution, commit-message hygiene, and PR/review
+collaboration. Still a fully explainable formula — no LLM anywhere in
+this file.
+
+Note on coexistence with github_analyzer.py:
+  github_analyzer.analyze_repo() computes a SIMPLER internal score
+  (quality_score 0-100, activity_score 0-100 separately) that is stored
+  in GithubProjectAnalysis and used for tier assignment and portfolio
+  sorting. That score intentionally omits hygiene/collaboration/maintenance
+  to stay cheap and stable for DB queries. THIS score is the canonical
+  user-facing number; the analyzer's split is an internal signal.
+  combined_repo_score() in github_analyzer.py is the shared blending
+  function for the internal path.
 """
 from datetime import datetime, timezone
 

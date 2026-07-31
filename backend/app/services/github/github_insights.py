@@ -43,6 +43,19 @@ def build_repo_headline(repo: dict) -> str:
     return f"{lead} — " + "; ".join(parts) if parts else lead
 
 
+# Impact constants mirror the EXACT point values awarded by score_repository()
+# in github_scoring.py — keep these in sync if that formula changes:
+#   documentation: has_readme -> +10 pts (plus 5 for description, not actionable here)
+#   engineering:   has_tests  -> +12 pts
+#   engineering:   has_ci     -> +8 pts
+#   hygiene:       score/100 * 5, so a score<40 repo loses ~3 pts vs. a score>=80 repo
+_IMPACT_README = 10
+_IMPACT_TESTS = 12
+_IMPACT_CI = 8
+_IMPACT_HYGIENE = 6
+_IMPACT_STALE = 4
+
+
 def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
     """Estimates the score-point gain from fixing the single biggest gap
     on each repo, using the exact same weights as github_scoring.py so
@@ -58,20 +71,20 @@ def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
 
         breakdown = r.get("project_score", {}).get("breakdown", {})
         if not r.get("has_readme"):
-            candidates.append({"project": r["name"], "action": f"Write a README for {r['name']}", "impact": 10})
+            candidates.append({"project": r["name"], "action": f"Write a README for {r['name']}", "impact": _IMPACT_README})
         if not r.get("has_tests"):
-            candidates.append({"project": r["name"], "action": f"Add tests to {r['name']}", "impact": 15})
+            candidates.append({"project": r["name"], "action": f"Add tests to {r['name']}", "impact": _IMPACT_TESTS})
         if not r.get("has_ci"):
-            candidates.append({"project": r["name"], "action": f"Add CI to {r['name']}", "impact": 10})
+            candidates.append({"project": r["name"], "action": f"Add CI to {r['name']}", "impact": _IMPACT_CI})
         if r.get("archived") is False and r.get("commits_last_30_days", 0) == 0 and breakdown.get("activity", 0) < 5:
-            candidates.append({"project": r["name"], "action": f"Archive or resume {r['name']}", "impact": 4})
+            candidates.append({"project": r["name"], "action": f"Archive or resume {r['name']}", "impact": _IMPACT_STALE})
 
         hygiene = r.get("commit_hygiene") or {}
         if hygiene.get("sample_size", 0) >= 5 and hygiene.get("score", 100) < 40:
             candidates.append({
                 "project": r["name"],
                 "action": f"Write clearer, more specific commit messages for {r['name']}",
-                "impact": 6,
+                "impact": _IMPACT_HYGIENE,
             })
 
     candidates.sort(key=lambda c: c["impact"], reverse=True)

@@ -1,4 +1,12 @@
 # backend/app/services_github_analyzer.py
+#
+# This module computes a SIMPLER per-repo score (quality_score, activity_score
+# separately) used for tier assignment and GithubProjectAnalysis DB storage.
+# github_scoring.score_repository() computes the RICHER user-facing 0-100 score
+# (breakdown, fork penalty, hygiene, collaboration, maintenance). The two
+# intentionally coexist: the rich score is the canonical user-facing number;
+# the simpler split is a stable, cheap internal signal for sorting/tiering.
+# See: github_scoring.py module docstring for the complementary note.
 from datetime import datetime, timezone
 
 # Evidence -> inferred technology. Checked as a case-insensitive substring
@@ -29,6 +37,21 @@ CAPABILITY_MAP = {
 FRONTEND_TECH = {"React", "Vue", "Next.js", "TailwindCSS"}
 BACKEND_TECH = {"FastAPI", "Django", "Flask", "Express"}
 DATABASE_TECH = {"PostgreSQL", "SQLAlchemy", "Redis"}
+
+# Weights used to combine quality and activity into a single repo score for
+# internal tier assignment and portfolio sorting. Keep in sync with usages
+# in github_knowledge.py which imports this helper.
+_QUALITY_WEIGHT = 0.6
+_ACTIVITY_WEIGHT = 0.4
+
+
+def combined_repo_score(quality_score: float, activity_score: float) -> float:
+    """Single source-of-truth for the quality/activity blend used in tier
+    assignment and portfolio ranking (0.6 quality + 0.4 activity). This is
+    the INTERNAL signal — distinct from score_repository()'s richer 0-100
+    user-facing score which includes hygiene, collaboration, and maintenance.
+    """
+    return quality_score * _QUALITY_WEIGHT + activity_score * _ACTIVITY_WEIGHT
 
 
 def _scan(content: str | None, signatures: dict[str, str]) -> set[str]:
@@ -109,7 +132,7 @@ def analyze_repo(
         else round(max(0, 100 - min(last_activity_days if last_activity_days is not None else 999, 100)), 1)
     )
 
-    combined = quality_score * 0.6 + activity_score * 0.4
+    combined = combined_repo_score(quality_score, activity_score)
     if is_archived:
         tier = "archived"
     elif is_fork and not is_meaningful_fork_contribution:
@@ -163,7 +186,7 @@ def build_portfolio_analysis(
 
     strongest_projects = [
         r["repo_name"] for r in sorted(
-            repo_analyses, key=lambda r: r["quality_score"] + r["activity_score"], reverse=True
+            repo_analyses, key=lambda r: combined_repo_score(r["quality_score"], r["activity_score"]), reverse=True
         )[:5]
     ]
     recently_active_projects = [

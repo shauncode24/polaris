@@ -1,4 +1,19 @@
+"""Portfolio-wide narrative review — engineering self-knowledge-facing.
+
+Audience: the candidate wanting to understand their own engineering
+patterns across verified projects (testing consistency, collaboration
+mode, specialization, biggest weakness).
+
+Distinct from GithubPortfolioReview (github/github_reviewer.py), which
+takes a hiring-manager angle (role fit, recruiter impression, resume
+integration). The two intentionally coexist: this module reads raw
+GithubProjectAnalysis rows directly for factual accuracy; the reviewer
+reads the condensed knowledge object shaped for LLM interpretation.
+Merging them would couple hiring feedback to raw DB access and create
+one unwieldy prompt.
+"""
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -10,6 +25,8 @@ from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import PortfolioNarrativeReview
 from app.prompts.portfolio_narrative import PORTFOLIO_NARRATIVE_SYSTEM_PROMPT
 from app.schemas.project_intelligence import PortfolioNarrativeLLMOutput, PortfolioNarrativeReport
+
+logger = logging.getLogger(__name__)
 
 MIN_VERIFIED_PROJECTS_FOR_NARRATIVE = 2
 
@@ -98,7 +115,7 @@ async def generate_portfolio_narrative(db: AsyncSession, user_id) -> PortfolioNa
 
     degraded = False
     try:
-        print("[TRACING] Requesting portfolio-wide narrative from LLM...", flush=True)
+        logger.info("Requesting portfolio-wide narrative from LLM...")
         response = await chat_completion(
             model=MODEL,
             messages=[
@@ -109,10 +126,10 @@ async def generate_portfolio_narrative(db: AsyncSession, user_id) -> PortfolioNa
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw portfolio narrative JSON:\n{content}", flush=True)
+        logger.debug("Raw portfolio narrative JSON: %s", content)
         llm_output = PortfolioNarrativeLLMOutput.model_validate(json.loads(content))
     except Exception as e:
-        print(f"[TRACING] Portfolio narrative degraded, using fallback: {e}", flush=True)
+        logger.warning("Portfolio narrative degraded, using fallback: %s", e)
         tested_pct = round((facts["tested_projects"] / facts["total_verified_projects"]) * 100)
         llm_output = PortfolioNarrativeLLMOutput(
             eligible=True,

@@ -61,6 +61,8 @@ def compute_technology_depth(repos_using_tech: list[dict]) -> dict:
     # Architecture depth (0-30): the STRONGEST architecture read among
     # repos using this tech — one well-architected repo is meaningful
     # evidence of depth even if other repos using the same tech are simpler.
+    # Intentional: max, not average — revisit with repo-count weighting if
+    # this proves too lenient in practice.
     depth_points = [
         DEPTH_LABEL_POINTS.get(r.get("architecture_depth_label"), DEFAULT_DEPTH_LABEL_POINTS)
         for r in repos_using_tech
