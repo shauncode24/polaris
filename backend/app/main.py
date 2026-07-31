@@ -12,6 +12,7 @@ from app.api.profile import router as profile_router
 from app.api.company_notes import router as company_notes_router
 from app.api.projects import router as projects_router
 from app.api.github import router as github_router
+from app.api.identity import router as identity_router
 from app.core.settings import settings
 
 app = FastAPI(title="Polaris API")
@@ -34,6 +35,7 @@ app.include_router(profile_router)
 app.include_router(company_notes_router)
 app.include_router(projects_router)
 app.include_router(github_router)
+app.include_router(identity_router)
 
 
 @app.get("/health")

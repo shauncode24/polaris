@@ -23,7 +23,8 @@ function useNavGroups() {
     {
       label: 'Overview',
       items: [
-        { key: 'dashboard', label: 'Dashboard', icon: IconHome, to: '/home' }
+        { key: 'dashboard', label: 'Dashboard', icon: IconHome, to: '/home' },
+        { key: 'identity', label: 'Engineering Identity', icon: IconSparkle, to: '/identity' },
       ],
     },
     {

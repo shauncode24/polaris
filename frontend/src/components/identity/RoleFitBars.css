@@ -1,0 +1,10 @@
+.rolefit-bars { display: flex; flex-direction: column; gap: 12px; }
+.rolefit-bars__row { display: flex; flex-direction: column; gap: 5px; }
+.rolefit-bars__row-top { display: flex; align-items: center; justify-content: space-between; }
+.rolefit-bars__label { font-size: 13px; font-weight: 700; color: var(--ink); }
+.rolefit-bars__pct { font-size: 13px; font-weight: 700; color: var(--ink); }
+.rolefit-bars__track { height: 6px; border-radius: var(--radius-pill); background: var(--surface-soft); overflow: hidden; }
+.rolefit-bars__fill { height: 100%; border-radius: var(--radius-pill); }
+.rolefit-bars__fill--strong { background: var(--success); }
+.rolefit-bars__fill--partial { background: var(--warning); }
+.rolefit-bars__fill--weak { background: var(--danger); }

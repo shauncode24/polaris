@@ -1,5 +1,6 @@
 # backend/app/services/resume/analysis/role_fit.py
 import json
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import chat_completion, MODEL
 from app.services.jobs.skill_categories import CATEGORY_MAP
 
@@ -66,3 +67,33 @@ Output ONLY a valid JSON object matching this schema, no markdown, no prose:
     except Exception as e:
         print("AI role fit computation failed, falling back to deterministic:", e, flush=True)
         return []
+
+
+async def get_confident_canonical_skills(db: AsyncSession) -> list[dict]:
+    """Retrieves all skill confidence scores from the database and maps them
+    to structured dictionaries with confidence levels (high, medium, low).
+    """
+    from app.services.evidence import get_all_skill_confidences
+    confidences = await get_all_skill_confidences(db)
+    
+    confident_skills = []
+    for canonical, score in confidences.items():
+        if score >= 0.5:
+            conf_label = "high"
+        elif score >= 0.15:
+            conf_label = "medium"
+        else:
+            conf_label = "low"
+            
+        confident_skills.append({
+            "canonical": canonical,
+            "name": canonical,
+            "confidence": conf_label,
+            "score": score
+        })
+    return confident_skills
+
+
+def compute_combined_role_fit(confident_skills: list[dict]) -> list[dict]:
+    """Wrapper around compute_role_fit that takes mapped confident skills."""
+    return compute_role_fit(confident_skills)

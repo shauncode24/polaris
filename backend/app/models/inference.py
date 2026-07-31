@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -262,6 +262,43 @@ class PortfolioNarrativeReview(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     report_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+class EngineeringIdentity(Base):
+    """The single reconciled cross-module snapshot (design review §item 10)
+    — one row per generation, append-only like CareerPlan, built from
+    deterministic facts pulled from Resume + GitHub + LeetCode + Jobs +
+    Goals (see services/identity/identity_builder.py), with exactly ONE
+    LLM narrative pass over them (identity_synthesizer.py). Append-only
+    rather than upserted so weekly_brief.py has real snapshot history to
+    diff against, the same way profile_snapshots' append-only design is
+    what makes Resume Evolution possible.
+    """
+    __tablename__ = "engineering_identities"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    facts_json: Mapped[dict] = mapped_column(JSONB)
+    narrative_json: Mapped[dict] = mapped_column(JSONB)
+    analysis_degraded: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class WeeklyBrief(Base):
+    """One row per generated weekly brief (design review §item 11) — a
+    deterministic diff between the two most recent EngineeringIdentity
+    rows, narrated once by an LLM (weekly_brief.py). Append-only for the
+    same reason as EngineeringIdentity.
+    """
+    __tablename__ = "weekly_briefs"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    brief_json: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
