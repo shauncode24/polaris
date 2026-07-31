@@ -68,12 +68,18 @@ def match_project_to_repo(project_name: str, project_repo_url: str | None, repo_
 
 def build_repo_lookup(analysis_by_repo_name: dict, projects: list) -> dict:
     """project.id -> repo_name, for every project that matches a synced
-    repo under any of the three tiers above. Computed once per overview
-    build (repo_names list built once) instead of once per project.
+    repo under any of the three tiers above or is explicitly linked.
+    Computed once per overview build (repo_names list built once) instead
+    of once per project.
     """
     repo_names = list(analysis_by_repo_name.keys())
     lookup: dict = {}
     for p in projects:
+        # Prioritize explicit confirmed link
+        if getattr(p, "github_repo_name", None) and p.github_repo_name in repo_names:
+            lookup[p.id] = p.github_repo_name
+            continue
+
         matched = match_project_to_repo(p.name, p.repo_url, repo_names)
         if matched:
             lookup[p.id] = matched

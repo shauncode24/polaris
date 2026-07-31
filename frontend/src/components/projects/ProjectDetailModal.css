@@ -134,3 +134,78 @@
 
 .pdm__loading, .pdm__error { font-size: 13px; color: var(--text-soft); }
 .pdm__error { color: var(--danger); }
+
+.pdm__link-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--warning-soft);
+  border: 1px dashed #e2b85a;
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+
+.pdm__link-container .pdm__notice {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.pdm__link-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdm__link-selector label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pdm__link-row {
+  display: flex;
+  gap: 8px;
+}
+
+.pdm__link-row select {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--ink);
+  outline: none;
+}
+
+.pdm__link-row select:focus {
+  border-color: var(--accent);
+}
+
+.pdm__link-button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.pdm__link-button:hover {
+  background: var(--accent-strong);
+}
+
+.pdm__link-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pdm__link-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin-top: 4px;
+}

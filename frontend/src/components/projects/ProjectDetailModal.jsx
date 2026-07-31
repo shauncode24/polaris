@@ -4,6 +4,8 @@ import {
   getProjectClaimAudit,
   getProjectIntelligence,
   getProjectInterviewQuestions,
+  getLinkOptions,
+  confirmProjectLink,
 } from '../../api/projects'
 import './ProjectDetailModal.css'
 
@@ -218,8 +220,17 @@ function InterviewQuestionsSection({ project, token }) {
   )
 }
 
-function ProjectDetailModal({ project, onClose }) {
+function ProjectDetailModal({ project, onClose, onLinkConfirmed }) {
   const { token } = useAuth()
+  const [currentProject, setCurrentProject] = useState(project)
+  const [availableRepos, setAvailableRepos] = useState([])
+  const [selectedRepo, setSelectedRepo] = useState('')
+  const [linking, setLinking] = useState(false)
+  const [linkError, setLinkError] = useState('')
+
+  useEffect(() => {
+    setCurrentProject(project)
+  }, [project])
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -229,30 +240,90 @@ function ProjectDetailModal({ project, onClose }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  if (!project) return null
+  useEffect(() => {
+    if (currentProject && !currentProject.has_repo) {
+      getLinkOptions(token)
+        .then((data) => {
+          setAvailableRepos(data.repositories || [])
+        })
+        .catch((err) => {
+          console.error('Failed to load repo options:', err)
+        })
+    }
+  }, [currentProject, token])
+
+  async function handleLinkProject() {
+    if (!selectedRepo) return
+    setLinking(true)
+    setLinkError('')
+    try {
+      await confirmProjectLink(token, currentProject.id, selectedRepo)
+      setCurrentProject((prev) => ({
+        ...prev,
+        has_repo: true,
+        matched_repo_name: selectedRepo,
+      }))
+      onLinkConfirmed?.()
+    } catch (err) {
+      setLinkError(err.message || 'Failed to connect repository.')
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  if (!currentProject) return null
 
   return (
     <div className="pdm__overlay" onClick={onClose}>
       <div className="pdm__panel" onClick={(e) => e.stopPropagation()}>
         <div className="pdm__header">
           <div>
-            <h2>{project.name}</h2>
-            <p className="pdm__tagline">{project.tagline}</p>
+            <h2>{currentProject.name}</h2>
+            <p className="pdm__tagline">{currentProject.tagline}</p>
           </div>
           <button type="button" className="pdm__close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
-        {!project.has_repo && (
-          <p className="pdm__notice">
-            No matched GitHub repository — claim audit and verified facts aren't available until this
-            project is linked to a synced repo.
-          </p>
+        {!currentProject.has_repo && (
+          <div className="pdm__link-container">
+            <p className="pdm__notice">
+              No matched GitHub repository — claim audit and verified facts aren't available until this
+              project is linked to a synced repo.
+            </p>
+            <div className="pdm__link-selector">
+              <label htmlFor="repo-select">Connect to a GitHub repository:</label>
+              <div className="pdm__link-row">
+                <select
+                  id="repo-select"
+                  value={selectedRepo}
+                  onChange={(e) => setSelectedRepo(e.target.value)}
+                  disabled={linking}
+                >
+                  <option value="">-- Select a repository --</option>
+                  {availableRepos.map((repo) => (
+                    <option key={repo} value={repo}>
+                      {repo}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleLinkProject}
+                  disabled={linking || !selectedRepo}
+                  className="pdm__link-button"
+                >
+                  {linking ? 'Linking...' : 'Connect'}
+                </button>
+              </div>
+              {linkError && <p className="pdm__link-error">{linkError}</p>}
+            </div>
+          </div>
         )}
 
         <div className="pdm__body">
-          {project.has_repo && <ClaimAuditSection project={project} token={token} />}
-          <IntelligenceSection project={project} token={token} />
-          <InterviewQuestionsSection project={project} token={token} />
+          {currentProject.has_repo && <ClaimAuditSection project={currentProject} token={token} />}
+          <IntelligenceSection project={currentProject} token={token} />
+          <InterviewQuestionsSection project={currentProject} token={token} />
         </div>
       </div>
     </div>

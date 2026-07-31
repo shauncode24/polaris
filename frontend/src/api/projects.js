@@ -55,3 +55,33 @@ export function getProjectInterviewQuestions(token, projectId, regenerate = fals
   if (regenerate) url.searchParams.append('regenerate', 'true')
   return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
+
+export function getLinkSuggestions(token) {
+  return fetch(`${API_BASE_URL}/projects/link-suggestions`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
+export function confirmProjectLink(token, projectId, repoName) {
+  return fetch(`${API_BASE_URL}/projects/${projectId}/link`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(token),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ repo_name: repoName }),
+  }).then(handle)
+}
+
+export function unlinkProject(token, projectId) {
+  return fetch(`${API_BASE_URL}/projects/${projectId}/unlink`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
+export function getLinkOptions(token) {
+  return fetch(`${API_BASE_URL}/projects/link-options`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}

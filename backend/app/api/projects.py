@@ -7,7 +7,8 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import GithubSnapshot, Project, User
 from app.models.structure import ProjectCapability
-from app.schemas.projects import ProjectsInsightsResponse, ProjectsOverviewResponse
+from app.models.github_analysis import GithubProjectAnalysis
+from app.schemas.projects import ProjectsInsightsResponse, ProjectsOverviewResponse, LinkProjectRequest
 from app.schemas.project_intelligence import (
     ClaimAuditReport,
     InterviewQuestionsReport,
@@ -16,7 +17,7 @@ from app.schemas.project_intelligence import (
     ProjectIntelligenceReport,
 )
 from app.services.projects.claim_audit import audit_project_claims
-from app.services.projects.claim_audit_llm import generate_claim_audit_narrative
+from app.services.projects.claim_audit_llm import generate_claim_audit_narrative, get_cached_claim_audit_report
 from app.services.projects.comparison import build_goal_aware_ranking, build_projects_comparison
 from app.services.projects.intelligence import build_project_context, generate_project_intelligence
 from app.services.projects.interview_questions import generate_interview_questions
@@ -24,6 +25,7 @@ from app.services.projects.milestones import build_recent_milestones
 from app.services.projects.overview import build_projects_overview
 from app.services.projects.portfolio_narrative import generate_portfolio_narrative
 from app.services.projects.recommendations import build_project_recommendations
+from app.services.projects.linking import suggest_repo_links, link_project, unlink_project
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -103,6 +105,7 @@ async def get_portfolio_narrative(
 @router.get("/{project_id}/claim-audit", response_model=ClaimAuditReport)
 async def get_project_claim_audit(
     project_id: UUID,
+    regenerate: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -111,6 +114,11 @@ async def get_project_claim_audit(
     the single highest-value missing feature flagged in the Projects
     module review.
     """
+    if not regenerate:
+        cached = await get_cached_claim_audit_report(db, project_id)
+        if cached is not None:
+            return cached
+
     context = await build_project_context(db, current_user.id, project_id)
     if context is None:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -133,7 +141,7 @@ async def get_project_claim_audit(
         quality_score=verified.get("quality_score"),
         activity_score=verified.get("activity_score"),
     )
-    return await generate_claim_audit_narrative(facts)
+    return await generate_claim_audit_narrative(db, current_user.id, project_id, facts)
 
 
 @router.get("/{project_id}/intelligence", response_model=ProjectIntelligenceReport)
@@ -166,3 +174,50 @@ async def get_project_interview_questions(
     if context is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return await generate_interview_questions(context)
+
+
+@router.get("/link-suggestions")
+async def get_link_suggestions_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await suggest_repo_links(db, current_user.id)
+
+
+@router.get("/link-options")
+async def get_link_options(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(GithubProjectAnalysis.repo_name)
+        .where(GithubProjectAnalysis.user_id == current_user.id)
+        .order_by(GithubProjectAnalysis.repo_name.asc())
+    )
+    repos = [r[0] for r in result.all()]
+    return {"repositories": repos}
+
+
+@router.post("/{project_id}/link")
+async def confirm_project_link(
+    project_id: UUID,
+    payload: LinkProjectRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await link_project(db, current_user.id, project_id, payload.repo_name)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "success", "github_repo_name": project.github_repo_name}
+
+
+@router.post("/{project_id}/unlink")
+async def remove_project_link(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await unlink_project(db, current_user.id, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "success"}

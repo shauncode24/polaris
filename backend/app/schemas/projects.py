@@ -162,3 +162,7 @@ class ProjectsInsightsResponse(BaseModel):
     recommendations: list[RecommendationItem] = []
     milestones: list[MilestoneItem] = []
     source_coverage: dict = {}
+
+
+class LinkProjectRequest(BaseModel):
+    repo_name: str

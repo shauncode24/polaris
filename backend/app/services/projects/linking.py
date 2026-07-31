@@ -23,11 +23,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.facts import Project, Resume
 from app.models.github_analysis import GithubProjectAnalysis
 
+_PREFIX_RE = re.compile(r"^project\s*\d+\s*[:\-\s]\s*", re.IGNORECASE)
+_PAREN_RE = re.compile(r"\s*\([^)]*\)")
+_BRACKET_RE = re.compile(r"\s*\[[^\]]*\]")
 _NORMALIZE_RE = re.compile(r"[^a-z0-9]")
 
 
 def normalize_name(name: str) -> str:
-    return _NORMALIZE_RE.sub("", name.lower())
+    # Remove "Project 1:", "Project 2 -", etc.
+    cleaned = _PREFIX_RE.sub("", name)
+    # Remove "(Ongoing)", "(Live Link)", etc.
+    cleaned = _PAREN_RE.sub("", cleaned)
+    cleaned = _BRACKET_RE.sub("", cleaned)
+    return _NORMALIZE_RE.sub("", cleaned.lower())
 
 
 async def suggest_repo_links(db: AsyncSession, user_id) -> list[dict]:

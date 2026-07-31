@@ -134,7 +134,11 @@ function ProjectsPage() {
       </div>
 
       {detailProject && (
-        <ProjectDetailModal project={detailProject} onClose={() => setDetailProject(null)} />
+        <ProjectDetailModal
+          project={detailProject}
+          onClose={() => setDetailProject(null)}
+          onLinkConfirmed={loadAll}
+        />
       )}
     </div>
   )

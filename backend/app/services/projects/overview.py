@@ -1,8 +1,10 @@
+# backend/app/services/projects/overview.py
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.projects.scoring import compute_rating, compute_status, compute_tier, derive_engineering_tags
 from app.services.projects.repo_linking import build_repo_lookup
 from app.services.projects.claim_audit import audit_project_claims
+from app.services.projects.linking import normalize_name  # <-- NEW IMPORT
 
 from app.models.facts import GithubSnapshot, Project
 from app.models.github_analysis import GithubProjectAnalysis
@@ -22,11 +24,6 @@ def _fallback_tagline(name: str, description: str | None) -> str:
 
 
 def _compute_abandonment_status(matched_analysis) -> str | None:
-    """Cross is_active/last_activity_days against quality_score: a
-    high-quality-but-stale project is a "resume it" nudge; a
-    low-quality-and-stale project is a "quietly retire it" nudge.
-    Previously both looked identical ("not recently active").
-    """
     if matched_analysis is None or matched_analysis.is_active:
         return None
     stale = (matched_analysis.last_activity_days or 0) > ABANDONMENT_STALE_DAYS
@@ -39,7 +36,24 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     projects_result = await db.execute(
         select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
     )
-    projects = list(projects_result.scalars().all())
+    all_projects = list(projects_result.scalars().all())
+
+    # --- FIX: dedupe by normalized project name, same pattern already
+    # used by profile.py's get_profile_data() and
+    # career_planner/context_builder.py's _get_projects(). Without this,
+    # every resume re-upload creates a brand-new Project row for the same
+    # conceptual project (ingestion.py never checks for an existing one —
+    # that's correct for an append-only facts table), and this page was
+    # rendering every single one of them as a separate card. Since the
+    # query above orders by created_at desc, keeping the FIRST occurrence
+    # of each normalized name keeps the most recently uploaded version.
+    seen_names: set[str] = set()
+    projects: list[Project] = []
+    for p in all_projects:
+        norm = normalize_name(p.name)
+        if norm not in seen_names:
+            seen_names.add(norm)
+            projects.append(p)
 
     if not projects:
         return ProjectsOverviewResponse(stats=ProjectsStats(), projects=[])
@@ -73,9 +87,6 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     )
     analysis_by_repo_name = {a.repo_name: a for a in analysis_rows.scalars().all()}
 
-    # Deterministic repo-url-first, slug-fallback linkage — fixes the
-    # silent-drop-on-name-mismatch bug the old lowercased-exact-match
-    # lookup had (see repo_linking.py).
     repo_lookup = build_repo_lookup(analysis_by_repo_name, projects)
 
     connected_repos_result = await db.execute(
@@ -107,9 +118,6 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
         )
         tier = compute_tier(rating, has_repo=has_repo, github_tier=matched_analysis.tier if matched_analysis else None)
 
-        # Claim-vs-implementation audit — the single highest-value gap
-        # flagged in the Projects module review. Only runs when a real
-        # GitHub match exists (nothing to audit against otherwise).
         claim_risk = None
         if matched_analysis is not None:
             audit = audit_project_claims(
