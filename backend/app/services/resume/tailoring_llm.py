@@ -162,7 +162,9 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
             r["claim_risk"] = risk
     ranked.sort(key=lambda r: r["relevance_score"], reverse=True)
 
-    skill_confidence = await get_all_skill_confidences(db)
+    # FIX (cross-user evidence leak): user_id is now required by
+    # get_all_skill_confidences.
+    skill_confidence = await get_all_skill_confidences(db, user_id)
     bullets = await build_bullets_with_strength(db, user_id, resume_id, skill_confidence)
     bullets_sorted = sorted(bullets, key=lambda b: b["strength"]["score"], reverse=True)
     bullets_for_prompt = [

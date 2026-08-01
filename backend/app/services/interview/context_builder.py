@@ -3,13 +3,6 @@ blueprint library and persona config, and hands all of it to the LLM
 untouched. No scoring, no filtering, no pre-selection of stories or
 blueprints: the model decides what's relevant and which blueprint fits,
 not this module.
-
-Evidence sources in the context object:
-  - resume/projects/experiences/education: structured from DB
-  - skills: confidence-weighted SkillEvidence pool (all sources)
-  - github_repos: top GithubProjectAnalysis rows (architecture, hygiene, etc.)
-  - leetcode_evidence: latest LeetCode snapshot summary (solve depth, top topics)
-  - company_notes: any saved research notes for the target company
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,41 +87,31 @@ async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
 
 
 async def _get_all_skills_with_evidence(db: AsyncSession, user_id) -> list[dict]:
-    # Get all project IDs and experience IDs for this user to filter evidence
-    proj_result = await db.execute(select(Project.id).where(Project.user_id == user_id))
-    user_proj_ids = {p[0] for p in proj_result.all()}
-
-    exp_result = await db.execute(select(Experience.id).where(Experience.user_id == user_id))
-    user_exp_ids = {e[0] for e in exp_result.all()}
-
+    """FIX (cross-user evidence leak): this function used to manually
+    cross-reference project/experience IDs to fake per-user scoping for
+    two source types, while leaving GitHub/LeetCode/certificate evidence
+    completely unfiltered (an `else: filtered_rows.append(e)` branch that
+    accepted EVERY other user's evidence for that source type). Now that
+    SkillEvidence carries user_id directly, a single WHERE clause is both
+    simpler and actually correct for every source type at once.
+    """
     skill_result = await db.execute(select(Skill))
     skills = skill_result.scalars().all()
 
     out = []
     for skill in skills:
-        evidence_result = await db.execute(select(SkillEvidence).where(SkillEvidence.skill_id == skill.id))
+        evidence_result = await db.execute(
+            select(SkillEvidence).where(
+                SkillEvidence.skill_id == skill.id,
+                SkillEvidence.user_id == user_id,
+            )
+        )
         evidence_rows = list(evidence_result.scalars().all())
         if not evidence_rows:
             continue
 
-        # Keep only evidence rows that belong to this user's projects/experiences
-        # or are global/other sources (e.g. leetcode_tag)
-        filtered_rows = []
-        for e in evidence_rows:
-            if e.source_type == "project":
-                if e.source_id in user_proj_ids:
-                    filtered_rows.append(e)
-            elif e.source_type == "experience":
-                if e.source_id in user_exp_ids:
-                    filtered_rows.append(e)
-            else:
-                filtered_rows.append(e)
-
-        if not filtered_rows:
-            continue
-
-        confidence = compute_decayed_skill_confidence(filtered_rows)
-        details = await build_evidence_details(db, filtered_rows)
+        confidence = compute_decayed_skill_confidence(evidence_rows)
+        details = await build_evidence_details(db, evidence_rows)
         out.append({"skill": skill.canonical_name, "confidence": confidence, "evidence": details})
 
     return out
@@ -144,10 +127,6 @@ async def _get_company_notes(db: AsyncSession, user_id, target_company: str | No
 
 
 async def _get_leetcode_evidence(db: AsyncSession, user_id) -> dict | None:
-    """Loads a lightweight summary from the latest LeetCode ProfileSnapshot.
-    Returns None if no sync has happened (agent gracefully skips the field).
-    Capped to top 5 topics to stay well under 300 tokens of prompt payload.
-    """
     result = await db.execute(
         select(ProfileSnapshot)
         .where(ProfileSnapshot.user_id == user_id)
@@ -163,7 +142,6 @@ async def _get_leetcode_evidence(db: AsyncSession, user_id) -> dict | None:
     insights = snapshot.skills_json.get("insights", {})
     topic_mastery = insights.get("topic_mastery", [])
 
-    # Top topics: strong mastery labels first, then by solve count
     mastery_order = {
         "Extensive Practice": 0, "Consistent Practice": 1,
         "Some Practice": 2, "Introduced": 3, "Not Practiced": 4,
@@ -184,10 +162,6 @@ async def _get_leetcode_evidence(db: AsyncSession, user_id) -> dict | None:
 
 
 async def _get_project_claim_flags(db: AsyncSession, user_id) -> list[dict]:
-    """Real claim-vs-implementation risk flags from the Projects module's
-    Claim Audit, so the Interview Response Agent can phrase claims
-    conservatively instead of independently re-deriving this risk.
-    """
     proj_result = await db.execute(select(Project.id, Project.name).where(Project.user_id == user_id))
     projects_by_id = {pid: name for pid, name in proj_result.all()}
     if not projects_by_id:
@@ -242,20 +216,6 @@ async def build_interview_context(
     }
 
 async def _get_github_repo_evidence(db: AsyncSession, user_id, limit: int = 6) -> list[dict]:
-    """Real, verified GitHub repository evidence — commit hygiene,
-    collaboration mode, architecture depth — so the Interview Response
-    Agent can cite concrete, checkable details (e.g. real PR-review
-    collaboration, a "layered" architecture assessment) instead of only
-    ever drawing on resume-described projects. Previously this context
-    builder never queried GithubProjectAnalysis at all, so questions
-    about scalability, collaboration, or code quality had nothing real
-    from GitHub to cite even when strong evidence existed.
-
-    Non-contributed forks are excluded — same rule applied everywhere
-    else GitHub evidence is surfaced (github_knowledge.py, coverage.py).
-    Ranked by quality+activity and capped so the prompt payload stays
-    small, same approach as github_knowledge.py.
-    """
     result = await db.execute(
         select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user_id)
     )

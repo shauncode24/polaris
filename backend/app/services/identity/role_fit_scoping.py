@@ -1,14 +1,13 @@
 """Builds scope-filtered skill-evidence lists for get_role_fit(), so every
 caller passes the SAME shape (canonical decayed confidence + real
 sources) filtered to a different SkillEvidence source_type set, instead
-of each reimplementing its own skill-set construction (fix #2).
+of each reimplementing its own skill-set construction (Engineering
+Identity fix #2).
 
-KNOWN PRE-EXISTING LIMITATION (not introduced by this fix, not in scope
-to fix here): SkillEvidence has no user_id column — the same limitation
-already present in services/evidence.py's get_all_skill_confidences and
-career_planner/context_builder.py's _get_skills_by_confidence. This
-module mirrors that existing (imperfect but consistent) behavior rather
-than inventing new, inconsistent scoping logic.
+FIX (cross-user evidence leak): `user_id` is now a REQUIRED parameter.
+This was the exact function flagged as pooling every user's evidence
+together — every caller (identity_builder.py, resume/analysis/engine.py,
+api/resume.py, github_reviewer.py) has been updated to pass it.
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,15 +22,22 @@ GITHUB_SOURCE_TYPES = {"github_repo"}
 
 
 async def build_scoped_skill_evidence(
-    db: AsyncSession, source_types: set[str] | None = None
+    db: AsyncSession, user_id, source_types: set[str] | None = None
 ) -> list[dict]:
-    """source_types=None means "all sources" (no filtering)."""
+    """source_types=None means "all sources for this user" — NOT "all
+    users." user_id is always required.
+    """
     skill_result = await db.execute(select(Skill))
     skills = skill_result.scalars().all()
 
     out: list[dict] = []
     for skill in skills:
-        ev_result = await db.execute(select(SkillEvidence).where(SkillEvidence.skill_id == skill.id))
+        ev_result = await db.execute(
+            select(SkillEvidence).where(
+                SkillEvidence.skill_id == skill.id,
+                SkillEvidence.user_id == user_id,
+            )
+        )
         rows = list(ev_result.scalars().all())
         if source_types is not None:
             rows = [r for r in rows if r.source_type in source_types]

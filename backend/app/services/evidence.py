@@ -9,12 +9,9 @@ from app.services.resume.confidence import compute_decayed_skill_confidence
 
 
 async def build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvidence]) -> list[str]:
-    """Human-readable evidence trail for a list of SkillEvidence rows —
-    joins back to Project/Experience/GithubProjectAnalysis since
-    SkillEvidence itself only stores a weight + source_id. Shared by
-    Skill Gap Analyzer, Career Planner, and the Interview Response Agent
-    so every surface describes the same evidence the same way, instead
-    of duplicating this join logic.
+    """Human-readable evidence trail for a list of SkillEvidence rows.
+    Unchanged by the user-scoping fix — it operates on rows already
+    handed to it by a caller, and never queries SkillEvidence itself.
     """
     project_ids = [e.source_id for e in evidence_rows if e.source_type == "project" and e.source_id]
     experience_ids = [e.source_id for e in evidence_rows if e.source_type == "experience" and e.source_id]
@@ -53,21 +50,28 @@ async def build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvid
     return list(dict.fromkeys(details))
 
 
-async def get_all_skill_confidences(db: AsyncSession) -> dict[str, float]:
-    """canonical_name -> recency-decayed confidence, for every skill with
-    at least one evidence row — resume, GitHub, LeetCode, and certificate
-    evidence all summed and decay-weighted together (see
-    resume/confidence.py and resume/decay.py). This is the single
-    unified evidence pool: bullet-strength scoring, narrative coherence,
-    tailoring, and role-fit (role_fit.py) all read from here instead of
-    each recomputing their own partial view of "what does this person
-    actually know."
+async def get_all_skill_confidences(db: AsyncSession, user_id) -> dict[str, float]:
+    """canonical_name -> recency-decayed confidence, for ONE user.
+
+    FIX (cross-user evidence leak): `user_id` is now a REQUIRED parameter
+    with no default. Previously this queried SkillEvidence by skill_id
+    alone, meaning every skill's "confidence" was secretly an aggregate
+    across every user in the system — a candidate's Skill Gap report,
+    role-fit evidence, resume tailoring, and narrative coherence could
+    all be silently influenced by other users' evidence for the same
+    canonical skill. Every caller must now say explicitly whose evidence
+    it wants.
     """
     result = await db.execute(select(Skill))
     skills = result.scalars().all()
     out: dict[str, float] = {}
     for skill in skills:
-        ev = await db.execute(select(SkillEvidence).where(SkillEvidence.skill_id == skill.id))
+        ev = await db.execute(
+            select(SkillEvidence).where(
+                SkillEvidence.skill_id == skill.id,
+                SkillEvidence.user_id == user_id,
+            )
+        )
         rows = list(ev.scalars().all())
         if rows:
             out[skill.canonical_name] = compute_decayed_skill_confidence(rows)

@@ -1,7 +1,6 @@
 """Resume Evolution — diffs the two most recent "resume upload"
 ProfileSnapshot rows for a user. Purely deterministic — no new LLM call,
-no new storage. ingestion.py already writes a ProfileSnapshot on every
-upload (see its skills_json); this was just never read back as a diff.
+no new storage.
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,10 +24,8 @@ async def _get_recent_resume_snapshots(db: AsyncSession, user_id, limit: int = 2
 
 
 def _skills_map(snapshot: ProfileSnapshot) -> dict[str, float]:
-    """Reads the FROZEN, upload-time confidence — deliberately (per this
-    module's own original design) diffed against the LIVE decayed number
-    elsewhere in this file. Key renamed to confidence_at_upload (fix #10)
-    so this distinction is enforced by the schema, not by a comment."""
+    """Reads the FROZEN, upload-time confidence — deliberately diffed
+    against the LIVE decayed number elsewhere in this file."""
     if not isinstance(snapshot.skills_json, dict):
         return {}
     return {
@@ -49,7 +46,8 @@ async def build_evolution_report(db: AsyncSession, user_id) -> EvolutionReport:
         )
 
     current, previous = snapshots[0], snapshots[1]
-    current_skills = await get_all_skill_confidences(db)
+    # FIX (cross-user evidence leak): user_id is now required.
+    current_skills = await get_all_skill_confidences(db, user_id)
     previous_skills = _skills_map(previous)
 
     gained = sorted(set(current_skills) - set(previous_skills))

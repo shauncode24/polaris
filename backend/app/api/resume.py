@@ -242,7 +242,8 @@ async def get_resume_workspace(
     if latest_analysis and isinstance(latest_analysis, dict):
         role_fit = latest_analysis.get("role_fit")
     if not role_fit:
-        resume_scoped_evidence = await build_scoped_skill_evidence(db, RESUME_SOURCE_TYPES)
+        # FIX (cross-user evidence leak): user_id now required.
+        resume_scoped_evidence = await build_scoped_skill_evidence(db, uid, RESUME_SOURCE_TYPES)
         role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
         role_fit = [r.model_dump() for r in role_fit_results]
 

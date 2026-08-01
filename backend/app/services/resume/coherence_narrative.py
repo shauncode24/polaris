@@ -180,7 +180,9 @@ async def _get_claim_risk_project_labels(db: AsyncSession, projects: list) -> li
 async def generate_coherence_report(
     db: AsyncSession, user_id, resume_id, target_role: str | None
 ) -> CoherenceReport:
-    skill_confidence = await get_all_skill_confidences(db)
+    # FIX (cross-user evidence leak): user_id is now required by
+    # get_all_skill_confidences.
+    skill_confidence = await get_all_skill_confidences(db, user_id)
     bullets = await build_bullets_with_strength(db, user_id, resume_id, skill_confidence)
 
     facts_dict = compute_narrative_facts(skill_confidence, bullets, target_role)

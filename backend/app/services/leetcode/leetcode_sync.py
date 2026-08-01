@@ -19,21 +19,11 @@ logger = logging.getLogger(__name__)
 
 CONTEST_HISTORY_LIMIT = 12
 
-# Depth multiplier bounds for LeetCode-tag SkillEvidence weights. A topic
-# with more difficulty-weighted solves earns a proportionally higher weight
-# in the shared confidence pool — a user with 200 Graph solves should read
-# more confidently than one with 1. Formula: min(MAX, 1.0 + score / SCALE).
-# Results in weight range [WEIGHTS["leetcode_tag"] * 1.0 .. * MAX_DEPTH_MULTIPLIER].
-# Tune DEPTH_SCALE if thresholds shift with real snapshot history.
-_DEPTH_SCALE = 50.0    # weighted_score at which multiplier reaches 2.0
-_MAX_DEPTH_MULTIPLIER = 2.0  # cap — never inflate beyond 2x the base weight
+_DEPTH_SCALE = 50.0
+_MAX_DEPTH_MULTIPLIER = 2.0
 
 
 def _depth_multiplier_for_score(weighted_score: float) -> float:
-    """Converts a difficulty-weighted topic score into a SkillEvidence weight
-    multiplier. Score=0 → 1.0 (baseline, unchanged). Score=25 → 1.5.
-    Score>=50 → 2.0 (cap). Always explainable in one sentence.
-    """
     return min(_MAX_DEPTH_MULTIPLIER, 1.0 + weighted_score / _DEPTH_SCALE)
 
 
@@ -50,9 +40,22 @@ async def _get_previous_tag_counts(db: AsyncSession, user_id) -> dict[str, int]:
     return latest
 
 
-async def _get_existing_evidence_skill_ids(db: AsyncSession) -> set:
+async def _get_existing_evidence_skill_ids(db: AsyncSession, user_id) -> set:
+    """FIX (cross-user evidence leak — actual functional bug, not just a
+    leak): this previously checked skill_id membership GLOBALLY across
+    all users. Two real bugs resulted: (1) if User A already had
+    leetcode_tag evidence for a skill, User B's sync would treat that
+    skill as "already existing" and silently skip creating User B's OWN
+    evidence row for it; and (2) the companion UPDATE statement below
+    had no user filter either, so User B's sync could overwrite User A's
+    evidence weight outright. Both are fixed by scoping this query (and
+    the UPDATE) to user_id.
+    """
     result = await db.execute(
-        select(SkillEvidence.skill_id).where(SkillEvidence.source_type == "leetcode_tag")
+        select(SkillEvidence.skill_id).where(
+            SkillEvidence.source_type == "leetcode_tag",
+            SkillEvidence.user_id == user_id,
+        )
     )
     return {row[0] for row in result.all()}
 
@@ -109,14 +112,8 @@ async def _persist_leetcode_data(
     extra_stats: dict | None = None,
     tag_difficulty_tier: dict[str, str] | None = None,
 ) -> dict:
-    """`tag_difficulty_tier` is only ever populated for a real auto-sync
-    (see sync_leetcode below) — a manual submission has no way of knowing
-    each tag's difficulty tier, so it's left None and mastery for that
-    submission falls back to unweighted (fundamental-equivalent) scoring,
-    which is the honest thing to do with less information, not a bug.
-    """
     previous_tag_counts = await _get_previous_tag_counts(db, user.id)
-    existing_evidence_skill_ids = await _get_existing_evidence_skill_ids(db)
+    existing_evidence_skill_ids = await _get_existing_evidence_skill_ids(db, user.id)
     previous_stats = await _get_previous_leetcode_stats(db, user.id)
     contest_rating_history = await _get_contest_rating_history(db, user.id)
     recommended_topics, recommended_at = await _get_latest_recommended_topics(db, user.id)
@@ -133,11 +130,7 @@ async def _persist_leetcode_data(
             )
         )
 
-    # Build per-topic weighted scores now so we can derive depth multipliers
-    # for SkillEvidence weights before entering the tag loop below.
     weighted_totals_by_topic = weighted_topic_totals(tag_counts, tag_difficulty_tier)
-    # Map tag → weighted_score via the canonical-topic rollup so each
-    # tag inherits its topic's aggregate depth, not just its raw count.
     tag_weighted_score: dict[str, float] = {}
     for tag in tag_counts:
         topic = TAG_TO_TOPIC.get(tag)
@@ -158,14 +151,12 @@ async def _persist_leetcode_data(
         if canonical is not None:
             skill = await get_or_create_skill(db, canonical, tag)
             prev_count = previous_tag_counts.get(tag)
-            # depth-weighted evidence weight: grows with practice depth so
-            # downstream consumers (Skill Gap, Career Planner, Interview
-            # Agent) distinguish heavy practice from a single solve.
             weighted_score = tag_weighted_score.get(tag, 0.0)
             depth_weight = WEIGHTS["leetcode_tag"] * _depth_multiplier_for_score(weighted_score)
 
             if skill.id not in existing_evidence_skill_ids:
                 db.add(SkillEvidence(
+                    user_id=user.id,
                     skill_id=skill.id, source_type="leetcode_tag",
                     source_id=None, weight=depth_weight,
                 ))
@@ -173,12 +164,11 @@ async def _persist_leetcode_data(
                 new_skills.append(canonical)
                 skill_updated = True
             elif prev_count is not None and count > prev_count:
-                # Self-correct any previously flat weight to the current
-                # depth-weighted value — the next sync always converges.
                 await db.execute(
                     update(SkillEvidence)
                     .where(SkillEvidence.skill_id == skill.id)
                     .where(SkillEvidence.source_type == "leetcode_tag")
+                    .where(SkillEvidence.user_id == user.id)
                     .values(weight=depth_weight)
                 )
                 reinforced_skills.append(canonical)

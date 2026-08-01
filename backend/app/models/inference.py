@@ -13,6 +13,12 @@ class SkillEvidence(Base):
     __tablename__ = "skill_evidence"
 
     id: Mapped[uuid.UUID] = uuid_pk()
+    # FIX (cross-user evidence leak): every row now belongs to exactly
+    # one user. Previously SkillEvidence had no owner column at all, so
+    # any reader that queried by skill_id alone (get_all_skill_confidences,
+    # gap_analysis.py, role_fit_scoping.py, interview/context_builder.py)
+    # was silently pooling every user's evidence for that skill together.
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     skill_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("skills.id"), index=True)
     source_type: Mapped[str] = mapped_column(String(50))
     source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -41,11 +47,6 @@ class ReadinessScore(Base):
 
 
 class ResumeReview(Base):
-    """Derived, recomputable review output (§5.5 'inference') — never a
-    source of truth, safe to regenerate any time bullet_analysis.py or
-    the LLM prompt changes. Tied to the specific Resume row it reviewed
-    so you can see review quality evolve as the resume itself evolves.
-    """
     __tablename__ = "resume_reviews"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -57,12 +58,6 @@ class ResumeReview(Base):
     )
 
 class CareerPlan(Base):
-    """Derived, recomputable roadmap output (§5.5 'inference') — one row
-    per plan generation, tied to the Goal it was generated for. The Goal
-    and the skill evidence behind it are the source of truth; this table
-    is a cache of one particular LLM reasoning pass over that truth, safe
-    to regenerate any time the prompt or context-building logic changes.
-    """
     __tablename__ = "career_plans"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -74,12 +69,6 @@ class CareerPlan(Base):
     )
 
 class InterviewResponse(Base):
-    """Derived, recomputable output (§5.5 'inference') — one row per
-    question asked, so the design doc's own test case ('ask it 4-5
-    questions in a row') has a real history to inspect afterward. Never
-    a source of truth: safe to regenerate any time the prompt or
-    story-ranking logic changes.
-    """
     __tablename__ = "interview_responses"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -93,13 +82,6 @@ class InterviewResponse(Base):
 
 
 class ResumeAnalysis(Base):
-    """Deterministic analysis engine output (§5.5 'inference').
-
-    One row per engine run, tied to the specific Resume it analyzed.
-    Pure derived data — safe to regenerate any time an analysis module
-    changes. Separate from ResumeReview (LLM narrative + rewrites) so
-    the two pipelines can evolve independently.
-    """
     __tablename__ = "resume_analyses"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -112,13 +94,6 @@ class ResumeAnalysis(Base):
 
 
 class GithubPortfolioReview(Base):
-    """LLM career-interpretation layer over the deterministic GitHub
-    analysis (github_analyzer.py / github_insights.py / GithubProjectAnalysis).
-    One row per review run — this table never computes a single fact
-    itself (no scores, no technology detection); it only stores the
-    model's read of facts that are already verified elsewhere. Safe to
-    regenerate any time the prompt or github_knowledge.py's shape changes.
-    """
     __tablename__ = "github_portfolio_reviews"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -130,12 +105,6 @@ class GithubPortfolioReview(Base):
 
 
 class LeetcodePortfolioReview(Base):
-    """LLM career-interpretation layer over the deterministic LeetCode
-    analysis (leetcode_sync.py / leetcode_insights.py).
-    One row per review run — stores the model's read of LeetCode facts,
-    including comparisons to GitHub-derived practical engineering capabilities.
-    Safe to regenerate any time the prompt or leetcode_knowledge.py's shape changes.
-    """
     __tablename__ = "leetcode_portfolio_reviews"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -146,13 +115,6 @@ class LeetcodePortfolioReview(Base):
     )
 
 class ResumeCoherenceReview(Base):
-    """Derived, recomputable narrative-coherence output (§5.5 'inference').
-    One row per (resume, target_role) — UPSERTED, not appended, since a
-    coherence read for a given resume + role is always safe to
-    regenerate and there's no value in accumulating stale duplicates.
-    This is what lets the Resume page load an existing report instantly
-    instead of re-running the LLM call every visit.
-    """
     __tablename__ = "resume_coherence_reviews"
     __table_args__ = (UniqueConstraint("resume_id", "target_role", name="uq_coherence_resume_role"),)
 
@@ -167,11 +129,6 @@ class ResumeCoherenceReview(Base):
 
 
 class ResumeTailoringReview(Base):
-    """Derived, recomputable tailoring output (§5.5 'inference'). One row
-    per (resume, job_description) pair — UPSERTED so re-running tailoring
-    against the same JD replaces the stale recommendation instead of
-    accumulating duplicates.
-    """
     __tablename__ = "resume_tailoring_reviews"
     __table_args__ = (
         UniqueConstraint("resume_id", "job_description_id", name="uq_tailoring_resume_jd"),
@@ -190,14 +147,6 @@ class ResumeTailoringReview(Base):
 
 
 class ProjectClaimAuditReview(Base):
-    """Derived, recomputable claim-vs-implementation audit (§5.5
-    'inference'). UPSERTED, one row per project — a claim audit for a
-    given project is always safe to regenerate (the resume text and
-    GitHub-verified facts it diffs are the real source of truth), and
-    there's no value in keeping stale duplicates around. Lets the
-    Projects page load an existing audit instantly instead of re-running
-    the LLM call every visit.
-    """
     __tablename__ = "project_claim_audit_reviews"
     __table_args__ = (UniqueConstraint("project_id", name="uq_claim_audit_project"),)
 
@@ -211,13 +160,6 @@ class ProjectClaimAuditReview(Base):
 
 
 class ProjectIntelligenceReview(Base):
-    """Derived, recomputable Project Intelligence output (§5.5
-    'inference'). UPSERTED by (project_id, framing, comparison_target) —
-    the same framing asked twice should return the same cached read
-    instead of spending another LLM call, but a different framing (or a
-    different comparison target) is a genuinely different question and
-    gets its own cached row.
-    """
     __tablename__ = "project_intelligence_reviews"
     __table_args__ = (
         UniqueConstraint("project_id", "framing", "comparison_target", name="uq_intelligence_project_framing"),
@@ -235,9 +177,6 @@ class ProjectIntelligenceReview(Base):
 
 
 class ProjectInterviewQuestionsReview(Base):
-    """Derived, recomputable per-project interview-question set (§5.5
-    'inference'). UPSERTED, one row per project.
-    """
     __tablename__ = "project_interview_questions_reviews"
     __table_args__ = (UniqueConstraint("project_id", name="uq_interview_questions_project"),)
 
@@ -251,12 +190,6 @@ class ProjectInterviewQuestionsReview(Base):
 
 
 class PortfolioNarrativeReview(Base):
-    """LLM portfolio-wide engineering-maturity narrative (§5.5
-    'inference'). APPEND-ONLY, same pattern as GithubPortfolioReview —
-    one row per generation, read back as "latest" by default so a
-    returning user sees history accumulate rather than a single
-    overwritten row.
-    """
     __tablename__ = "portfolio_narrative_reviews"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -267,14 +200,13 @@ class PortfolioNarrativeReview(Base):
     )
 
 class EngineeringIdentity(Base):
-    """The single reconciled cross-module snapshot (design review §item 10)
-    — one row per generation, append-only like CareerPlan, built from
-    deterministic facts pulled from Resume + GitHub + LeetCode + Jobs +
-    Goals (see services/identity/identity_builder.py), with exactly ONE
-    LLM narrative pass over them (identity_synthesizer.py). Append-only
-    rather than upserted so weekly_brief.py has real snapshot history to
-    diff against, the same way profile_snapshots' append-only design is
-    what makes Resume Evolution possible.
+    """The single reconciled cross-module snapshot — one row per
+    generation, append-only like CareerPlan. `source_event` (freshness
+    fix, mirrors LeetcodeEngineeringSnapshot's own field) records WHY
+    this snapshot exists — "resume upload", "github sync", "leetcode
+    sync", "job description analysis", or "manual_refresh" for an
+    explicit POST /identity/refresh call. Append-only rather than
+    upserted so weekly_brief.py has real snapshot history to diff against.
     """
     __tablename__ = "engineering_identities"
 
@@ -283,17 +215,13 @@ class EngineeringIdentity(Base):
     facts_json: Mapped[dict] = mapped_column(JSONB)
     narrative_json: Mapped[dict] = mapped_column(JSONB)
     analysis_degraded: Mapped[bool] = mapped_column(Boolean, default=False)
+    source_event: Mapped[str] = mapped_column(String(50), default="manual_refresh")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
 
 class WeeklyBrief(Base):
-    """One row per generated weekly brief (design review §item 11) — a
-    deterministic diff between the two most recent EngineeringIdentity
-    rows, narrated once by an LLM (weekly_brief.py). Append-only for the
-    same reason as EngineeringIdentity.
-    """
     __tablename__ = "weekly_briefs"
 
     id: Mapped[uuid.UUID] = uuid_pk()

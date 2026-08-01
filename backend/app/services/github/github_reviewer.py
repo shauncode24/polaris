@@ -94,10 +94,9 @@ async def generate_github_portfolio_review(db: AsyncSession, user_id) -> GithubP
     ]
 
     # Role-fit: ALWAYS sourced from the single shared, entirely-LLM-
-    # generated function, scoped to GitHub-only evidence — never from
-    # whatever (if anything) the main review call above returned, and
-    # never clamped against a deterministic anchor.
-    github_scoped_evidence = await build_scoped_skill_evidence(db, GITHUB_SOURCE_TYPES)
+    # generated function, scoped to GitHub-only evidence AND this one
+    # user (user_id now required by build_scoped_skill_evidence).
+    github_scoped_evidence = await build_scoped_skill_evidence(db, user_id, GITHUB_SOURCE_TYPES)
     llm_output.role_fit = await get_role_fit(github_scoped_evidence, scope="github_only")
 
     real_tech_names = set(knowledge.get("all_technologies", []))

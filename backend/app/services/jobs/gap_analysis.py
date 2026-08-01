@@ -15,11 +15,6 @@ from app.services.resume.review import classify_match
 from app.services.evidence import build_evidence_details
 
 async def _historical_skill_frequency(db: AsyncSession, user_id) -> Counter:
-    """How often each canonical skill has shown up as a requirement across
-    every JD this user has ever pasted. Purely a priority-ordering signal
-    for the fallback path below — a skill that keeps reappearing across
-    applications is worth tackling before one that showed up once.
-    """
     result = await db.execute(
         select(JobDescription.extracted_requirements).where(JobDescription.user_id == user_id)
     )
@@ -35,12 +30,6 @@ async def _historical_skill_frequency(db: AsyncSession, user_id) -> Counter:
 def _fallback_prioritization(
     missing_skill_names: list[str], frequency: Counter, canonical_order: list[str]
 ) -> tuple[list[str], dict[str, int]]:
-    """Deterministic fallback used when the contextual-reasoning LLM call
-    fails — frequency across past JDs, then original JD order, plus a flat
-    per-skill estimate. Same graceful-degradation philosophy as the LeetCode
-    manual-form fallback: never let an unofficial/best-effort call crash the
-    whole report.
-    """
     ordered = sorted(
         missing_skill_names,
         key=lambda s: (get_curriculum_rank(s), -frequency.get(s, 0), canonical_order.index(s)),
@@ -52,7 +41,7 @@ def _fallback_prioritization(
 async def analyze_skill_gap(
     db: AsyncSession,
     user_id,
-    canonical_skills: dict[str, str],  # canonical_name -> "required" | "implicit" | "nice_to_have"
+    canonical_skills: dict[str, str],
     architecture_topics: list[str],
     role: str | None,
     company: str | None,
@@ -84,7 +73,18 @@ async def analyze_skill_gap(
             )
             continue
 
-        evidence_result = await db.execute(select(SkillEvidence).where(SkillEvidence.skill_id == skill.id))
+        # FIX (cross-user evidence leak): this used to query evidence by
+        # skill_id ALONE, meaning a Skill Gap report's confidence numbers
+        # for a canonical skill like "python" were pooled across every
+        # user who has ever evidenced that skill — the highest-severity
+        # instance of this bug, since it directly affects the have/
+        # partial/missing classification a real user relies on.
+        evidence_result = await db.execute(
+            select(SkillEvidence).where(
+                SkillEvidence.skill_id == skill.id,
+                SkillEvidence.user_id == user_id,
+            )
+        )
         evidence_rows = list(evidence_result.scalars().all())
 
         if not evidence_rows:
@@ -146,7 +146,6 @@ async def analyze_skill_gap(
 
     if missing_names:
         try:
-            # Sort missing list by curriculum rank to group them by dependency
             curriculum_ordered_missing = sorted(missing_names, key=get_curriculum_rank)
             learning_plan_curriculum = [
                 {
@@ -171,15 +170,11 @@ async def analyze_skill_gap(
             }
             result = await prioritize_missing_skills(context)
 
-            # Validate: never trust the LLM's list blindly. Drop anything
-            # hallucinated, and make sure every real missing skill is present
-            # even if the LLM dropped one.
             valid_priority = [s for s in result.priority_order if s in missing_names]
             for s in missing_names:
                 if s not in valid_priority:
                     valid_priority.append(s)
 
-            # Force re-sort of priority by curriculum rank
             valid_priority = sorted(valid_priority, key=get_curriculum_rank)
 
             weeks_by_skill = {
@@ -194,7 +189,6 @@ async def analyze_skill_gap(
     for m in missing:
         m.estimated_weeks = weeks_by_skill.get(m.skill, 0)
 
-    # Force re-sort of missing report by curriculum rank
     missing.sort(key=lambda m: get_curriculum_rank(m.skill))
     total_weeks = sum(weeks_by_skill.values()) if weeks_by_skill else estimate_weeks(len(missing))
 

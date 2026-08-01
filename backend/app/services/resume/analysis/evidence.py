@@ -5,11 +5,8 @@ is corroborating evidence in: Projects, Experience, or GitHub.
 
 Assigns a CORROBORATION level (high / medium / low) per skill based on
 how many independent SOURCES back it up. This is deliberately NOT called
-"confidence" (Engineering Identity fix #1) — the canonical, numeric
-confidence score lives in resume/confidence.py's decayed-weight formula;
-this module answers a different question ("how many places mention this
-skill"), and giving it the same name as the real confidence score is
-exactly what let three different labeling systems drift apart.
+"confidence" — the canonical, numeric confidence score lives in
+resume/confidence.py's decayed-weight formula.
 """
 import uuid
 from sqlalchemy import select
@@ -26,7 +23,6 @@ async def analyze_evidence(
     user_id: uuid.UUID,
     resume_id: uuid.UUID,
 ) -> dict:
-    # ── Fetch experience & project IDs for this resume ─────────────────────
     exp_rows = await db.execute(
         select(Experience.id).where(
             Experience.user_id == user_id,
@@ -55,10 +51,19 @@ async def analyze_evidence(
             "low_corroboration": 0,
         }
 
-    # ── Fetch skill evidence linked to those sources ────────────────────────
+    # FIX (cross-user evidence leak): all three queries below now also
+    # filter on SkillEvidence.user_id. The project/experience query was
+    # already effectively safe (source_id is a real UUID PK, so it can't
+    # collide across users), but the leetcode/certificate queries join
+    # on tag/skill NAME rather than a user-scoped foreign key, so without
+    # this filter they could match a SkillEvidence row belonging to a
+    # different user who happens to have evidence for the same skill.
     ev_rows = await db.execute(
         select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
-        .where(SkillEvidence.source_id.in_([uuid.UUID(sid) for sid in all_source_ids]))
+        .where(
+            SkillEvidence.source_id.in_([uuid.UUID(sid) for sid in all_source_ids]),
+            SkillEvidence.user_id == user_id,
+        )
     )
     evidence_list = list(ev_rows.fetchall())
 
@@ -69,14 +74,22 @@ async def analyze_evidence(
             LeetcodeSnapshot,
             (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name)
         )
-        .where(LeetcodeSnapshot.user_id == user_id, SkillEvidence.source_type == "leetcode_tag")
+        .where(
+            LeetcodeSnapshot.user_id == user_id,
+            SkillEvidence.source_type == "leetcode_tag",
+            SkillEvidence.user_id == user_id,
+        )
     )
     evidence_list.extend(lc_ev_rows.fetchall())
 
     cert_ev_rows = await db.execute(
         select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
         .join(Certificate, SkillEvidence.source_id == Certificate.id)
-        .where(Certificate.user_id == user_id, SkillEvidence.source_type == "certificate")
+        .where(
+            Certificate.user_id == user_id,
+            SkillEvidence.source_type == "certificate",
+            SkillEvidence.user_id == user_id,
+        )
     )
     evidence_list.extend(cert_ev_rows.fetchall())
 
@@ -217,7 +230,6 @@ async def analyze_evidence(
         if techs:
             github_langs.update(t.lower() for t in techs)
 
-    # ── Assign CORROBORATION level (renamed from "confidence" — fix #1) ────
     skills_list: list[dict] = []
     high_corr = medium_corr = low_corr = 0
 

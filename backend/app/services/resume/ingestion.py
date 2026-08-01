@@ -220,18 +220,13 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
 
         for entry, weight in zip(evidence_entries, weights):
             db.add(SkillEvidence(
+                user_id=user.id,
                 skill_id=skill.id,
                 source_type=entry["source_type"],
                 source_id=UUID(entry["source_id"]),
                 weight=weight,
             ))
 
-        # RENAMED (fix #10): this is a raw, non-decayed, computed-once-at-
-        # write-time number — deliberately different from the LIVE decayed
-        # confidence resume/evolution.py compares it against. The old key
-        # name ("confidence") looked identical to the live number and
-        # nothing enforced the distinction anywhere a skills_json blob got
-        # read later. Now the schema itself says which one this is.
         skills_json[canonical] = {"confidence_at_upload": confidence, "evidence": evidence_entries}
 
         if confidence >= 0.6:
@@ -381,13 +376,13 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
 
         for entry, weight in zip(evidence_entries, weights):
             db.add(SkillEvidence(
+                user_id=user_id,
                 skill_id=skill.id,
                 source_type=entry["source_type"],
                 source_id=UUID(entry["source_id"]),
                 weight=weight,
             ))
 
-        # Renamed for the same reason as ingest_resume() above (fix #10).
         skills_json[canonical] = {"confidence_at_upload": confidence, "evidence": evidence_entries}
 
     snapshot = ProfileSnapshot(

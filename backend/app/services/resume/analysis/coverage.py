@@ -15,23 +15,35 @@ from app.services.resume.timeline_plausibility import build_timeline_plausibilit
 async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.UUID) -> dict:
     # ── 1. Skills on the CURRENT resume ─────────────────────────────────────
     resume_skills = set()
-    
-    # Skills from experiences linked to latest resume
+
+    # These joins already scope correctly through Experience.user_id /
+    # Project.user_id, so the added SkillEvidence.user_id filter below is
+    # defense-in-depth rather than a fix for a live bug — but it's free,
+    # consistent with every other SkillEvidence query in the codebase now
+    # doing the same, and guards against this query ever being copy-pasted
+    # somewhere without its join condition intact.
     resume_exp_skills = await db.execute(
         select(Skill.canonical_name)
         .join(SkillEvidence, SkillEvidence.skill_id == Skill.id)
         .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
-        .where(Experience.user_id == user_id, Experience.resume_id == resume_id)
+        .where(
+            Experience.user_id == user_id,
+            Experience.resume_id == resume_id,
+            SkillEvidence.user_id == user_id,
+        )
         .distinct()
     )
     resume_skills.update(r[0] for r in resume_exp_skills.fetchall() if r[0])
 
-    # Skills from projects linked to latest resume
     resume_proj_skills = await db.execute(
         select(Skill.canonical_name)
         .join(SkillEvidence, SkillEvidence.skill_id == Skill.id)
         .join(Project, (SkillEvidence.source_id == Project.id) & (SkillEvidence.source_type == "project"))
-        .where(Project.user_id == user_id, Project.resume_id == resume_id)
+        .where(
+            Project.user_id == user_id,
+            Project.resume_id == resume_id,
+            SkillEvidence.user_id == user_id,
+        )
         .distinct()
     )
     resume_skills.update(r[0] for r in resume_proj_skills.fetchall() if r[0])
@@ -45,7 +57,7 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
     for row in github_techs_result.fetchall():
         if row[0]:
             github_techs.update(row[0])
-            
+
     github_skills = set()
     if github_techs:
         resolved_gh = await resolve_skills(github_techs, db)
@@ -53,13 +65,13 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
 
     # ── 3. LeetCode skills ──────────────────────────────────────────────────
     EXCLUDED_LEETCODE_TAGS = {
-        "array", "string", "sorting", "math", "simulation", "two pointers", 
+        "array", "string", "sorting", "math", "simulation", "two pointers",
         "matrix", "hash table", "search", "binary search", "sliding window",
         "stack", "queue", "linked list", "recursion", "divide and conquer",
         "greedy", "heap", "priority queue", "bit manipulation", "counting",
         "number theory", "combinatorics"
     }
-    
+
     leetcode_skills_result = await db.execute(
         select(Skill.canonical_name)
         .join(LeetcodeSnapshot, (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name))
@@ -80,7 +92,7 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
     for row in cert_skills_result.fetchall():
         if row[0]:
             all_cert_skills.update(row[0])
-            
+
     cert_skills = set()
     if all_cert_skills:
         resolved_certs = await resolve_skills(all_cert_skills, db)
@@ -98,7 +110,6 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
     )
     github_projects = github_projects_result.scalars().all()
 
-    # Get names/urls of projects on the resume
     resume_projects_result = await db.execute(
         select(Project.name, Project.repo_url)
         .where(Project.user_id == user_id, Project.resume_id == resume_id)
@@ -107,7 +118,6 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
     resume_project_names = {r[0].lower() for r in resume_projects_data if r[0]}
     resume_project_urls = {r[1].lower() for r in resume_projects_data if r[1]}
 
-    # Map missing GitHub technologies to specific repo names
     github_gap_details = []
     for skill in sorted(github_only):
         matching_repos = []
@@ -129,7 +139,6 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
                 "repos": []
             })
 
-    # Suggestions for missing GitHub projects entirely (Polaris personalized recommendations)
     project_suggestions = []
     for gp in github_projects:
         is_on_resume = False
@@ -139,11 +148,11 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
         for url in resume_project_urls:
             if gp_name_lower in url:
                 is_on_resume = True
-                
+
         if not is_on_resume:
             techs = ", ".join(gp.technologies[:3])
             tech_desc = f" built using {techs}" if gp.technologies else ""
-            
+
             if gp.quality_score and gp.quality_score >= 60:
                 reason = f"Your high-quality repository '{gp.repo_name}'{tech_desc} (Quality: {gp.quality_score}%) is missing from your resume."
                 project_suggestions.append({
@@ -161,13 +170,12 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
                     "type": "project_addition"
                 })
 
-    # Map missing Certificate skills to specific certificate names
     cert_rows_result = await db.execute(
         select(Certificate)
         .where(Certificate.user_id == user_id)
     )
     user_certs = cert_rows_result.scalars().all()
-    
+
     cert_gap_details = []
     for skill in sorted(cert_only):
         matching_certs = []
@@ -189,7 +197,6 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
                 "certs": []
             })
 
-    # Map LeetCode gaps
     leetcode_gap_details = []
     for skill in sorted(leetcode_only):
         reason = f"Evidenced from your LeetCode problem solutions but missing from your resume."
