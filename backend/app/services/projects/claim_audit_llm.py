@@ -13,18 +13,15 @@ from app.schemas.project_intelligence import ClaimAuditFacts, ClaimAuditNarrativ
 
 def _fallback_narrative(facts: ClaimAuditFacts) -> ClaimAuditNarrative:
     if facts.unsupported_claims:
-        risk = "high" if len(facts.unsupported_claims) > 1 else "medium"
         headline = f"{len(facts.unsupported_claims)} claimed technologies have no supporting evidence in the repo."
     elif facts.undersold_work:
-        risk = "low"
         headline = "Your resume undersells this project's real engineering depth."
     else:
-        risk = "low"
         headline = "Resume claims and verified repository evidence are aligned."
 
     return ClaimAuditNarrative(
         headline=headline,
-        risk_level=risk,
+        risk_level=facts.risk_level,
         talking_points=[f"You have verified evidence for {t}." for t in facts.undersold_work[:3]],
         fixes=[f"Reconsider listing '{c}' unless you can point to real evidence." for c in facts.unsupported_claims[:3]],
     )
@@ -81,6 +78,7 @@ async def generate_claim_audit_narrative(
         content = response.choices[0].message.content
         print(f"[TRACING] Raw claim-audit JSON:\n{content}", flush=True)
         narrative = ClaimAuditNarrative.model_validate(json.loads(content))
+        narrative.risk_level = facts.risk_level  # deterministic fact — never LLM-decided
     except Exception as e:
         print(f"[TRACING] Claim-audit narrative degraded, using fallback: {e}", flush=True)
         narrative = _fallback_narrative(facts)

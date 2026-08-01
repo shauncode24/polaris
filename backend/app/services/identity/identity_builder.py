@@ -17,9 +17,9 @@ complete, deterministic fact base. identity_synthesizer.py is step two
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import JobDescription, Resume
+from app.models.facts import JobDescription, Resume, Project
 from app.models.goals import Goal
-from app.models.inference import ResumeAnalysis, SkillEvidence
+from app.models.inference import ResumeAnalysis, SkillEvidence, ProjectClaimAuditReview
 from app.models.structure import Skill
 from app.schemas.engineering_identity import IdentityFacts
 from app.services.evidence import build_evidence_details, get_all_skill_confidences
@@ -115,6 +115,24 @@ async def _get_recent_job_matches(db: AsyncSession, user_id, limit: int = MAX_RE
     return out
 
 
+async def _get_claim_risk_summary(db: AsyncSession, user_id) -> dict:
+    proj_result = await db.execute(select(Project.id).where(Project.user_id == user_id))
+    project_ids = [r[0] for r in proj_result.all()]
+    if not project_ids:
+        return {"high_risk_count": 0, "medium_risk_count": 0}
+    audit_result = await db.execute(
+        select(ProjectClaimAuditReview).where(ProjectClaimAuditReview.project_id.in_(project_ids))
+    )
+    high = medium = 0
+    for row in audit_result.scalars().all():
+        level = ((row.report_json or {}).get("narrative", {})).get("risk_level")
+        if level == "high":
+            high += 1
+        elif level == "medium":
+            medium += 1
+    return {"high_risk_count": high, "medium_risk_count": medium}
+
+
 async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
     top_skills = await _get_top_skills(db)
 
@@ -164,4 +182,5 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
         timeline_plausibility_notes=timeline_plausibility_notes,
         active_goals=active_goals,
         recent_job_matches=recent_job_matches,
+        claim_risk_summary=await _get_claim_risk_summary(db, user_id),
     )

@@ -21,6 +21,7 @@ class IdentityFacts(BaseModel):
     timeline_plausibility_notes: list[dict] = []
     active_goals: list[dict] = []
     recent_job_matches: list[dict] = []
+    claim_risk_summary: dict = {}
 
 
 class IdentityLLMOutput(BaseModel):

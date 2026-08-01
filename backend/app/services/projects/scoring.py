@@ -86,4 +86,8 @@ def compute_rating(
 
 
 def compute_status(github_is_active: bool | None) -> str:
+    if github_is_active is None:
+        # No matched GitHub repo — there's no real signal on whether this
+        # project is ongoing or finished, so don't assert "completed".
+        return "unknown"
     return "ongoing" if github_is_active else "completed"

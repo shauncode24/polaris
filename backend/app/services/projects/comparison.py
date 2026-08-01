@@ -21,14 +21,16 @@ UNDERSOLD_BONUS = 0.5
 COLLABORATION_BONUS = 0.5
 
 
-async def _latest_missing_skills(db: AsyncSession, user_id) -> set[str]:
-    result = await db.execute(
+async def _latest_missing_skills(db: AsyncSession, user_id, job_description_id=None) -> set[str]:
+    stmt = (
         select(JobDescription)
         .where(JobDescription.user_id == user_id)
         .where(JobDescription.analysis_result.isnot(None))
-        .order_by(JobDescription.created_at.desc())
-        .limit(1)
     )
+    if job_description_id is not None:
+        stmt = stmt.where(JobDescription.id == job_description_id)
+    stmt = stmt.order_by(JobDescription.created_at.desc()).limit(1)
+    result = await db.execute(stmt)
     jd = result.scalar_one_or_none()
     if jd is None or not isinstance(jd.analysis_result, dict):
         return set()
@@ -42,12 +44,12 @@ def _winner(a_name: str, b_name: str, a_value: float, b_value: float) -> str:
     return a_name if a_value > b_value else b_name
 
 
-async def build_goal_aware_ranking(db: AsyncSession, user_id) -> PortfolioComparisonResponse:
-    overview = await build_projects_overview(db, user_id)
+async def build_goal_aware_ranking(db: AsyncSession, user_id, job_description_id=None, overview=None) -> PortfolioComparisonResponse:
+    overview = overview or await build_projects_overview(db, user_id)
     if not overview.projects:
         return PortfolioComparisonResponse(ranked=[], lead_project=None, recommendation="")
 
-    missing_skills = await _latest_missing_skills(db, user_id)
+    missing_skills = await _latest_missing_skills(db, user_id, job_description_id)
     missing_lower = {s.lower() for s in missing_skills}
 
     ranked_items: list[GoalAwareRanking] = []
@@ -92,17 +94,16 @@ async def build_goal_aware_ranking(db: AsyncSession, user_id) -> PortfolioCompar
     return PortfolioComparisonResponse(ranked=ranked_items, lead_project=lead, recommendation=recommendation)
 
 
-async def build_projects_comparison(db: AsyncSession, user_id) -> ProjectComparison | None:
+async def build_projects_comparison(db: AsyncSession, user_id, overview=None) -> ProjectComparison | None:
     """Kept for the existing pairwise-metrics UI card — now sourced from
     the top 2 of the goal-aware ranking instead of a generic rating
     sort, so the "winner" reflects real target-role relevance whenever
     a target job exists.
     """
-    ranking = await build_goal_aware_ranking(db, user_id)
+    overview = overview or await build_projects_overview(db, user_id)
+    ranking = await build_goal_aware_ranking(db, user_id, overview=overview)
     if len(ranking.ranked) < 2:
         return None
-
-    overview = await build_projects_overview(db, user_id)
     by_id = {p.id: p for p in overview.projects}
     a = by_id[ranking.ranked[0].project_id]
     b = by_id[ranking.ranked[1].project_id]

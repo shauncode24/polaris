@@ -30,6 +30,8 @@ def audit_project_claims(
     quality_score: float | None,
     activity_score: float | None,
 ) -> dict:
+    MIN_SUBSTRING_LEN = 3
+
     claimed_tokens = set()
     for item in project_stack:
         claimed_tokens.add(item.strip().lower())
@@ -47,7 +49,13 @@ def audit_project_claims(
         item_lower = item.strip().lower()
         if not item_lower:
             continue
-        if any(item_lower in tech or tech in item_lower for tech in verified_tech_lower):
+        matched = any(
+            item_lower == tech
+            or (len(item_lower) >= MIN_SUBSTRING_LEN and len(tech) >= MIN_SUBSTRING_LEN
+                and (item_lower in tech or tech in item_lower))
+            for tech in verified_tech_lower
+        )
+        if matched:
             continue
         unsupported_claims.append(item)
 
@@ -68,7 +76,12 @@ def audit_project_claims(
     confirmed_claims: list[str] = []
     for item in project_stack:
         item_lower = item.strip().lower()
-        if any(item_lower in tech or tech in item_lower for tech in verified_tech_lower):
+        if any(
+            item_lower == tech
+            or (len(item_lower) >= MIN_SUBSTRING_LEN and len(tech) >= MIN_SUBSTRING_LEN
+                and (item_lower in tech or tech in item_lower))
+            for tech in verified_tech_lower
+        ):
             confirmed_claims.append(item)
 
     architecture_flag = None
@@ -80,13 +93,20 @@ def audit_project_claims(
                 "structure reads as a flat script with little separation of concerns."
             )
 
+    unsupported_sorted = sorted(set(unsupported_claims))
+    if unsupported_sorted:
+        risk_level = "high" if len(unsupported_sorted) > 1 else "medium"
+    else:
+        risk_level = "low"
+
     return {
         "project_name": project_name,
         "has_repo_match": True,
-        "unsupported_claims": sorted(set(unsupported_claims)),
+        "unsupported_claims": unsupported_sorted,
         "undersold_work": sorted(set(undersold_work)),
         "confirmed_claims": sorted(set(confirmed_claims)),
         "architecture_flag": architecture_flag,
+        "risk_level": risk_level,
         "verified_facts": {
             "technologies": repo_technologies,
             "capabilities": repo_capabilities,

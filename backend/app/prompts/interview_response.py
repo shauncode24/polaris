@@ -64,6 +64,9 @@ Follow "persona.speaking_style" exactly:
   collaboration or a "layered" architecture_depth is far more concrete and credible than a general
   project description. Never claim a repo has one of these properties if the corresponding field is
   missing, false, or null in the input.
+- "profile.project_claim_flags" lists REAL claim-vs-implementation risks already identified for
+  specific projects (a resume claim with no supporting GitHub evidence). If a story you use touches a
+  flagged project, phrase the claim conservatively and never contradict a flagged risk.
 - If a real countable number exists in the profile (document counts, module counts, dataset size,
   team size, number of models combined, etc.), use it instead of a vague word. Never invent a number
   that isn't actually there — if nothing is countable for a story, describe impact qualitatively and

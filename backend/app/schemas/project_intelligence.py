@@ -41,6 +41,7 @@ class ClaimAuditFacts(BaseModel):
     undersold_work: list[str] = []
     confirmed_claims: list[str] = []
     architecture_flag: str | None = None
+    risk_level: str = "low"
     verified_facts: dict = {}
 
 

@@ -66,38 +66,32 @@ async def suggest_repo_links(db: AsyncSession, user_id) -> list[dict]:
         select(GithubProjectAnalysis.repo_name).where(GithubProjectAnalysis.user_id == user_id)
     )
     repo_names = [r[0] for r in repo_result.all()]
-    normalized_repos = {normalize_name(r): r for r in repo_names}
+    from app.services.projects.repo_linking import match_project_to_repo
 
     suggestions = []
     for project in unlinked:
         norm_project = normalize_name(project.name)
-        exact = normalized_repos.get(norm_project)
+        matched = match_project_to_repo(project.name, project.repo_url, repo_names)
 
-        if exact:
+        if matched and normalize_name(matched) == norm_project:
             suggestions.append({
                 "project_id": str(project.id),
                 "project_name": project.name,
-                "candidate_repo": exact,
+                "candidate_repo": matched,
                 "confidence": "exact",
                 "other_candidates": [],
             })
-            continue
-
-        # Fuzzy: substring containment either direction. Cheap and good
-        # enough to catch "Cortex Route" <-> "cortex-route-gateway"
-        # without pulling in a similarity-matching dependency.
-        candidates = [
-            repo for norm_repo, repo in normalized_repos.items()
-            if norm_project and (norm_project in norm_repo or norm_repo in norm_project)
-        ]
-
-        if candidates:
+        elif matched:
+            others = [
+                r for r in repo_names
+                if r != matched and norm_project and (norm_project in normalize_name(r) or normalize_name(r) in norm_project)
+            ]
             suggestions.append({
                 "project_id": str(project.id),
                 "project_name": project.name,
-                "candidate_repo": candidates[0],
+                "candidate_repo": matched,
                 "confidence": "fuzzy",
-                "other_candidates": candidates[1:4],
+                "other_candidates": others[:3],
             })
         else:
             suggestions.append({

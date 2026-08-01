@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import CompanyNote, Education, Experience, Project, Resume
-from app.models.inference import ProfileSnapshot, SkillEvidence
+from app.models.inference import ProfileSnapshot, SkillEvidence, ProjectClaimAuditReview
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
 from app.services.interview.blueprints import get_blueprint_library, get_persona
@@ -183,6 +183,31 @@ async def _get_leetcode_evidence(db: AsyncSession, user_id) -> dict | None:
     }
 
 
+async def _get_project_claim_flags(db: AsyncSession, user_id) -> list[dict]:
+    """Real claim-vs-implementation risk flags from the Projects module's
+    Claim Audit, so the Interview Response Agent can phrase claims
+    conservatively instead of independently re-deriving this risk.
+    """
+    proj_result = await db.execute(select(Project.id, Project.name).where(Project.user_id == user_id))
+    projects_by_id = {pid: name for pid, name in proj_result.all()}
+    if not projects_by_id:
+        return []
+
+    audit_result = await db.execute(
+        select(ProjectClaimAuditReview).where(ProjectClaimAuditReview.project_id.in_(projects_by_id.keys()))
+    )
+    flags = []
+    for row in audit_result.scalars().all():
+        narrative = (row.report_json or {}).get("narrative", {})
+        if narrative.get("risk_level") in ("high", "medium"):
+            flags.append({
+                "project": projects_by_id.get(row.project_id, "Unknown project"),
+                "risk_level": narrative.get("risk_level"),
+                "headline": narrative.get("headline", ""),
+            })
+    return flags
+
+
 async def build_interview_context(
     db: AsyncSession,
     user_id,
@@ -209,6 +234,7 @@ async def build_interview_context(
             "skills": skills,
             "github_repos": github_repos,
             "leetcode_evidence": leetcode_evidence,
+            "project_claim_flags": await _get_project_claim_flags(db, user_id),
         },
         "company_notes": company_notes,
         "blueprint_library": get_blueprint_library(),

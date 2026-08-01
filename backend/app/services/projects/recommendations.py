@@ -34,8 +34,8 @@ def _has_capability(project, keywords: set[str]) -> bool:
     return any(any(k in c for k in keywords) for c in lowered)
 
 
-async def build_project_recommendations(db: AsyncSession, user_id) -> list[RecommendationItem]:
-    overview = await build_projects_overview(db, user_id)
+async def build_project_recommendations(db: AsyncSession, user_id, overview=None) -> list[RecommendationItem]:
+    overview = overview or await build_projects_overview(db, user_id)
 
     analysis_result = await db.execute(
         select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user_id)

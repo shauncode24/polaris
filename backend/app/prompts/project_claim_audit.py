@@ -10,9 +10,9 @@ for a skeptical interviewer:
 
 1. "headline": one direct sentence summarizing the overall finding (e.g. "Your resume undersells this
    project's real engineering depth" or "Two claimed technologies have no supporting evidence in the repo").
-2. "risk_level": "high" if unsupported_claims contains anything a technical interviewer would likely
-   probe and find unsupported live; "medium" if there's a real but minor gap; "low" if confirmed_claims
-   dominate and unsupported_claims is empty or trivial.
+2. "risk_level" is NOT yours to decide — it is already given to you as fact in the input under
+   "risk_level". Reflect it accurately in "headline"/"talking_points"/"fixes"; never output a different
+   value than the one given.
 3. "talking_points": 2-4 real, specific things from undersold_work or confirmed_claims the candidate
    should proactively bring up in an interview because the evidence backs them strongly.
 4. "fixes": 2-4 concrete, specific actions — e.g. "Remove 'Kubernetes' from this project's stack list
