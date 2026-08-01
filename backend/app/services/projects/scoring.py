@@ -11,6 +11,14 @@ BACKEND_SKILLS = {
 MIN_RATING = 1.0
 MAX_RATING = 5.0
 
+# When GitHub evidence exists for a project, resume-only bonuses (description
+# length, skill/capability count) are scaled down by this factor. Otherwise a
+# padded description + long skill list can out-weigh real, verified GitHub
+# quality/activity scores just by stacking flat bonuses — GitHub evidence is
+# supposed to be the stronger signal once it's present (see compute_tier,
+# which already prefers the GitHub-verified tier outright).
+RESUME_BONUS_DAMPENING_WITH_GITHUB = 0.6
+
 STACK_CAPABILITY_MAP: dict[str, str] = {
     "docker": "Containerization", "kubernetes": "Containerization",
     "fastapi": "API Design", "django": "API Design", "flask": "API Design",
@@ -51,7 +59,15 @@ _GITHUB_TIER_LABELS = {
 
 def compute_tier(rating: float, has_repo: bool, github_tier: str | None) -> str:
     if github_tier:
-        return _GITHUB_TIER_LABELS.get(github_tier, "Career Project")
+        label = _GITHUB_TIER_LABELS.get(github_tier)
+        if label is None:
+            # Previously a silent fallback to "Career Project" — now
+            # visible, since github_tier should always be one of the
+            # closed set of values github_analyzer.analyze_repo() emits;
+            # anything else signals a real drift between the two modules.
+            print(f"[TRACING] Unrecognized github_tier '{github_tier}' — defaulting to 'Career Project'", flush=True)
+            return "Career Project"
+        return label
     if rating >= 4.0 and has_repo:
         return "Flagship Project"
     if rating >= 3.0:
@@ -70,12 +86,21 @@ def compute_rating(
     github_activity_score: float | None,
 ) -> float:
     rating = 2.5
+
+    resume_bonus = 0.0
     if description_length > 100:
-        rating += 0.5
+        resume_bonus += 0.5
     if skill_count >= 4:
-        rating += 0.5
+        resume_bonus += 0.5
     if capability_count >= 3:
-        rating += 0.5
+        resume_bonus += 0.5
+
+    has_github_evidence = github_quality_score is not None or github_activity_score is not None
+    if has_github_evidence:
+        resume_bonus *= RESUME_BONUS_DAMPENING_WITH_GITHUB
+
+    rating += resume_bonus
+
     if github_quality_score is not None:
         rating += (github_quality_score / 100) * 0.75
     if github_activity_score is not None:

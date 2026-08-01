@@ -165,7 +165,11 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
         )
 
     featured_count = min(4, len(cards))
-    ranked = sorted(cards, key=lambda c: c.rating, reverse=True)
+    # Explicit tiebreaker: rating first, then most-recently-updated. Previously
+    # this relied on Python's stable sort silently preserving the created_at-desc
+    # order the initial query happened to return cards in — correct in practice,
+    # but not something a reader could tell without checking sort stability.
+    ranked = sorted(cards, key=lambda c: (c.rating, c.updated_at), reverse=True)
     featured_ids = {c.id for c in ranked[:featured_count] if c.rating >= 3.0}
     for c in cards:
         c.is_featured = c.id in featured_ids

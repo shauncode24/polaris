@@ -19,6 +19,18 @@ JD_MATCH_WEIGHT = 2.0
 CLAIM_RISK_PENALTY = 1.0
 UNDERSOLD_BONUS = 0.5
 COLLABORATION_BONUS = 0.5
+# Previously computed by overview.py but never consumed by any ranking or
+# recommendation logic in this module. A "resume_it" project (stale but
+# still high-quality) is worth surfacing before it's forgotten entirely;
+# a "retire_it" project (stale AND low-quality) shouldn't be led with.
+ABANDONMENT_RESUME_IT_BONUS = 0.5
+ABANDONMENT_RETIRE_IT_PENALTY = 0.5
+
+# Claim-risk severity used both for the ranking penalty above and for the
+# reconciled pairwise "Lower claim-audit risk" metric below, so the two
+# views of the same portfolio agree with each other instead of the
+# pairwise card computing risk from a totally separate calculation.
+_CLAIM_RISK_SEVERITY = {"high": 2, "medium": 1, "undersold": -1, None: 0}
 
 
 async def _latest_missing_skills(db: AsyncSession, user_id, job_description_id=None) -> set[str]:
@@ -77,6 +89,13 @@ async def build_goal_aware_ranking(db: AsyncSession, user_id, job_description_id
             score += COLLABORATION_BONUS
             reasons.append("Shows real PR/review collaboration, not just solo commits")
 
+        if p.abandonment_status == "resume_it":
+            score += ABANDONMENT_RESUME_IT_BONUS
+            reasons.append("High-quality but stale — worth resuming and re-surfacing before it's forgotten")
+        elif p.abandonment_status == "retire_it":
+            score -= ABANDONMENT_RETIRE_IT_PENALTY
+            reasons.append("Stale and low-quality — a weaker choice to lead with right now")
+
         if not reasons:
             reasons.append("Ranked by overall project rating")
 
@@ -98,7 +117,11 @@ async def build_projects_comparison(db: AsyncSession, user_id, overview=None) ->
     """Kept for the existing pairwise-metrics UI card — now sourced from
     the top 2 of the goal-aware ranking instead of a generic rating
     sort, so the "winner" reflects real target-role relevance whenever
-    a target job exists.
+    a target job exists. The metric axes below now include one directly
+    tied to a real ranking input (claim-audit risk) rather than being
+    computed entirely independently of what the ranking score is actually
+    based on — previously a project could win the overall ranking while
+    losing every displayed axis, with nothing explaining why.
     """
     overview = overview or await build_projects_overview(db, user_id)
     ranking = await build_goal_aware_ranking(db, user_id, overview=overview)
@@ -116,10 +139,15 @@ async def build_projects_comparison(db: AsyncSession, user_id, overview=None) ->
     backend_winner = _winner(a.name, b.name, len(a_stack & BACKEND_SKILLS), len(b_stack & BACKEND_SKILLS))
     goal_winner = _winner(a.name, b.name, ranking.ranked[0].score, ranking.ranked[1].score)
 
+    a_risk = _CLAIM_RISK_SEVERITY.get(a.claim_risk, 0)
+    b_risk = _CLAIM_RISK_SEVERITY.get(b.claim_risk, 0)
+    claim_risk_winner = _winner(a.name, b.name, -a_risk, -b_risk)  # lower severity wins
+
     metrics = [
         ComparisonMetric(label="More complex", winner=complexity_winner),
         ComparisonMetric(label="Deeper AI", winner=ai_winner),
         ComparisonMetric(label="Stronger backend", winner=backend_winner),
+        ComparisonMetric(label="Lower claim-audit risk", winner=claim_risk_winner),
         ComparisonMetric(label="Best fit for your target role", winner=goal_winner),
     ]
 

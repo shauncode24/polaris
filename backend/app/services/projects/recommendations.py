@@ -24,6 +24,7 @@ IMPACT_MISSING_TESTS = 12
 IMPACT_MISSING_CI = 8
 IMPACT_CLAIM_RISK = 10
 IMPACT_STALE_HIGH_QUALITY = 6
+IMPACT_RETIRE_STALE_LOW_QUALITY = 3
 IMPACT_CONNECT_REPO = 6
 IMPACT_RAG_BENCHMARK = 4
 IMPACT_FALLBACK = 2
@@ -86,6 +87,11 @@ async def build_project_recommendations(db: AsyncSession, user_id, overview=None
             candidates.append({
                 "text": f"Resume work on {project.name} — it's high-quality but stale",
                 "impact": IMPACT_STALE_HIGH_QUALITY,
+            })
+        elif project.abandonment_status == "retire_it":
+            candidates.append({
+                "text": f"Archive or remove {project.name} from your portfolio — it's stale and low-quality, and likely diluting attention from your stronger work",
+                "impact": IMPACT_RETIRE_STALE_LOW_QUALITY,
             })
 
     if not candidates:
