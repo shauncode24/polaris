@@ -13,10 +13,10 @@ from app.schemas.project_intelligence import GoalAwareRanking, PortfolioComparis
 from app.schemas.projects import ComparisonMetric, ProjectComparison
 from app.services.projects.overview import build_projects_overview
 from app.services.projects.scoring import AI_SKILLS, BACKEND_SKILLS
+from app.services.resume.claim_risk import apply_claim_risk_penalty
 
 BASE_WEIGHT = 1.0
 JD_MATCH_WEIGHT = 2.0
-CLAIM_RISK_PENALTY = 1.0
 UNDERSOLD_BONUS = 0.5
 COLLABORATION_BONUS = 0.5
 # Previously computed by overview.py but never consumed by any ranking or
@@ -79,7 +79,7 @@ async def build_goal_aware_ranking(db: AsyncSession, user_id, job_description_id
                 reasons.append("Demonstrates skills relevant to your most recent target job")
 
         if p.claim_risk in ("high", "medium"):
-            score -= CLAIM_RISK_PENALTY
+            score = apply_claim_risk_penalty(score, p.claim_risk)
             reasons.append("Has unresolved claim-vs-implementation risk — resolve before leading with this one")
         elif p.claim_risk == "undersold":
             score += UNDERSOLD_BONUS

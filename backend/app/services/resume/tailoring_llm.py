@@ -21,7 +21,7 @@ MAX_BULLETS_IN_PROMPT = 40
 # FIX (Important #5): same idea projects/comparison.py already applies to
 # its goal-aware ranking — an unresolved claim-risk finding should reduce
 # how strongly Tailoring recommends leading with a project.
-CLAIM_RISK_SCORE_PENALTY = {"high": 0.5, "medium": 0.25}
+from app.services.resume.claim_risk import CLAIM_RISK_MULTIPLIER, apply_claim_risk_penalty
 
 
 async def _get_claim_risk_by_project_id(db: AsyncSession, project_ids: list) -> dict:
@@ -158,7 +158,7 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
         project_uuid = next((p.id for p in projects if str(p.id) == r["id"]), None)
         risk = claim_risk_by_id.get(project_uuid)
         if risk:
-            r["relevance_score"] = round(r["relevance_score"] * (1 - CLAIM_RISK_SCORE_PENALTY[risk]), 2)
+            r["relevance_score"] = round(apply_claim_risk_penalty(r["relevance_score"], risk), 2)
             r["claim_risk"] = risk
     ranked.sort(key=lambda r: r["relevance_score"], reverse=True)
 

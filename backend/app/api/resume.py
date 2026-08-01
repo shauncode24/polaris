@@ -257,12 +257,16 @@ async def get_resume_workspace(
 
     coverage_gaps = await analyze_cross_source_coverage(db, uid, latest.id)
 
-    missing_from_resume = sorted(
-        {g["skill"].title() for g in coverage_gaps.get("github_gaps", [])}
-        | {g["skill"].title() for g in coverage_gaps.get("leetcode_gaps", [])}
-        | {g["skill"].title() for g in coverage_gaps.get("certificate_gaps", [])}
+    missing_from_resume_keys = (
+        {g["skill"].lower() for g in coverage_gaps.get("github_gaps", [])}
+        | {g["skill"].lower() for g in coverage_gaps.get("leetcode_gaps", [])}
+        | {g["skill"].lower() for g in coverage_gaps.get("certificate_gaps", [])}
     )
-    profile_skill_count = len(missing_from_resume) + evidence_res.get("total_skills", 0)
+    resume_skill_keys = {s["canonical"].lower() for s in evidence_res.get("skills", []) if s.get("canonical")}
+    missing_from_resume_keys -= resume_skill_keys  # a gap already on the resume isn't a gap
+
+    missing_from_resume = sorted(k.title() for k in missing_from_resume_keys)
+    profile_skill_count = len(missing_from_resume_keys | resume_skill_keys)
 
     return {
         "has_resume": True,

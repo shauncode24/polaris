@@ -44,6 +44,54 @@ def _suggestions_from_ats_warnings(ats_warnings: list[dict]) -> list[dict]:
     return out
 
 
+_STRUCTURE_ISSUE_COPY: dict[str, tuple[str, str]] = {
+    "missing_recommended": ("Add a recommended section", "Strengthens ATS parsing and reviewer scanability."),
+    "section_order": ("Reorder resume sections", "Conventional section ordering makes resumes easier to scan."),
+}
+
+
+def _suggestions_from_structure(structure: dict) -> list[dict]:
+    """FIX (Important #6): structure.py was being computed on every
+    /resume/analyze call and stored in the response, but nothing ever
+    read it to produce a suggestion — real, non-trivial computation with
+    no consumer. This wires its two real signals (missing recommended
+    sections, bad section order) into the suggestion list.
+    """
+    out = []
+    for sec in structure.get("missing_recommended", []):
+        out.append(_s(
+            "medium", "structure",
+            f"Add a '{sec.title()}' section",
+            f"No clearly labeled '{sec.title()}' section was detected — recommended for both "
+            "ATS parsing and human reviewers scanning quickly.",
+            "Clear section headers help both ATS parsers and human reviewers scan your resume quickly.",
+        ))
+    for issue in structure.get("issues", []):
+        if issue["type"] == "section_order":
+            out.append(_s(
+                issue["severity"], "structure",
+                "Reorder resume sections",
+                issue["detail"],
+                "Conventional section ordering (contact → summary → experience → education → "
+                "projects → skills) is what both ATS parsers and recruiters expect.",
+            ))
+    return out
+
+
+def _suggestions_from_formatting(formatting: dict) -> list[dict]:
+    """Same fix — formatting.py's bullet-consistency/date-consistency/
+    orphan-fragment signals were computed but never surfaced."""
+    out = []
+    for issue in formatting.get("issues", []):
+        out.append(_s(
+            issue["severity"], "formatting",
+            issue["type"].replace("_", " ").title(),
+            issue["detail"],
+            "Visual consistency affects both ATS parsing reliability and reviewer first impressions.",
+        ))
+    return out
+
+
 def generate_suggestions(
     structure:  dict,
     parsing:    dict,
@@ -58,6 +106,10 @@ def generate_suggestions(
 
     if ats_warnings:
         suggestions.extend(_suggestions_from_ats_warnings(ats_warnings))
+
+    # NEW — previously unused parameters, now actually consumed.
+    suggestions.extend(_suggestions_from_structure(structure))
+    suggestions.extend(_suggestions_from_formatting(formatting))
 
     density = metrics.get("metric_density", 100)
     no_metric = metrics.get("bullets_without_metrics", 0)

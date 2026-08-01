@@ -4,15 +4,13 @@ Checks whether an ATS can reliably parse this resume.
 Deterministic regex + heuristics; zero LLM calls.
 """
 import re
-
-_EMAIL_RE    = re.compile(r"[\w.\-]+@[\w.\-]+\.\w+")
-_PHONE_RE    = re.compile(r"(\+?\d{1,3}[\s.\-]?)?\(?\d{3,4}\)?[\s.\-]?\d{3,4}[\s.\-]?\d{3,4}")
-_LINKEDIN_RE = re.compile(r"linkedin\.com/in/[\w\-]+", re.IGNORECASE)
-_GITHUB_RE   = re.compile(r"github\.com/[\w\-]+", re.IGNORECASE)
+from app.services.resume.analysis.shared_signals import (
+    EMAIL_PATTERN, PHONE_PATTERN, LINKEDIN_PATTERN, GITHUB_PATTERN,
+    has_email, has_phone, has_linkedin, has_github,
+)
 
 # Fancy Unicode bullets that some ATS systems can't read
 _FANCY_BULLET_RE = re.compile(r"[▪▫◦◉●►✓✗✦✧✩✱☛☞▶◆◇★☆]")
-# Non-ASCII characters (potential encoding landmines)
 _NON_ASCII_RE = re.compile(r"[^\x00-\x7F]")
 
 MIN_WORDS = 150
@@ -24,23 +22,22 @@ def analyze_parsing(raw_text: str) -> dict:
     warnings: list[dict] = []
     word_count = len(raw_text.split())
 
-    # --- Contact presence ---
-    has_email    = bool(_EMAIL_RE.search(raw_text))
-    has_phone    = bool(_PHONE_RE.search(raw_text))
-    has_linkedin = bool(_LINKEDIN_RE.search(raw_text))
-    has_github   = bool(_GITHUB_RE.search(raw_text))
+    has_email_flag    = has_email(raw_text)
+    has_phone_flag    = has_phone(raw_text)
+    has_linkedin_flag = has_linkedin(raw_text)
+    has_github_flag   = has_github(raw_text)
 
-    if not has_email:
+    if not has_email_flag:
         warnings.append({
             "type": "missing_email", "severity": "high",
             "detail": "No email address detected. This is required — ATS and recruiters need it.",
         })
-    if not has_phone:
+    if not has_phone_flag:
         warnings.append({
             "type": "missing_phone", "severity": "medium",
             "detail": "No phone number detected. Recommended for recruiter contact.",
         })
-    if not has_linkedin:
+    if not has_linkedin_flag:
         warnings.append({
             "type": "missing_linkedin", "severity": "low",
             "detail": "No LinkedIn URL detected. Most recruiters verify candidates on LinkedIn.",
@@ -84,9 +81,9 @@ def analyze_parsing(raw_text: str) -> dict:
         "score": round(score),
         "word_count": word_count,
         "page_count_estimate": page_count,
-        "has_email":    has_email,
-        "has_phone":    has_phone,
-        "has_linkedin": has_linkedin,
-        "has_github":   has_github,
+        "has_email":    has_email_flag,
+        "has_phone":    has_phone_flag,
+        "has_linkedin": has_linkedin_flag,
+        "has_github":   has_github_flag,
         "warnings": warnings,
     }

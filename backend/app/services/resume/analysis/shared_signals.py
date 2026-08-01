@@ -87,3 +87,30 @@ TECH_KEYWORD_POOL: frozenset[str] = frozenset({
     "pytorch", "tensorflow", "scikit-learn",
     "api", "database design", "security", "version control",
 })
+
+# --- Contact-info / link detection ---------------------------------------
+# Single canonical set — previously ats_checks.py, analysis/parsing.py, and
+# ats_scorer_v2.py each hand-rolled their own copies of these same patterns,
+# meaning "does this resume have an email" could legitimately disagree
+# depending on which module asked. Same fix philosophy as the metric/verb
+# detectors above.
+EMAIL_PATTERN = re.compile(r"[\w.\-]+@[\w.\-]+\.\w+")
+PHONE_PATTERN = re.compile(r"(\+?\d{1,3}[\s.\-]?)?\(?\d{3,4}\)?[\s.\-]?\d{3,4}[\s.\-]?\d{3,4}")
+LINKEDIN_PATTERN = re.compile(r"linkedin\.com/(in/)?[\w\-]+", re.IGNORECASE)
+GITHUB_PATTERN = re.compile(r"github\.com/[\w\-]+", re.IGNORECASE)
+
+
+def has_email(text: str) -> bool:
+    return bool(EMAIL_PATTERN.search(text))
+
+
+def has_phone(text: str) -> bool:
+    return bool(PHONE_PATTERN.search(text))
+
+
+def has_linkedin(text: str) -> bool:
+    return bool(LINKEDIN_PATTERN.search(text))
+
+
+def has_github(text: str) -> bool:
+    return bool(GITHUB_PATTERN.search(text))

@@ -1,30 +1,26 @@
 import re
+from app.services.resume.analysis.shared_signals import (
+    EMAIL_PATTERN, PHONE_PATTERN, has_email, has_phone,
+)
 
-EMAIL_PATTERN = re.compile(r"[\w\.-]+@[\w\.-]+\.\w+")
-PHONE_PATTERN = re.compile(r"(\+?\d{1,3}[\s.-]?)?\(?\d{3,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}")
 EXPECTED_SECTIONS = ["experience", "education", "skills", "project"]
-
 MIN_WORD_COUNT = 150
 MAX_WORD_COUNT = 1200
 
 
 def run_ats_checks(raw_text: str) -> list[dict]:
-    """Deterministic, resume-wide checks — things ATS parsers and
-    recruiters both care about, checkable reliably with regex/string
-    matching. No LLM call needed at all.
-    """
     flags: list[dict] = []
     lowered = raw_text.lower()
     word_count = len(raw_text.split())
 
-    if not EMAIL_PATTERN.search(raw_text):
+    if not has_email(raw_text):
         flags.append({
             "type": "missing_contact_email",
             "detail": "No email address detected in the resume text.",
             "severity": "high",
         })
 
-    if not PHONE_PATTERN.search(raw_text):
+    if not has_phone(raw_text):
         flags.append({
             "type": "missing_contact_phone",
             "detail": "No phone number detected in the resume text.",

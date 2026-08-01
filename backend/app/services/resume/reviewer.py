@@ -9,7 +9,6 @@ from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, Project, Resume
 from app.models.inference import ResumeReview
 from app.prompts.resume_review import (
-    RESUME_REVIEW_SYSTEM_PROMPT,
     RESUME_NARRATIVE_SYSTEM_PROMPT,
     RESUME_REWRITES_SYSTEM_PROMPT,
 )
@@ -23,7 +22,7 @@ from app.schemas.resume_review import (
     ResumeReviewStats,
     BulletRewriteSuggestion,
 )
-from app.services.resume.ats_checks import run_ats_checks
+from app.services.resume.analysis.ats_scorer_v2 import analyze_ats_v2
 from app.services.resume.bullet_analysis import analyze_bullet, build_bullet_units as _build_review_units
 from app.services.resume.text_sanitize import sanitize_ai_text as sanitize_ai_review_text
 
@@ -143,6 +142,14 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
     )
     projects = list(proj_result.scalars().all())
 
+    # NEW — education wasn't fetched before; analyze_ats_v2 needs it for
+    # the same-vocabulary fallback below.
+    from app.models.facts import Education
+    edu_result = await db.execute(
+        select(Education).where(Education.user_id == user_id, Education.resume_id == resume.id)
+    )
+    education = list(edu_result.scalars().all())
+
     # Surface any existing claim-audit risk findings for this resume's
     # projects — previously the Projects module and Resume Reviewer never
     # talked to each other despite reasoning about the same claims.
@@ -160,7 +167,23 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
 
     units = _build_review_units(experiences, projects)
     canonical_analysis = await _get_canonical_analysis(db, resume.id)
-    ats_flags = canonical_analysis.get("warnings", []) if canonical_analysis else run_ats_checks(resume.raw_text)
+
+    # FIX (Important #3): previously fell back to the legacy, weaker
+    # ats_checks.run_ats_checks() whenever no ResumeAnalysis row existed
+    # yet — meaning the warnings/severities a user saw from /resume/review
+    # literally depended on whether they'd already called /resume/analyze.
+    # Now both paths always speak ats_scorer_v2's vocabulary.
+    if canonical_analysis:
+        ats_flags = canonical_analysis.get("warnings", [])
+    else:
+        ats_res = analyze_ats_v2(
+            raw_text=resume.raw_text,
+            experiences=experiences,
+            projects=projects,
+            education=education,
+            profile_skills=None,
+        )
+        ats_flags = ats_res.get("warnings", [])
 
     bullet_reviews: list[BulletReview] = []
     flagged_for_llm: list[dict] = []

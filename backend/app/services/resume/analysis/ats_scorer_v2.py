@@ -5,18 +5,13 @@ from app.services.resume.analysis.shared_signals import (
     has_metric,
     opens_with_strong_verb,
     TECH_KEYWORD_POOL,
+    EMAIL_PATTERN, PHONE_PATTERN, LINKEDIN_PATTERN, GITHUB_PATTERN,
+    has_email, has_phone, has_linkedin, has_github,
 )
-
-EMAIL_PATTERN = re.compile(r"[\w.\-]+@[\w.\-]+\.\w+")
-PHONE_PATTERN = re.compile(r"(\+?\d{1,3}[\s.\-]?)?\(?\d{3,4}\)?[\s.\-]?\d{3,4}[\s.\-]?\d{3,4}")
-LINKEDIN_PATTERN = re.compile(r"linkedin\.com/(in/)?[\w\-]+", re.IGNORECASE)
-GITHUB_PATTERN = re.compile(r"github\.com/[\w\-]+", re.IGNORECASE)
 
 _FANCY_BULLET_RE = re.compile(r"[▪▫◦◉●►✓✗✦✧✩✱☛☞▶◆◇★☆]")
 _NON_ASCII_RE = re.compile(r"[^\x00-\x7F]")
 
-# Reuse the single canonical tech vocabulary instead of a private list —
-# this is the fix for keyword-coverage disagreeing with keywords.py.
 TECH_KEYWORDS = TECH_KEYWORD_POOL
 
 
