@@ -5,24 +5,60 @@ engineering score into one of four quadrants. Fully deterministic; the
 LLM (leetcode_reviewer.py) only narrates the placement, never decides it.
 """
 
-# Normalized mastery score for QUADRANT CLASSIFICATION only — maps labels
-# to a 0-1 scale used to compute a single per-user LeetCode score (0-100)
-# that is compared against a STRONG_THRESHOLD. These values are NOT shared
-# with company_readiness.py, which uses a different scale (0.0-1.0 as a
-# weighted-average readiness %) for a completely different computation.
-# Having two maps is intentional: they answer different questions.
-MASTERY_SCORE_MAP = {
-    "Not Practiced": 0.0, "Introduced": 0.25, "Some Practice": 0.5,
-    "Consistent Practice": 0.8, "Extensive Practice": 1.0,
-}
+from app.services.leetcode.leetcode_mastery import MASTERY_SCORE_BASE
+from app.services.leetcode.company_readiness import COMPANY_TOPIC_WEIGHTS
+from app.services.leetcode.leetcode_taxonomy import CANONICAL_TOPICS
+
+# Quadrant classification uses the BASE scale unmodified — see
+# leetcode_mastery.MASTERY_SCORE_BASE's docstring for why this file and
+# company_readiness.py intentionally read from the same source with only
+# one documented divergence (company_readiness's credit bump).
+MASTERY_SCORE_MAP = MASTERY_SCORE_BASE
 STRONG_THRESHOLD = 55  # 0-100 scale
+DEFAULT_TOPIC_IMPORTANCE = 0.3  # topics absent from every company profile still count, just lightly
+
+def _general_topic_importance() -> dict[str, float]:
+    """Average importance weight for each canonical topic across every
+    company/tier profile in COMPANY_TOPIC_WEIGHTS. This is deliberately a
+    GENERAL, cross-company signal — distinct from company_readiness.py's
+    PER-company weighting, which answers a different, more specific
+    question ("ready for Amazon specifically" vs "broadly interview-ready").
+    Topics that don't appear in any company's profile still get a small
+    DEFAULT_TOPIC_IMPORTANCE rather than 0, since real interview loops
+    outside the hand-seeded company list exist. Computed once at import
+    time since COMPANY_TOPIC_WEIGHTS is static, hand-seeded data.
+    """
+    sums: dict[str, float] = {t: 0.0 for t in CANONICAL_TOPICS}
+    counts: dict[str, int] = {t: 0 for t in CANONICAL_TOPICS}
+    for weights in COMPANY_TOPIC_WEIGHTS.values():
+        for topic, w in weights.items():
+            sums[topic] += w
+            counts[topic] += 1
+    return {
+        topic: (sums[topic] / counts[topic] if counts[topic] > 0 else DEFAULT_TOPIC_IMPORTANCE)
+        for topic in CANONICAL_TOPICS
+    }
+
+
+GENERAL_TOPIC_IMPORTANCE = _general_topic_importance()
 
 
 def compute_leetcode_score(topic_mastery: list[dict]) -> float:
+    """Importance-weighted average, not a flat average across all 19
+    topics — a topic that matters across most real interview loops (e.g.
+    Arrays & Hashing, Trees) now moves this score more than a rarely-
+    tested one (e.g. Trie), fixing the "too loose" quadrant classification
+    flagged in the module audit, while staying distinct from
+    company_readiness.py's per-company weighting.
+    """
     if not topic_mastery:
         return 0.0
-    scores = [MASTERY_SCORE_MAP.get(t["mastery"], 0.0) for t in topic_mastery]
-    return round((sum(scores) / len(scores)) * 100, 1)
+    weighted_sum = weight_total = 0.0
+    for t in topic_mastery:
+        importance = GENERAL_TOPIC_IMPORTANCE.get(t["topic"], DEFAULT_TOPIC_IMPORTANCE)
+        weighted_sum += MASTERY_SCORE_MAP.get(t["mastery"], 0.0) * importance
+        weight_total += importance
+    return round((weighted_sum / weight_total) * 100, 1) if weight_total > 0 else 0.0
 
 
 def compute_github_score(repositories: list[dict]) -> float:

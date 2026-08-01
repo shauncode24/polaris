@@ -23,7 +23,32 @@ MASTERY_THRESHOLDS: list[tuple[float, str]] = [
 ]
 MASTERY_MAX_LABEL = "Extensive Practice"
 MASTERY_ORDER = ["Not Practiced", "Introduced", "Some Practice", "Consistent Practice", "Extensive Practice"]
+# Canonical 0-1 mastery-to-score base. Every cross-module consumer that
+# needs to turn a mastery LABEL into a number should derive from THIS,
+# not define its own literal dict — that's what let engineering_quadrant.py
+# and company_readiness.py drift into two independently-hand-tuned tables
+# with no visible link between them (audit finding, module review).
+MASTERY_SCORE_BASE: dict[str, float] = {
+    "Not Practiced": 0.0,
+    "Introduced": 0.25,
+    "Some Practice": 0.5,
+    "Consistent Practice": 0.8,
+    "Extensive Practice": 1.0,
+}
 
+# company_readiness.py's ONLY sanctioned divergence from MASTERY_SCORE_BASE:
+# light/moderate practice gets a small credit bump at company-matching
+# resolution (a recommendation-facing question — "am I close?") without
+# touching the base scale used for quadrant CLASSIFICATION (a coarser,
+# stricter question). If this bump ever needs to change, it changes here,
+# once, instead of inside a second hardcoded dict.
+COMPANY_READINESS_SCORE_BUMP: dict[str, float] = {
+    "Not Practiced": 0.0,
+    "Introduced": 0.05,
+    "Some Practice": 0.10,
+    "Consistent Practice": 0.05,
+    "Extensive Practice": 0.0,
+}
 # Recency decay — a topic with real solved-problem history that hasn't
 # been touched in months shouldn't read identically to one practiced
 # last week. Interview readiness decays; the mastery label should too.
@@ -59,13 +84,14 @@ def _decay_levels_for(days_since_progress: int) -> int:
 
 def get_effective_mastery(weighted_score: float, days_since_progress: int | None) -> tuple[str, bool]:
     """Returns (effective_mastery_label, is_stale).
-
-    `weighted_score` is the difficulty-weighted topic score. `days_since_progress`
-    is the number of days since this topic's RAW solved-count last increased,
-    derived from real leetcode_snapshots history (see leetcode_recency.py) —
-    never a guess. If it's None (no history to derive it from yet, e.g. a
-    topic solved for the first time on the very first sync), no decay is
-    applied since we can't fairly penalize what we can't measure.
+    ...
+    KNOWN LIMITATION: a topic solved exactly once, on a single historical
+    sync, with no subsequent sync ever recording a second data point for
+    it, has no baseline to measure a gap FROM — days_since_progress stays
+    None forever for that topic, so it can never be flagged stale, even
+    a year later. This is a real coverage gap for infrequently-syncing
+    users, not a bug: there is no honest way to compute staleness without
+    a second recorded observation.
     """
     base = get_mastery_level(weighted_score)
     if weighted_score <= 0 or days_since_progress is None:

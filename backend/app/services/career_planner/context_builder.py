@@ -141,12 +141,22 @@ async def _get_latest_leetcode_insights(db: AsyncSession, user_id) -> dict:
     )
     snapshot = result.scalar_one_or_none()
     if snapshot is None or not isinstance(snapshot.skills_json, dict):
-        return {"blind_spots": {"missing_fundamentals": [], "advanced_topics": []}, "topic_mastery": []}
+        return {
+            "blind_spots": {"missing_fundamentals": [], "advanced_topics": []},
+            "topic_mastery": [],
+            "plan_adherence": [],
+        }
 
     insights = snapshot.skills_json.get("insights", {})
     return {
         "blind_spots": insights.get("blind_spots", {"missing_fundamentals": [], "advanced_topics": []}),
         "topic_mastery": insights.get("topic_mastery", []),
+        # Real, already-computed adherence to the LeetCode AI Coach's own
+        # prior recommendations (leetcode_insights.build_plan_adherence,
+        # persisted every sync) — previously never reached Career Planner,
+        # even though both modules independently reason about DSA study
+        # priority. Wiring this closes that gap (module audit, §5).
+        "plan_adherence": insights.get("plan_adherence", []),
     }
 
 
@@ -234,6 +244,7 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
         "projects": projects,
         "leetcode_blind_spots": leetcode["blind_spots"],
         "leetcode_topic_mastery": leetcode["topic_mastery"],
+        "leetcode_plan_adherence": leetcode["plan_adherence"],
         "recent_notes": notes,
         "recent_snapshots": snapshots,
     }

@@ -122,7 +122,14 @@ def build_topic_signals(
     jd_missing_skills: set[str],
     ats_missing_keywords: set[str],
     technology_depth: dict[str, dict] | None = None,
+    leetcode_plan_adherence: list[dict] | None = None,
 ) -> list[dict]:
+    # Index by canonical LeetCode topic name for O(1) lookup below. Entries
+    # come straight from leetcode_insights.build_plan_adherence — real,
+    # already-computed facts (status "followed"/"not_yet_followed", the
+    # date recommended, and how many new problems were solved since).
+    adherence_by_topic = {a["topic"]: a for a in (leetcode_plan_adherence or [])}
+
     signals = []
     for entry in curriculum_topics:
         topic = entry["topic"]
@@ -137,6 +144,24 @@ def build_topic_signals(
         if any(a in ats_missing_keywords for a in aliases):
             extra_reasons.append("related keyword flagged missing on your resume's ATS review")
 
+        # Cross-reference against the LeetCode AI Coach's own prior
+        # recommendation for this exact canonical topic, if one exists —
+        # curriculum "topic" strings don't share vocabulary with LeetCode's
+        # canonical topic names 1:1, so this only fires on an exact match
+        # (a real, if imperfect, signal is better than a fuzzy false one).
+        adherence = adherence_by_topic.get(topic)
+        if adherence is not None:
+            if adherence["status"] == "not_yet_followed":
+                extra_reasons.append(
+                    f"the LeetCode AI Coach recommended focusing on {topic} on "
+                    f"{adherence['recommended_at'][:10]} and no new problems have been solved here since"
+                )
+            else:
+                extra_reasons.append(
+                    f"you've already been acting on the LeetCode AI Coach's recommendation to focus on "
+                    f"{topic} ({adherence['new_problems_since_recommendation']} new problems solved since)"
+                )
+
         signals.append({
             "domain": entry["domain"],
             "topic": topic,
@@ -146,8 +171,4 @@ def build_topic_signals(
             "reasons": coverage_info["reasons"] + extra_reasons,
         })
 
-    # Ordered by domain-appearance then suggested_order — preserves a
-    # sensible default curriculum sequence. This is a STARTING POINT the
-    # prompt explicitly tells the LLM it can reorder based on coverage
-    # and days available, not a schedule it has to follow.
     return signals

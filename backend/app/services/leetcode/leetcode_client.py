@@ -59,6 +59,12 @@ def _compute_streaks(submission_calendar: dict[int, int]) -> tuple[int, int]:
     """submission_calendar: {unix_day_timestamp: submission_count}.
     Returns (longest_streak, current_streak) measured in consecutive
     active days.
+
+    The 86400s (one day) step below is safe ONLY because LeetCode's
+    submissionCalendar keys are always UTC-midnight-aligned day buckets,
+    not per-submission timestamps — confirmed from the real API response
+    shape, not assumed. If LeetCode ever changes this to per-submission
+    granularity, this streak math would need bucketing first.
     """
     active_days = sorted(ts for ts, count in submission_calendar.items() if count > 0)
     if not active_days:
