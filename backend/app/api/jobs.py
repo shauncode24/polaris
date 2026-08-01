@@ -29,6 +29,7 @@ from app.services.resume.pdf_parser import extract_text_from_pdf
 from app.services.resume.skill_classifier import resolve_skills
 from app.api.deps import get_current_user
 from app.models.facts import User
+from app.services.identity.identity_refresh import trigger_identity_refresh
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -160,6 +161,12 @@ async def _run_job_analysis(
     job_description.analysis_result = response.model_dump(mode="json")
     await db.commit()
     print("[TRACING] Skill gap analysis + narrative persisted to job_descriptions.", flush=True)
+
+    # Freshness fix — the fourth of the four real data-producing pages
+    # (Resume, GitHub, LeetCode, Jobs) that should keep Engineering
+    # Identity current: recent_job_matches is read directly from this
+    # data.
+    await trigger_identity_refresh(db, user.id, "job description analysis")
 
     return response
 

@@ -26,6 +26,8 @@ from app.services.resume.coherence_narrative import generate_coherence_report, g
 from app.services.resume.tailoring_llm import generate_tailoring_report, get_cached_tailoring_report
 from app.services.resume.evolution import build_evolution_report
 
+from app.services.identity.identity_refresh import trigger_identity_refresh
+
 router = APIRouter(prefix="/resume", tags=["resume"])
 
 
@@ -37,8 +39,10 @@ async def upload_resume(
 ):
     raw_bytes = await file.read()
     result = await ingest_resume(raw_bytes, db, current_user, filename=file.filename)
+    # Freshness fix: keep Engineering Identity current the instant new
+    # resume data lands, instead of only on a manual POST /identity/refresh.
+    await trigger_identity_refresh(db, current_user.id, "resume upload")
     return result
-
 
 @router.post("/review")
 async def review_resume(
@@ -56,7 +60,7 @@ async def review_resume(
 async def analyze_resume(
     job_description_id: str | None = None,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db=Depends(get_db),
 ):
     """Run the full deterministic Resume Analysis Engine and persist the result."""
     try:
@@ -68,6 +72,10 @@ async def analyze_resume(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # This is the endpoint that actually produces resume_score/grade —
+    # the field IdentityFacts reads — so it gets its own refresh trigger
+    # distinct from the raw upload above.
+    await trigger_identity_refresh(db, current_user.id, "resume analysis")
     return report
 
 

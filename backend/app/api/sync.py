@@ -18,6 +18,7 @@ from app.services.leetcode.engineering_snapshot import (
     get_engineering_snapshot_history,
     compute_engineering_snapshot,
 )
+from app.services.identity.identity_refresh import trigger_identity_refresh
 
 from app.models.inference import ProfileSnapshot, LeetcodePortfolioReview
 
@@ -48,11 +49,10 @@ async def trigger_github_sync(
     except GithubSyncError as e:
         return JSONResponse(status_code=502, content={"status": "error", "reason": str(e)})
 
-    # A GitHub sync can move the Engineering Maturity Quadrant (its
-    # github_score half) even if LeetCode data hasn't changed — append a
-    # new trend row. No-op (returns None) if the user has no LeetCode
-    # data synced yet, since the quadrant needs both sides to exist.
     await persist_engineering_snapshot(db, current_user.id, "github sync")
+    # Freshness fix — same trigger point as the proven
+    # LeetcodeEngineeringSnapshot pattern above.
+    await trigger_identity_refresh(db, current_user.id, "github sync")
 
     return result
 
@@ -80,6 +80,7 @@ async def trigger_leetcode_sync(
         )
 
     await persist_engineering_snapshot(db, current_user.id, "leetcode sync")
+    await trigger_identity_refresh(db, current_user.id, "leetcode sync")
 
     return result
 
@@ -92,6 +93,7 @@ async def submit_leetcode_manual(
 ):
     result = await sync_leetcode_manual(db, current_user, payload.tag_counts)
     await persist_engineering_snapshot(db, current_user.id, "leetcode manual submission")
+    await trigger_identity_refresh(db, current_user.id, "leetcode manual submission")
     return result
 
 
@@ -100,15 +102,6 @@ async def get_leetcode_workspace(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Restore LeetCode workspace sync snapshot & portfolio review from
-    database. The Engineering Maturity Quadrant, company readiness, and
-    resume-claim check are read from the persisted, append-only history
-    (LeetcodeEngineeringSnapshot) so the quadrant carries real trend
-    across syncs. If no row has ever been persisted yet (e.g. the very
-    first load after this feature shipped, before the next sync), a
-    read-only live computation fills the gap so the page isn't empty —
-    this never writes a row; only an explicit sync action does that.
-    """
     snapshot = await db.execute(
         select(ProfileSnapshot)
         .where(ProfileSnapshot.user_id == current_user.id)
@@ -173,11 +166,6 @@ async def run_leetcode_portfolio_review(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger an LLM-powered review of the user's LeetCode performance.
-    No new underlying data is synced here, so no new engineering-snapshot
-    trend row is written — re-running the coach on unchanged data
-    shouldn't fabricate a new trend point.
-    """
     from fastapi import HTTPException
     from app.services.leetcode.leetcode_reviewer import generate_leetcode_portfolio_review
 

@@ -17,9 +17,8 @@ from app.services.identity.identity_builder import build_identity_facts
 
 class IdentitySynthesisError(Exception):
     """Raised when the synthesis LLM call fails or returns something we
-    can't validate. Same graceful-degradation pattern used everywhere
-    else in this codebase — callers fall back to a deterministic
-    template instead of crashing the whole report.
+    can't validate. Callers fall back to a deterministic template
+    instead of crashing the whole report.
     """
 
 
@@ -62,7 +61,15 @@ def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
     )
 
 
-async def generate_engineering_identity(db: AsyncSession, user_id) -> EngineeringIdentityReport:
+async def generate_engineering_identity(
+    db: AsyncSession, user_id, source_event: str = "manual_refresh"
+) -> EngineeringIdentityReport:
+    """`source_event` — freshness fix: records WHY this snapshot exists,
+    same pattern LeetcodeEngineeringSnapshot already uses. Callers that
+    trigger this automatically after a real sync/upload event (see
+    identity_refresh.py) pass the real event name; an explicit
+    POST /identity/refresh keeps the "manual_refresh" default.
+    """
     facts = await build_identity_facts(db, user_id)
 
     degraded = False
@@ -90,6 +97,7 @@ async def generate_engineering_identity(db: AsyncSession, user_id) -> Engineerin
         narrative=narrative,
         generated_at=datetime.now(timezone.utc),
         analysis_degraded=degraded,
+        source_event=source_event,
     )
 
     row = EngineeringIdentity(
@@ -97,6 +105,7 @@ async def generate_engineering_identity(db: AsyncSession, user_id) -> Engineerin
         facts_json=facts.model_dump(mode="json"),
         narrative_json=narrative.model_dump(mode="json"),
         analysis_degraded=degraded,
+        source_event=source_event,
         created_at=report.generated_at,
     )
     db.add(row)
@@ -121,4 +130,5 @@ async def get_latest_engineering_identity(db: AsyncSession, user_id) -> Engineer
         narrative=IdentityLLMOutput.model_validate(row.narrative_json),
         generated_at=row.created_at,
         analysis_degraded=row.analysis_degraded,
+        source_event=row.source_event,
     )
