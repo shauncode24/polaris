@@ -186,8 +186,13 @@ async def run_analysis(
     role_fit = compute_role_fit(evidence.get("skills", []))
 
     # ── 7. Suggestions ───────────────────────────────────────────────────────
+    # FIX (Critical #1): ats_res["warnings"] is the SAME warnings list that
+    # produced `overall`/`grade`/`label` above — passing it in guarantees the
+    # displayed score and the displayed reasons for that score can never
+    # disagree.
     suggestions = generate_suggestions(
-        structure, parsing, formatting, content, metrics, keywords, evidence
+        structure, parsing, formatting, content, metrics, keywords, evidence,
+        ats_warnings=ats_res.get("warnings", []),
     )
 
     report: dict = {

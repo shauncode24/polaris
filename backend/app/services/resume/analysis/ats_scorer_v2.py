@@ -1,6 +1,11 @@
 import re
 from datetime import date
 from app.models.facts import Experience, Project, Education
+from app.services.resume.analysis.shared_signals import (
+    has_metric,
+    opens_with_strong_verb,
+    TECH_KEYWORD_POOL,
+)
 
 EMAIL_PATTERN = re.compile(r"[\w.\-]+@[\w.\-]+\.\w+")
 PHONE_PATTERN = re.compile(r"(\+?\d{1,3}[\s.\-]?)?\(?\d{3,4}\)?[\s.\-]?\d{3,4}[\s.\-]?\d{3,4}")
@@ -10,19 +15,9 @@ GITHUB_PATTERN = re.compile(r"github\.com/[\w\-]+", re.IGNORECASE)
 _FANCY_BULLET_RE = re.compile(r"[▪▫◦◉●►✓✗✦✧✩✱☛☞▶◆◇★☆]")
 _NON_ASCII_RE = re.compile(r"[^\x00-\x7F]")
 
-ACTION_VERBS = {
-    "built", "designed", "implemented", "developed", "created", "optimized", "architected",
-    "reduced", "automated", "led", "managed", "delivered", "deployed", "scaled", "integrated",
-    "analyzed", "facilitated", "authored", "orchestrated", "engineered", "refactored"
-}
-
-TECH_KEYWORDS = {
-    "python", "javascript", "typescript", "golang", "java", "c++", "rust", "ruby", "php",
-    "react", "angular", "vue", "next.js", "node.js", "express", "fastapi", "django", "flask",
-    "spring", "docker", "kubernetes", "aws", "gcp", "azure", "terraform", "ansible",
-    "postgresql", "mysql", "mongodb", "redis", "elasticsearch", "sqlite", "graphql", "grpc",
-    "git", "ci/cd", "html", "css", "tailwind", "pytorch", "tensorflow", "scikit-learn"
-}
+# Reuse the single canonical tech vocabulary instead of a private list —
+# this is the fix for keyword-coverage disagreeing with keywords.py.
+TECH_KEYWORDS = TECH_KEYWORD_POOL
 
 
 def analyze_ats_v2(
@@ -35,7 +30,6 @@ def analyze_ats_v2(
     lowered_text = raw_text.lower()
     word_count = len(raw_text.split())
 
-    # Collect bullets and raw text from experience & projects
     bullets: list[str] = []
     for exp in experiences:
         if exp.bullets:
@@ -88,7 +82,7 @@ def analyze_ats_v2(
     if has_experience_sec: qty_check += 15
     if has_projects_sec: qty_check += 15
     if has_education_sec: qty_check += 10
-    
+
     unique_skills = set()
     for exp in experiences:
         if exp.stack: unique_skills.update(s.lower() for s in exp.stack)
@@ -100,7 +94,7 @@ def analyze_ats_v2(
 
     completeness_score = sec_check + qty_check
 
-    # 3. Content Quality (25%)
+    # 3. Content Quality (25%) — now uses shared_signals for metric/verb detection
     action_verb_count = 0
     quantified_count = 0
     tech_mention_count = 0
@@ -111,16 +105,11 @@ def analyze_ats_v2(
         words = b.split()
         if not words:
             continue
-        # Action Verbs
-        first_word = words[0].lower().strip(".,:;-*•")
-        if first_word in ACTION_VERBS:
+        if opens_with_strong_verb(b):
             action_verb_count += 1
-        # Quantified Impact
-        if any(char.isdigit() or char == '%' for char in b):
+        if has_metric(b):
             quantified_count += 1
-        # Tech Mentions
         tech_mention_count += sum(1 for kw in TECH_KEYWORDS if f" {kw} " in f" {b.lower()} ")
-        # Bullet Length
         if len(words) > 10:
             good_length_count += 1
 
@@ -139,14 +128,12 @@ def analyze_ats_v2(
 
     # 4. Resume Structure & Organization (15%)
     struct_pts = 40
-    # Chronological sort experience
     if len(experiences) > 1:
         dates = [exp.start_date for exp in experiences if exp.start_date]
         if dates != sorted(dates, reverse=True):
             struct_pts -= 15
 
     proj_pts = 20
-    # Chronological sort projects
     if len(projects) > 1:
         p_dates = [p.created_at.date() for p in projects if p.created_at]
         if p_dates != sorted(p_dates, reverse=True):
@@ -156,7 +143,6 @@ def analyze_ats_v2(
     for exp in experiences:
         if exp.start_date and exp.end_date and exp.start_date > exp.end_date:
             timeline_pts -= 20
-        # Check overlaps
         for other in experiences:
             if other.id != exp.id and exp.start_date and exp.end_date and other.start_date and other.end_date:
                 if exp.start_date < other.end_date and other.start_date < exp.end_date:
@@ -175,9 +161,8 @@ def analyze_ats_v2(
     link_pts = 0
     if GITHUB_PATTERN.search(raw_text): link_pts += 20
     if LINKEDIN_PATTERN.search(raw_text): link_pts += 20
-    
+
     consistency_pts = 20
-    # Check date consistency in raw text
     slashed = len(re.findall(r"\d{1,2}/\d{1,2}/\d{2,4}", raw_text))
     written = len(re.findall(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{4}", lowered_text))
     if slashed > 0 and written > 0:
@@ -185,7 +170,6 @@ def analyze_ats_v2(
 
     professionalism_score = email_pts + link_pts + consistency_pts
 
-    # Aggregate weighted score
     overall = (
         parsing_score * 0.25 +
         completeness_score * 0.20 +
@@ -196,7 +180,6 @@ def analyze_ats_v2(
     )
 
     warnings = []
-    # Add detailed warning descriptors to pass to suggestions generator
     if not EMAIL_PATTERN.search(raw_text):
         warnings.append({"type": "missing_email", "severity": "high", "detail": "Missing contact email address."})
     if not PHONE_PATTERN.search(raw_text):
@@ -211,7 +194,6 @@ def analyze_ats_v2(
         warnings.append({"type": "missing_projects", "severity": "medium", "detail": "No personal or professional projects detected."})
     if not has_education_sec:
         warnings.append({"type": "missing_education", "severity": "medium", "detail": "No educational history detected."})
-
     if non_ascii_count > 30:
         warnings.append({
             "type": "encoding_issues", "severity": "medium",
@@ -222,7 +204,6 @@ def analyze_ats_v2(
             "type": "fancy_bullets", "severity": "low",
             "detail": f"Found {fancy_bullet_count} fancy Unicode bullets. Some ATS parsers misread these — prefer plain hyphens."
         })
-
 
     return {
         "score": round(overall),

@@ -1,12 +1,16 @@
 import re
 
+from app.services.resume.analysis.shared_signals import METRIC_PATTERN, has_metric
+
 WEAK_OPENERS = {
     "helped", "worked on", "responsible for", "assisted", "involved in",
     "tasked with", "participated in", "in charge of", "duties included",
     "worked with", "familiar with",
 }
 
-_METRIC_PATTERN = re.compile(r"(\d+(\.\d+)?\s*%|\$\s?\d|\b\d+(\.\d+)?[kKmMxX]?\b)")
+# Kept as module-level export name for backward compatibility with callers
+# (bullet_strength.py) that import _METRIC_PATTERN directly.
+_METRIC_PATTERN = METRIC_PATTERN
 _PASSIVE_PATTERN = re.compile(r"\b(was|were|been|being|is|are)\s+\w+ed\b", re.IGNORECASE)
 
 MIN_BULLET_LEN = 30
@@ -19,19 +23,13 @@ def _starts_with_weak_opener(text: str) -> bool:
 
 
 def analyze_bullet(text: str) -> list[dict]:
-    """Rule-based, deterministic bullet analysis — same philosophy as
-    resume/confidence.py: anything reliably computable in code should
-    never be left to LLM judgment, especially something as checkable as
-    'does this contain a number'. Returns a list of issue dicts, empty
-    if the bullet is clean.
-    """
     issues: list[dict] = []
     stripped = text.strip()
 
     if not stripped:
         return issues
 
-    if not _METRIC_PATTERN.search(stripped):
+    if not has_metric(stripped):
         issues.append({
             "type": "missing_metric",
             "detail": "No quantified metric (number, %, or $) found in this bullet.",
@@ -64,11 +62,6 @@ def analyze_bullet(text: str) -> list[dict]:
 
 
 def build_bullet_units(experiences: list, projects: list) -> list[dict]:
-    """Shared bullet-unit builder — used by both reviewer.py's
-    _build_review_units and coherence_narrative.py's
-    build_bullets_with_strength, so every surface describes the same
-    bullets (ids, labels) identically instead of duplicating this logic.
-    """
     units: list[dict] = []
     for exp in experiences:
         label = f"{exp.role} at {exp.company}"

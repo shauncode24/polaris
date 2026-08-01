@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, JobDescription, Project
-from app.models.inference import ResumeTailoringReview
+from app.models.inference import ResumeTailoringReview, ProjectClaimAuditReview
 from app.prompts.resume_tailoring import TAILORING_SYSTEM_PROMPT
 from app.schemas.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
 from app.services.evidence import get_all_skill_confidences
@@ -17,6 +17,29 @@ from app.services.resume.tailoring_ranking import rank_items_for_jd
 from app.services.resume.text_sanitize import sanitize_ai_text
 
 MAX_BULLETS_IN_PROMPT = 40
+
+# FIX (Important #5): same idea projects/comparison.py already applies to
+# its goal-aware ranking — an unresolved claim-risk finding should reduce
+# how strongly Tailoring recommends leading with a project.
+CLAIM_RISK_SCORE_PENALTY = {"high": 0.5, "medium": 0.25}
+
+
+async def _get_claim_risk_by_project_id(db: AsyncSession, project_ids: list) -> dict:
+    """project_id -> "high"|"medium", for projects with an unresolved
+    Claim Audit risk finding. Mirrors how the Projects module's
+    goal-aware ranking already reads this same table.
+    """
+    if not project_ids:
+        return {}
+    result = await db.execute(
+        select(ProjectClaimAuditReview).where(ProjectClaimAuditReview.project_id.in_(project_ids))
+    )
+    risk_by_id = {}
+    for row in result.scalars().all():
+        level = (row.report_json or {}).get("narrative", {}).get("risk_level")
+        if level in ("high", "medium"):
+            risk_by_id[row.project_id] = level
+    return risk_by_id
 
 
 class TailoringGenerationError(Exception):
@@ -124,6 +147,21 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
 
     ranked = rank_items_for_jd(items, canonical_skills)
 
+    # FIX (Important #5): apply the same claim-risk penalty Projects'
+    # goal-aware ranking already applies, so Tailoring never confidently
+    # recommends leading with a project the Claim Audit has already
+    # flagged as unsupported.
+    claim_risk_by_id = await _get_claim_risk_by_project_id(db, [p.id for p in projects])
+    for r in ranked:
+        if r["type"] != "project":
+            continue
+        project_uuid = next((p.id for p in projects if str(p.id) == r["id"]), None)
+        risk = claim_risk_by_id.get(project_uuid)
+        if risk:
+            r["relevance_score"] = round(r["relevance_score"] * (1 - CLAIM_RISK_SCORE_PENALTY[risk]), 2)
+            r["claim_risk"] = risk
+    ranked.sort(key=lambda r: r["relevance_score"], reverse=True)
+
     skill_confidence = await get_all_skill_confidences(db)
     bullets = await build_bullets_with_strength(db, user_id, resume_id, skill_confidence)
     bullets_sorted = sorted(bullets, key=lambda b: b["strength"]["score"], reverse=True)
@@ -141,6 +179,10 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
         "required_skills": sorted(raw_required), "implicit_skills": sorted(raw_implicit),
         "nice_to_have": sorted(raw_nice),
         "ranked_items": ranked, "bullets": bullets_for_prompt,
+        "claim_risk_flags": [
+            {"project_id": str(pid), "risk_level": level}
+            for pid, level in claim_risk_by_id.items()
+        ],
     }
 
     degraded = False

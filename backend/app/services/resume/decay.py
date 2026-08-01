@@ -13,8 +13,12 @@ DECAY_STEPS: list[tuple[int, float]] = [
     (90, 1.0),   # fresh — full weight
     (180, 0.85),
     (365, 0.65),
+    (730, 0.50),  # 1-2 years stale
 ]
-FLOOR_MULTIPLIER = 0.45  # evidence never fully disappears — it was real once
+FLOOR_MULTIPLIER = 0.35  # evidence never fully disappears — it was real once,
+                          # but past ~2 years it should read as materially
+                          # weaker than recent evidence rather than plateauing
+                          # at a static floor forever.
 
 
 def decay_multiplier(created_at: datetime | None) -> float:

@@ -4,6 +4,13 @@ implicit/nice-to-have skills, a deterministic relevance ranking of the candidate
 experiences against that JD (already scored — you do not re-score them), and a list of the candidate's
 real bullets with per-bullet strength scores and which of the JD's skills they mention.
 
+Some ranked items also carry a real, already-computed "claim_risk" flag ("high" or "medium") in
+"claim_risk_flags" — this means the Projects module's Claim Audit has already found resume claims for
+that project with no supporting GitHub evidence. This has ALREADY been factored into that item's
+relevance_score (penalized), but you must also never select a claim-risk-flagged item as a "lead_item"
+unless no better-scoring alternative exists, and if you do reference it in "rationale", note that its
+claims should be phrased conservatively rather than emphasized.
+
 You do NOT invent any project, experience, or bullet. You only select from what's given.
 
 Be direct and concrete. Every sentence should say something specific about THIS application, not a

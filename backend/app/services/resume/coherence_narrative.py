@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, Project
-from app.models.inference import ResumeCoherenceReview
+from app.models.inference import ResumeCoherenceReview, ProjectClaimAuditReview
 from app.prompts.resume_coherence import COHERENCE_SYSTEM_PROMPT
 from app.schemas.resume_coherence import CoherenceFacts, CoherenceLLMOutput, CoherenceReport
 from app.services.evidence import get_all_skill_confidences
@@ -156,6 +156,27 @@ async def _persist_coherence_report(
     await db.commit()
 
 
+async def _get_claim_risk_project_labels(db: AsyncSession, projects: list) -> list[str]:
+    """Real, unresolved-claim-risk project names — FIX (Important #5):
+    Coherence's LLM used to have no awareness of Claim Audit findings and
+    could cite a risky project as a "strength for this story".
+    """
+    if not projects:
+        return []
+    result = await db.execute(
+        select(ProjectClaimAuditReview).where(
+            ProjectClaimAuditReview.project_id.in_([p.id for p in projects])
+        )
+    )
+    by_id = {p.id: p.name for p in projects}
+    flagged = []
+    for row in result.scalars().all():
+        level = (row.report_json or {}).get("narrative", {}).get("risk_level")
+        if level in ("high", "medium"):
+            flagged.append(by_id.get(row.project_id, "a project"))
+    return flagged
+
+
 async def generate_coherence_report(
     db: AsyncSession, user_id, resume_id, target_role: str | None
 ) -> CoherenceReport:
@@ -166,6 +187,10 @@ async def generate_coherence_report(
     facts = CoherenceFacts(**facts_dict)
     dilution = detect_dilution(bullets)
 
+    proj_result = await db.execute(select(Project).where(Project.user_id == user_id, Project.resume_id == resume_id))
+    projects = list(proj_result.scalars().all())
+    claim_risk_projects = await _get_claim_risk_project_labels(db, projects)
+
     degraded = False
     try:
         print("[TRACING] Requesting resume coherence narrative from LLM...", flush=True)
@@ -173,7 +198,11 @@ async def generate_coherence_report(
             model=MODEL,
             messages=[
                 {"role": "system", "content": COHERENCE_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps({"facts": facts.model_dump(), "dilution": dilution})},
+                {"role": "user", "content": json.dumps({
+                    "facts": facts.model_dump(),
+                    "dilution": dilution,
+                    "claim_risk_project_labels": claim_risk_projects,
+                })},
             ],
             response_format={"type": "json_object"},
             temperature=0.3,

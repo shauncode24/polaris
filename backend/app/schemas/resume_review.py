@@ -51,13 +51,6 @@ class BulletRewriteSuggestion(BaseModel):
     rationale: str
 
 
-class LLMReviewOutput(BaseModel):
-    summary: str
-    strengths: list[str] = []
-    top_priority_fixes: list[str] = []
-    rewrites: list[BulletRewriteSuggestion] = []
-
-
 class LLMNarrativeOutput(BaseModel):
     summary: str
     strengths: list[str] = []

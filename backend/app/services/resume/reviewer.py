@@ -17,7 +17,6 @@ from app.schemas.resume_review import (
     ATSFlag,
     BulletIssue,
     BulletReview,
-    LLMReviewOutput,
     LLMNarrativeOutput,
     LLMRewritesOutput,
     ResumeReviewReport,

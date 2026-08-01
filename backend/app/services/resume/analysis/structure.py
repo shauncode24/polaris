@@ -32,10 +32,14 @@ def _detect_sections(raw_text: str) -> dict[str, int]:
         stripped = line.strip().lower()
         if not stripped or len(stripped) > 55:
             continue
+        normalized = stripped.rstrip(":")
         for key, aliases in SECTION_ALIASES.items():
             if key in detected:
                 continue
-            if any(stripped == alias or stripped.rstrip(":") == alias for alias in aliases):
+            # Exact match first; substring fallback catches real-world
+            # headers like "Skills & Technologies" or "Technical Skills
+            # Summary" that would otherwise falsely trigger missing_required.
+            if any(normalized == alias or alias in normalized for alias in aliases):
                 detected[key] = i
                 break
     return detected

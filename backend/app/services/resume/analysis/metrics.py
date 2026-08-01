@@ -1,19 +1,12 @@
 """Module 5 — Metrics Analyzer.
 
 Calculates "metric density" — the percentage of bullets that contain
-at least one concrete number, percentage, or dollar amount.
-Deterministic; zero LLM calls.
+at least one concrete number, percentage, or dollar amount. Deterministic;
+zero LLM calls. Uses shared_signals.METRIC_PATTERN so this can never
+disagree with bullet_analysis.py or ats_scorer_v2.py on whether a
+bullet contains a metric.
 """
-import re
-
-# Matches: 35%, $50k, 3.5x, 15,000, 10M, 150+ etc.
-_METRIC_RE = re.compile(
-    r"(\b\d+(\.\d+)?\s*%"        # percentages: 35%, 3.5%
-    r"|\$\s?\d[\d,\.]*[kKmMbB]?" # dollar amounts: $50, $1.2M, $500k
-    r"|\b\d[\d,\.]*[kKmMbBxX]\b" # abbreviated: 10k, 5M, 3x
-    r"|\b\d{2,}(?:,\d{3})*\b"    # large numbers: 15,000 or 1200
-    r"|\b\d+\+)"                  # with plus: 150+
-)
+from app.services.resume.analysis.shared_signals import has_metric
 
 
 def analyze_metrics(bullets: list[str]) -> dict:
@@ -29,12 +22,10 @@ def analyze_metrics(bullets: list[str]) -> dict:
             "total_bullets": 0,
         }
 
-    with_metrics = sum(1 for b in clean if _METRIC_RE.search(b))
-    without      = total - with_metrics
-    density      = with_metrics / total * 100
+    with_metrics = sum(1 for b in clean if has_metric(b))
+    without = total - with_metrics
+    density = with_metrics / total * 100
 
-    # Score curve:
-    # ≥ 70% → 100   ≥ 55% → 88   ≥ 40% → 75   ≥ 25% → 60   < 25% → linear
     if density >= 70:
         score = 100
     elif density >= 55:

@@ -224,82 +224,6 @@ async def get_resume_workspace(
         })
     versions = list(reversed(versions))  # newest first
 
-    # ── Profile consistency ──────────────────────────────────────────────────
-    # 1. Fetch user's profile skills (GitHub languages, Leetcode, Certificates)
-    profile_skills = set()
-    
-    # GitHub
-    gh_rows = await db.execute(
-        select(GithubSnapshot.languages).where(GithubSnapshot.user_id == uid)
-    )
-    for row in gh_rows.fetchall():
-        if row[0]:
-            profile_skills.update(k.lower() for k in row[0].keys())
-
-    # Leetcode
-    lc_ev_rows = await db.execute(
-        select(Skill.name)
-        .join(LeetcodeSnapshot, (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name))
-        .where(LeetcodeSnapshot.user_id == uid)
-    )
-    profile_skills.update(r[0].lower() for r in lc_ev_rows.fetchall() if r[0])
-
-    # Certificates
-    cert_ev_rows = await db.execute(
-        select(Certificate.skills).where(Certificate.user_id == uid)
-    )
-    for row in cert_ev_rows.fetchall():
-        if row[0]:
-            profile_skills.update(s.lower() for s in row[0])
-
-    # Exclude generic Leetcode algorithmic skills if needed, or keep all profile skills
-    from app.services.resume.analysis.engine import EXCLUDED_SKILLS
-    profile_skills = {s for s in profile_skills if s not in EXCLUDED_SKILLS}
-
-    # 2. Fetch all skills that are present in the latest resume (experiences, projects, and parsed skills)
-    resume_skills = set()
-    
-    # Skills from experiences
-    exp_skills = await db.execute(
-        select(Skill.canonical_name)
-        .join(SkillEvidence, SkillEvidence.skill_id == Skill.id)
-        .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
-        .where(Experience.resume_id == latest.id)
-    )
-    resume_skills.update(r[0].lower() for r in exp_skills.fetchall() if r[0])
-
-    # Skills from projects
-    proj_skills = await db.execute(
-        select(Skill.canonical_name)
-        .join(SkillEvidence, SkillEvidence.skill_id == Skill.id)
-        .join(Project, (SkillEvidence.source_id == Project.id) & (SkillEvidence.source_type == "project"))
-        .where(Project.resume_id == latest.id)
-    )
-    resume_skills.update(r[0].lower() for r in proj_skills.fetchall() if r[0])
-
-    # Skills from parsed general skills section
-    from app.services.resume.ingestion import extract_skills_from_text
-    from app.services.resume.skill_classifier import resolve_skills
-    parsed_skills = extract_skills_from_text(latest.raw_text)
-    if parsed_skills:
-        resolved_parsed = await resolve_skills(set(parsed_skills), db)
-        resume_skills.update(canonical.lower() for canonical in resolved_parsed.values() if canonical)
-
-    # 3. Compute consistency
-    all_profile_skills = profile_skills | resume_skills
-    display_names = {}
-    if all_profile_skills:
-        skill_rows = await db.execute(
-            select(Skill.canonical_name, Skill.name).where(Skill.canonical_name.in_(list(all_profile_skills)))
-        )
-        for canonical, name in skill_rows.fetchall():
-            display_names[canonical.lower()] = name
-            display_names[name.lower()] = name
-
-    missing_keys = profile_skills - resume_skills
-    missing_from_resume = sorted([display_names.get(k, k.title()) for k in missing_keys])
-
-
     # ── Resume vs jobs ───────────────────────────────────────────────────────
     jobs_result = await db.execute(
         select(JobDescription)
@@ -338,6 +262,18 @@ async def get_resume_workspace(
 
     coverage_gaps = await analyze_cross_source_coverage(db, uid, latest.id)
 
+    # FIX (Critical #2): profile_consistency.missing_from_resume used to be
+    # computed a second time, inline, with slightly different logic than
+    # coverage_gaps (analyze_cross_source_coverage) — the two could disagree.
+    # Derive it FROM coverage_gaps instead, so there is exactly one
+    # cross-source-gap computation in the codebase.
+    missing_from_resume = sorted(
+        {g["skill"].title() for g in coverage_gaps.get("github_gaps", [])}
+        | {g["skill"].title() for g in coverage_gaps.get("leetcode_gaps", [])}
+        | {g["skill"].title() for g in coverage_gaps.get("certificate_gaps", [])}
+    )
+    profile_skill_count = len(missing_from_resume) + evidence_res.get("total_skills", 0)
+
     return {
         "has_resume": True,
         "current_resume": {
@@ -358,8 +294,8 @@ async def get_resume_workspace(
         "latest_review": latest_review,
         "latest_analysis": latest_analysis,
         "profile_consistency": {
-            "profile_skill_count": len(all_profile_skills),
-            "resume_skill_count": len(resume_skills),
+            "profile_skill_count": profile_skill_count,
+            "resume_skill_count": evidence_res.get("total_skills", 0),
             "missing_from_resume": missing_from_resume[:10],
         },
         "resume_vs_jobs": resume_vs_jobs,

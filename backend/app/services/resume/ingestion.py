@@ -14,7 +14,7 @@ from app.models.inference import SkillEvidence, ProfileSnapshot
 from app.services.resume.pdf_parser import extract_text_from_pdf
 from app.services.resume.extraction import extract_resume_data
 from app.services.resume.skill_classifier import resolve_skills
-from app.services.resume.confidence import WEIGHTS, compute_skill_confidence
+from app.services.resume.confidence import WEIGHTS, STACK_ONLY_MULTIPLIER, compute_skill_confidence
 from app.services.resume.review import flag_for_review, REVIEW_THRESHOLD
 
 
@@ -192,11 +192,17 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
                 proj_extracted.description, raw_name
             )
             if stack_match or desc_match:
-                weights.append(WEIGHTS["project"])
+                # Only stack-listed with no corroborating description text
+                # gets the discounted weight — a real description mention
+                # (even alongside a stack listing) earns full weight.
+                weight = WEIGHTS["project"] if desc_match else WEIGHTS["project"] * STACK_ONLY_MULTIPLIER
+                weights.append(weight)
                 evidence_entries.append({
                     "source_type": "project",
                     "source_id": str(proj_row.id),
                     "detail": proj_extracted.name,
+                    "corroborated": desc_match,
+                    "weight": weight,
                 })
 
         for exp_row, exp_extracted in zip(experience_rows, extraction.experiences):
@@ -210,28 +216,32 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
                 # evidence from other sources. All mentions still show up
                 # in evidence_entries for transparency.
                 weights.append(WEIGHTS["experience"])
-                for bullet in bullet_hits:
+                for i, bullet in enumerate(bullet_hits):
                     evidence_entries.append({
                         "source_type": "experience",
                         "source_id": str(exp_row.id),
                         "detail": bullet,
+                        "weight": WEIGHTS["experience"] if i == 0 else 0.0,
                     })
             elif stack_match:
-                weights.append(WEIGHTS["experience"])
+                weight = WEIGHTS["experience"] * STACK_ONLY_MULTIPLIER
+                weights.append(weight)
                 evidence_entries.append({
                     "source_type": "experience",
                     "source_id": str(exp_row.id),
                     "detail": f"Listed in stack for {exp_extracted.role}",
+                    "corroborated": False,
+                    "weight": weight,
                 })
 
         confidence = compute_skill_confidence(weights)
 
-        for entry in evidence_entries:
+        for entry, weight in zip(evidence_entries, weights):
             db.add(SkillEvidence(
                 skill_id=skill.id,
                 source_type=entry["source_type"],
                 source_id=UUID(entry["source_id"]),
-                weight=WEIGHTS[entry["source_type"]],
+                weight=weight,
             ))
 
         skills_json[canonical] = {"confidence": confidence, "evidence": evidence_entries}
@@ -352,11 +362,17 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
                 proj_row.description, raw_name
             )
             if stack_match or desc_match:
-                weights.append(WEIGHTS["project"])
+                # Only stack-listed with no corroborating description text
+                # gets the discounted weight — a real description mention
+                # (even alongside a stack listing) earns full weight.
+                weight = WEIGHTS["project"] if desc_match else WEIGHTS["project"] * STACK_ONLY_MULTIPLIER
+                weights.append(weight)
                 evidence_entries.append({
                     "source_type": "project",
                     "source_id": str(proj_row.id),
                     "detail": proj_row.name,
+                    "corroborated": desc_match,
+                    "weight": weight,
                 })
 
         for exp_row in experiences:
@@ -370,28 +386,32 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
                 # evidence from other sources. All mentions still show up
                 # in evidence_entries for transparency.
                 weights.append(WEIGHTS["experience"])
-                for bullet in bullet_hits:
+                for i, bullet in enumerate(bullet_hits):
                     evidence_entries.append({
                         "source_type": "experience",
                         "source_id": str(exp_row.id),
                         "detail": bullet,
+                        "weight": WEIGHTS["experience"] if i == 0 else 0.0,
                     })
             elif stack_match:
-                weights.append(WEIGHTS["experience"])
+                weight = WEIGHTS["experience"] * STACK_ONLY_MULTIPLIER
+                weights.append(weight)
                 evidence_entries.append({
                     "source_type": "experience",
                     "source_id": str(exp_row.id),
                     "detail": f"Listed in stack for {exp_row.role}",
+                    "corroborated": False,
+                    "weight": weight,
                 })
 
         confidence = compute_skill_confidence(weights)
 
-        for entry in evidence_entries:
+        for entry, weight in zip(evidence_entries, weights):
             db.add(SkillEvidence(
                 skill_id=skill.id,
                 source_type=entry["source_type"],
                 source_id=UUID(entry["source_id"]),
-                weight=WEIGHTS[entry["source_type"]],
+                weight=weight,
             ))
 
         skills_json[canonical] = {"confidence": confidence, "evidence": evidence_entries}
