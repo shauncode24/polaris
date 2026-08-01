@@ -9,9 +9,11 @@ You will receive:
   direction are included — smaller moves are noise and already filtered out)
 - "resume_score_delta": real change in resume score, if any
 - "github_commits_delta" / "github_new_repos": real GitHub activity deltas over the tracked period
+- "github_documentation_trend" / "github_testing_trend": real "Improving"/"Declining" trend labels already
+  computed at GitHub-sync time (only present when there's a genuine trend to report — absent otherwise)
+- "github_new_technologies": real technologies that newly appeared in GitHub activity since the last sync
 - "leetcode_solved_delta": real change in total solved problems
 - "goals_progress": their current active goals with real status_pct
-
 Your job:
 
 1. "headline": a short (3-8 word), honest, specific characterization of the week — e.g. "Steady GitHub

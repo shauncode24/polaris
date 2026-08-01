@@ -22,14 +22,20 @@ def _auth_headers(token: str) -> dict:
     }
 
 
+MAX_REPO_PAGES = 20  # 2,000 owned repos — generous ceiling. Every other
+                      # paginated call in this file caps its pages
+                      # (fetch_commit_count_last_30d at 5, fetch_user_commit_
+                      # count_capped at 3); this was the one unbounded loop,
+                      # and each page fans out into ~12 concurrent per-repo
+                      # calls downstream, so an unusually large account could
+                      # make a sync run away with no circuit breaker.
+
+
 async def fetch_repos(client: httpx.AsyncClient, username: str, token: str) -> list[dict]:
-    """List all public (and, if token has scope, private) repos for the user.
-    Raw GitHub repo objects — note this already includes a "fork" boolean
-    field, which is why no separate fetch is needed for fork detection.
-    """
+    """List all public (and, if token has scope, private) repos for the user."""
     repos: list[dict] = []
     page = 1
-    while True:
+    while page <= MAX_REPO_PAGES:
         resp = await client.get(
             f"{GITHUB_API_BASE}/user/repos",
             headers=_auth_headers(token),
@@ -44,6 +50,12 @@ async def fetch_repos(client: httpx.AsyncClient, username: str, token: str) -> l
         if len(batch) < 100:
             break
         page += 1
+    else:
+        print(
+            f"[TRACING] fetch_repos hit MAX_REPO_PAGES={MAX_REPO_PAGES} for {username} — "
+            f"there may be more owned repos than were synced this run.",
+            flush=True,
+        )
     return repos
 
 
@@ -176,10 +188,11 @@ async def fetch_pull_request_stats(
 async def fetch_repo_tree(
     client: httpx.AsyncClient, owner: str, repo: str, token: str, default_branch: str
 ) -> list[str]:
-    """Full recursive file-path listing for one repo. Used ONLY for the
-    gated architecture-depth LLM pass on a cache miss — never fetched for
-    every repo, since this is one of the heavier calls in the sync.
-    Returns blob (file) paths only, no tree/commit objects.
+    """Full recursive file-path listing for one repo. Fetched once per repo,
+    every sync (needed for test-signal detection regardless of cache state),
+    and reused for the gated architecture-depth LLM pass on a cache miss
+    instead of being fetched a second time. Returns blob (file) paths only,
+    no tree/commit objects.
     """
     resp = await client.get(
         f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{default_branch}",
@@ -287,23 +300,13 @@ TEST_FILE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-async def fetch_test_signal(
-    client: httpx.AsyncClient, owner: str, repo: str, token: str, default_branch: str
-) -> bool:
-    """True if the repo's file tree contains anything that looks like a
-    test file or test directory. One recursive tree call per repo — a
-    binary 'has some testing set up' signal, not a coverage measurement.
+def detect_test_signal(tree_paths: list[str]) -> bool:
+    """Pure function, no network call — operates on a file-tree path list
+    already fetched once via fetch_repo_tree(). Previously this issued its
+    OWN recursive tree fetch every sync, independent of (and duplicating)
+    the tree fetch the architecture pass does on a cache miss — up to two
+    identical recursive tree calls per eligible repo per sync. The tree is
+    now fetched exactly once per repo (see github_sync.py) and reused for
+    both signals.
     """
-    resp = await client.get(
-        f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{default_branch}",
-        headers=_auth_headers(token),
-        params={"recursive": "1"},
-    )
-    if resp.status_code != 200:
-        return False
-    tree = resp.json().get("tree", [])
-    return any(
-        TEST_FILE_PATTERN.search(entry.get("path", ""))
-        for entry in tree
-        if entry.get("type") == "blob"
-    )
+    return any(TEST_FILE_PATTERN.search(path) for path in tree_paths)

@@ -45,6 +45,22 @@ class GithubReviewError(Exception):
     deterministic summary instead of crashing the whole endpoint.
     """
 
+def _expected_rating_band(anchor_pct: float) -> tuple[int, int]:
+    """Anchor-relative clamp band: the LLM's 1-5 rating must land within
+    this window of the deterministic, code-computed anchor percentage,
+    never fully independent of it. Previously role_fit's rating was only
+    SOFTLY nudged toward the anchor via prompt instruction, with no
+    code-level enforcement — the same gap the rest of Polaris explicitly
+    avoids elsewhere (e.g. gap_analysis.py never trusting priority_order
+    blindly). This is the enforcement.
+    """
+    if anchor_pct >= 75:
+        return (4, 5)
+    if anchor_pct >= 50:
+        return (3, 4)
+    if anchor_pct >= 25:
+        return (2, 3)
+    return (1, 2)
 
 def _fallback_report(knowledge: dict) -> GithubPortfolioReviewLLMOutput:
     repos = knowledge.get("repositories", [])
@@ -90,11 +106,8 @@ def _build_role_fit_anchor(repositories: list[dict]) -> list[dict]:
 async def generate_github_portfolio_review(db: AsyncSession, user_id) -> GithubPortfolioReviewReport:
     knowledge = await build_github_knowledge_object(db, user_id)
     if knowledge is None or not knowledge.get("repositories"):
-        raise ValueError("No synced GitHub data found for this user \u2014 run a GitHub sync first.")
+        raise ValueError("No synced GitHub data found for this user — run a GitHub sync first.")
 
-    # Compute deterministic role-fit anchor and inject before LLM call.
-    # This gives the model a grounding baseline and lets us validate
-    # its output against a real, explainable computation.
     role_fit_anchor = _build_role_fit_anchor(knowledge["repositories"])
     knowledge["role_fit_anchor"] = role_fit_anchor
 
@@ -118,19 +131,11 @@ async def generate_github_portfolio_review(db: AsyncSession, user_id) -> GithubP
         llm_output = _fallback_report(knowledge)
         degraded = True
 
-    # --- Post-hoc validation: same "never trust the LLM on names" rule
-    # that flagship_projects already gets, now applied to role_fit and
-    # skill_confidence_explanations too. ---
-
-    # 1. flagship_projects: must reference a real synced repo.
     real_repo_names = {r["name"] for r in knowledge["repositories"]}
     llm_output.flagship_projects = [
         fp for fp in llm_output.flagship_projects if fp.name in real_repo_names
     ]
 
-    # 2. role_fit: must use one of the ROLE_ARCHETYPES canonical role names.
-    #    LLM-invented roles (e.g. "DevOps" instead of "DevOps / Platform",
-    #    "AI Engineer" instead of "AI/ML Engineer") are silently dropped.
     original_role_count = len(llm_output.role_fit)
     llm_output.role_fit = [rf for rf in llm_output.role_fit if rf.role in _VALID_ROLE_NAMES]
     dropped_roles = original_role_count - len(llm_output.role_fit)
@@ -141,9 +146,22 @@ async def generate_github_portfolio_review(db: AsyncSession, user_id) -> GithubP
             sorted(_VALID_ROLE_NAMES),
         )
 
-    # 3. skill_confidence_explanations: skill name must appear in all_technologies.
-    #    The LLM is only given technologies that code has already verified
-    #    exist \u2014 any name outside that set is hallucinated.
+    # --- NEW: clamp each remaining rating to the deterministic anchor's
+    # expected band, instead of trusting the LLM's number at face value. ---
+    anchor_by_role = {a["role"]: a["match_pct"] for a in role_fit_anchor}
+    for rf in llm_output.role_fit:
+        anchor_pct = anchor_by_role.get(rf.role)
+        if anchor_pct is None:
+            continue
+        lo, hi = _expected_rating_band(anchor_pct)
+        if not (lo <= rf.rating <= hi):
+            clamped = min(max(rf.rating, lo), hi)
+            logger.info(
+                "Clamped role_fit rating for %r from %d to %d (anchor=%.0f%%)",
+                rf.role, rf.rating, clamped, anchor_pct,
+            )
+            rf.rating = clamped
+
     real_tech_names = set(knowledge.get("all_technologies", []))
     original_skill_count = len(llm_output.skill_confidence_explanations)
     llm_output.skill_confidence_explanations = [

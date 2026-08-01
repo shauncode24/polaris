@@ -11,15 +11,10 @@ into one explainable 0-100 score per technology.
 Deterministic only — no LLM. Same philosophy as github_scoring.py.
 """
 
-MAX_SCORE = 100
+from app.services.github.github_taxonomy import ARCHITECTURE_DEPTH_POINTS
 
-# architecture_assessment.depth_label -> points (0-100 scale component)
-DEPTH_LABEL_POINTS = {
-    "flat_script": 10,
-    "basic_structure": 40,
-    "layered": 75,
-    "well_architected": 100,
-}
+MAX_SCORE = 100
+# DEPTH_LABEL_POINTS removed — now imported as ARCHITECTURE_DEPTH_POINTS
 DEFAULT_DEPTH_LABEL_POINTS = 25  # no architecture assessment available for this repo
 
 DEPTH_LABELS = [
@@ -64,7 +59,7 @@ def compute_technology_depth(repos_using_tech: list[dict]) -> dict:
     # Intentional: max, not average — revisit with repo-count weighting if
     # this proves too lenient in practice.
     depth_points = [
-        DEPTH_LABEL_POINTS.get(r.get("architecture_depth_label"), DEFAULT_DEPTH_LABEL_POINTS)
+        ARCHITECTURE_DEPTH_POINTS.get(r.get("architecture_depth_label"), DEFAULT_DEPTH_LABEL_POINTS)
         for r in repos_using_tech
     ]
     architecture = (max(depth_points) / 100) * 30

@@ -9,6 +9,8 @@
 # See: github_scoring.py module docstring for the complementary note.
 from datetime import datetime, timezone
 
+from app.services.github.github_taxonomy import TECH_CATEGORIES, TECH_DISPLAY_NAMES
+
 # Evidence -> inferred technology. Checked as a case-insensitive substring
 # search against manifest file contents, so "fastapi>=0.139" still matches.
 PACKAGE_JSON_SIGNATURES = {
@@ -61,6 +63,24 @@ def _scan(content: str | None, signatures: dict[str, str]) -> set[str]:
     return {tech for keyword, tech in signatures.items() if keyword in lowered}
 
 
+def _scan_topics_and_languages(languages: dict, topics: list[str]) -> set[str]:
+    """Reconciles the breadth-oriented taxonomy (github_taxonomy.TECH_CATEGORIES,
+    built from GitHub's own language stats + repo topics) with this module's
+    manifest-based technology detection. Before this fix, a technology visible
+    only via GitHub's topics/language stats (e.g. a repo tagged "docker" with
+    no local Dockerfile actually checked in) was silently invisible to the
+    evidence/depth pipeline, which only ever trusted manifest scanning —
+    meaning the insights dashboard (taxonomy-based) and SkillEvidence/
+    technology-depth (manifest-based) could disagree about what a repo uses.
+    """
+    found: set[str] = set()
+    candidates = {lang.lower() for lang in languages} | {t.lower() for t in topics}
+    for key in candidates:
+        if key in TECH_CATEGORIES:
+            found.add(TECH_DISPLAY_NAMES.get(key, key.title()))
+    return found
+
+
 def analyze_repo(
     repo_name: str,
     languages: dict,
@@ -75,12 +95,27 @@ def analyze_repo(
     commits_30d: int,
     last_commit_at: datetime | None,
     is_archived: bool,
+    score_breakdown: dict,                     # NEW — score_repository()'s "breakdown"
     is_fork: bool = False,
     is_meaningful_fork_contribution: bool = False,
+    topics: list[str] | None = None,           # NEW — for taxonomy reconciliation
 ) -> dict:
-    """Pure derivation — same inputs always produce the same output, so
-    this is safe to re-run any time the scoring formula changes, without
-    touching github_snapshots at all (§5.5's 'inference is a rebuildable cache').
+    """Pure derivation — same inputs always produce the same output, so this
+    is safe to re-run any time the scoring formula changes (§5.5's 'inference
+    is a rebuildable cache').
+
+    quality_score/activity_score are now DERIVED from score_repository()'s
+    real breakdown rather than recomputed with a separate, weaker formula.
+    This is the fix for the two-scores-disagree problem: previously this
+    function computed quality_score as a bare
+    0.3*has_readme + 0.4*has_tests + 0.3*has_ci, which ignored commit
+    hygiene, collaboration, and breadth entirely — yet THIS score (not the
+    richer one) was what actually drove tiering, LLM-context repo ranking,
+    the technology-depth "quality" component, and the LeetCode engineering
+    quadrant's GitHub axis. score_repository() is computed once by the
+    caller (github_sync.py) before this function runs; this just re-scales
+    the relevant pieces of that single real computation onto two 0-100
+    axes instead of inventing a second, disagreeing formula.
     """
     technologies: set[str] = set()
     technologies |= _scan(package_json, PACKAGE_JSON_SIGNATURES)
@@ -95,6 +130,8 @@ def analyze_repo(
         technologies.add("CI/CD")
     if has_tests_dir:
         technologies.add("Testing")
+
+    technologies |= _scan_topics_and_languages(languages, topics or [])
 
     is_backend = bool(technologies & BACKEND_TECH)
     is_frontend = bool(technologies & FRONTEND_TECH) or any(
@@ -115,7 +152,6 @@ def analyze_repo(
         category = "Library/Other"
 
     capabilities = sorted({CAPABILITY_MAP[t] for t in technologies if t in CAPABILITY_MAP})
-
     primary_language = max(languages, key=languages.get) if languages else None
 
     last_activity_days = (
@@ -123,10 +159,21 @@ def analyze_repo(
     )
     is_active = last_activity_days is not None and last_activity_days <= 30
 
-    activity_score = round(min(commits_30d / 20, 1.0) * 100, 1)
+    # --- quality/activity derived from the rich score's own breakdown ---
+    b = score_breakdown
     quality_score = round(
-        (0.3 * has_readme + 0.4 * has_tests + 0.3 * has_ci) * 100, 1
+        (b["documentation"] / 15 * 40) +
+        (b["engineering"] / 30 * 40) +
+        (b["commit_hygiene"] / 5 * 10) +
+        (b["collaboration"] / 5 * 10),
+        1,
     )
+    activity_score = round(
+        (b["activity"] / 25 * 70) +
+        (b["maintenance"] / 20 * 30),
+        1,
+    )
+
     maintenance_score = (
         0.0 if is_archived
         else round(max(0, 100 - min(last_activity_days if last_activity_days is not None else 999, 100)), 1)
@@ -136,8 +183,6 @@ def analyze_repo(
     if is_archived:
         tier = "archived"
     elif is_fork and not is_meaningful_fork_contribution:
-        # A clone-through with no real added work is not portfolio evidence,
-        # regardless of how healthy the upstream repo's own signals are.
         tier = "fork"
     elif combined >= 60 and has_readme:
         tier = "flagship"

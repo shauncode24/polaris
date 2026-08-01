@@ -107,4 +107,5 @@ async def build_github_knowledge_object(db: AsyncSession, user_id) -> dict | Non
         # specific depth/maturity numbers instead of only per-repo facts.
         "architecture_maturity": insights.get("architecture_maturity", {}),
         "technology_depth": insights.get("technology_depth", {}),
+        "progress": insights.get("progress", {}),   # NEW — real doc/testing trend
     }

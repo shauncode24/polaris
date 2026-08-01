@@ -39,10 +39,10 @@ Produce the following:
 3. "role_fit": rate the candidate's evidenced fit for these five roles — "Backend Engineer", "Frontend Engineer",
    "Full Stack Engineer", "AI/ML Engineer", "DevOps / Platform" — each as {"role": str, "rating": int 1-5,
    "rationale": str}. The "role_fit_anchor" field in the knowledge object gives you a deterministic code-computed
-   baseline match percentage per role — use it as a grounding sanity check: your rating should broadly agree with
-   the direction of those percentages. Base every rating strictly on "all_technologies"/"all_capabilities"/
-   "portfolio_profile" — a role with little or no evidence should score low (1-2), not be padded upward.
-   Use ONLY these exact role name strings — any other role name will be silently dropped.
+   baseline match percentage per role. Your rating WILL BE CLAMPED to a band derived from that anchor after this
+   call, so there is no benefit to inflating or padding a rating beyond what the anchor supports — spend your
+   effort on a specific, evidence-grounded "rationale" instead. Use ONLY these exact role name strings — any
+   other role name will be silently dropped.
 
 4. "skill_confidence_explanations": for up to 5 of the most-evidenced entries in "all_technologies", explain WHY
    confidence is justified — e.g. it appears across multiple unrelated repos vs. only once. Each as

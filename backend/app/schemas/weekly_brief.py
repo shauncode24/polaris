@@ -18,6 +18,9 @@ class WeeklyBriefFacts(BaseModel):
     resume_score_delta: float | None = None
     github_commits_delta: int | None = None
     github_new_repos: int = 0
+    github_documentation_trend: str | None = None   # NEW — "Improving" | "Declining"
+    github_testing_trend: str | None = None          # NEW — "Improving" | "Declining"
+    github_new_technologies: list[str] = []           # NEW
     leetcode_solved_delta: int | None = None
     goals_progress: list[dict] = []
 

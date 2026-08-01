@@ -145,6 +145,7 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
 
     github_knowledge = await build_github_knowledge_object(db, user_id) or {}
     github_summary = github_knowledge.get("summary", {})
+    github_progress = github_knowledge.get("progress", {})   # NEW
     architecture_maturity = github_knowledge.get("architecture_maturity", {})
 
     technology_depth = github_knowledge.get("technology_depth", {})
@@ -174,6 +175,7 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
         resume_score=resume_score,
         resume_grade=resume_grade,
         github_summary=github_summary,
+        github_progress=github_progress,   # NEW
         architecture_maturity=architecture_maturity,
         technology_depth_highlights=technology_depth_highlights,
         leetcode_summary=leetcode_summary,

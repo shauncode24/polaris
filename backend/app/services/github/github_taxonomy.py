@@ -47,6 +47,49 @@ TECH_CATEGORIES: dict[str, str] = {
     "pytest": "testing", "jest": "testing", "testing": "testing", "unit-testing": "testing",
 }
 
+# Shared architecture-depth-label -> point mapping (0-100), used by BOTH the
+# portfolio-wide maturity rollup (github_insights.build_architecture_maturity_rollup)
+# and the per-technology depth score (github_skill_depth.compute_technology_depth).
+# Previously these were two separately-tuned dicts for the same four labels
+# (0/33/67/100 vs 10/40/75/100) — a repo's architecture read could silently
+# score differently depending on which rollup read it. One shared table now.
+ARCHITECTURE_DEPTH_POINTS: dict[str, int] = {
+    "flat_script": 0,
+    "basic_structure": 33,
+    "layered": 67,
+    "well_architected": 100,
+}
+
+# Display-name normalization for technologies detected via language/topic
+# scanning (github_analyzer._scan_topics_and_languages), so breadth-based
+# detection (this file) and manifest-based detection (github_analyzer.py's
+# PACKAGE_JSON_SIGNATURES/REQUIREMENTS_SIGNATURES) speak the same vocabulary
+# instead of silently disagreeing on what a repo "uses".
+TECH_DISPLAY_NAMES: dict[str, str] = {
+    "docker": "Docker", "docker-compose": "Docker Compose",
+    "kubernetes": "Kubernetes", "k8s": "Kubernetes",
+    "terraform": "Terraform", "redis": "Redis",
+    "mongodb": "MongoDB", "mongo": "MongoDB",
+    "postgresql": "PostgreSQL", "postgres": "PostgreSQL", "mysql": "MySQL",
+    "pgvector": "pgvector", "sqlite": "SQLite", "dynamodb": "DynamoDB",
+    "fastapi": "FastAPI", "django": "Django", "flask": "Flask",
+    "express": "Express", "expressjs": "Express", "nodejs": "Node.js",
+    "aspnet-core": "ASP.NET Core", "aspnetcore": "ASP.NET Core",
+    "spring": "Spring", "spring-boot": "Spring Boot",
+    "react": "React", "reactjs": "React", "vue": "Vue", "vuejs": "Vue",
+    "angular": "Angular", "svelte": "Svelte",
+    "nextjs": "Next.js", "next-js": "Next.js",
+    "tailwind": "TailwindCSS", "tailwindcss": "TailwindCSS",
+    "redux": "Redux", "vite": "Vite",
+    "graphql": "GraphQL", "grpc": "gRPC",
+    "pytest": "Testing", "jest": "Testing", "unit-testing": "Testing",
+    "github-actions": "CI/CD", "ci-cd": "CI/CD", "cicd": "CI/CD",
+    "nginx": "Nginx", "aws": "AWS", "azure": "Azure", "gcp": "GCP",
+    "langchain": "LangChain", "langgraph": "LangGraph", "openai": "OpenAI",
+    "huggingface": "Hugging Face", "tensorflow": "TensorFlow", "pytorch": "PyTorch",
+    "llm": "LLM", "nlp": "NLP", "rag": "RAG", "vector-search": "Vector Search",
+    "react-native": "React Native", "flutter": "Flutter",
+}
 
 def categorize_technologies(
     repo_language_map: dict[str, dict], repo_topics_map: dict[str, list[str]]

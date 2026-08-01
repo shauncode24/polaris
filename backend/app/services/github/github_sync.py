@@ -18,7 +18,7 @@ from app.services.github.github_client import (
     fetch_languages,
     fetch_readme_exists,
     fetch_repos,
-    fetch_test_signal,
+    detect_test_signal,
     fetch_repo_file,
     fetch_repo_path_exists,
     fetch_last_commit_info,
@@ -164,7 +164,10 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
             commits_task = fetch_commit_count_last_30d(client, username, repo_name, username, token)
             readme_task = fetch_readme_exists(client, username, repo_name, token)
             ci_task = fetch_ci_config_exists(client, username, repo_name, token)
-            tests_task = fetch_test_signal(client, username, repo_name, token, default_branch)
+            # Fetched once, reused for both test-signal detection AND the
+            # architecture pass below — previously each fetched their own
+            # copy of the same recursive tree.
+            tree_task = fetch_repo_tree(client, username, repo_name, token, default_branch)
             package_json_task = fetch_repo_file(client, username, repo_name, "package.json", token)
             requirements_task = fetch_repo_file(client, username, repo_name, "requirements.txt", token)
             pyproject_task = fetch_repo_file(client, username, repo_name, "pyproject.toml", token)
@@ -178,7 +181,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 commits_30d,
                 has_readme,
                 has_ci,
-                has_tests,
+                tree_paths,
                 package_json,
                 requirements_txt,
                 pyproject_toml,
@@ -187,12 +190,13 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 has_compose_yaml,
                 last_commit_info,
             ) = await asyncio.gather(
-                languages_task, commits_task, readme_task, ci_task, tests_task,
+                languages_task, commits_task, readme_task, ci_task, tree_task,
                 package_json_task, requirements_task, pyproject_task,
                 dockerfile_task, compose_yml_task, compose_yaml_task,
                 last_commit_info_task,
             )
 
+            has_tests = detect_test_signal(tree_paths)
             has_compose = has_compose_yml or has_compose_yaml
             current_sha = last_commit_info["sha"] if last_commit_info else None
             last_commit_at = last_commit_info["date"] if last_commit_info else None
@@ -264,8 +268,10 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 commits_30d=commits_30d,
                 last_commit_at=last_commit_at,
                 is_archived=is_archived,
+                score_breakdown=score["breakdown"],   # NEW — single source of truth
                 is_fork=is_fork,
                 is_meaningful_fork_contribution=score["is_meaningful_fork_contribution"],
+                topics=topics,                         # NEW — taxonomy reconciliation
             )
 
             # --- Architecture pass: only run on a cache miss, and only if
@@ -280,7 +286,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 is_fork=is_fork,
                 contributed_as_fork=score["is_meaningful_fork_contribution"],
             ):
-                tree_paths = await fetch_repo_tree(client, username, repo_name, token, default_branch)
+                # tree_paths already fetched above — no second network call.
                 architecture_result = await assess_architecture_depth(
                     repo_name, analysis["technologies"], tree_paths
                 )

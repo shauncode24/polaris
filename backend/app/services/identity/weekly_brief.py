@@ -94,6 +94,15 @@ def _build_facts_diff(
     prev_repos = previous.github_summary.get("repos_synced") or 0
     github_new_repos = max(0, curr_repos - prev_repos)
 
+    # NEW — GitHub's own trend computation (github_insights.py::build_github_insights'
+    # "progress" block), already real, already computed at sync time relative to the
+    # PRIOR github sync. Previously this genuinely useful signal was invisible to the
+    # weekly brief, which only ever computed a cruder commit-count-only diff itself.
+    gh_progress = current.github_progress or {}
+    doc_trend = gh_progress.get("documentation")
+    test_trend = gh_progress.get("testing")
+    new_techs = gh_progress.get("new_technologies", [])
+
     curr_solved = current.leetcode_summary.get("total_solved")
     prev_solved = previous.leetcode_summary.get("total_solved")
     leetcode_solved_delta = (
@@ -110,6 +119,9 @@ def _build_facts_diff(
         resume_score_delta=resume_score_delta,
         github_commits_delta=github_commits_delta,
         github_new_repos=github_new_repos,
+        github_documentation_trend=doc_trend if doc_trend not in (None, "Unchanged") else None,
+        github_testing_trend=test_trend if test_trend not in (None, "Unchanged") else None,
+        github_new_technologies=new_techs,
         leetcode_solved_delta=leetcode_solved_delta,
         goals_progress=goals_progress,
     )
@@ -128,6 +140,12 @@ def _fallback_narrative(facts: WeeklyBriefFacts) -> WeeklyBriefLLMOutput:
         changes.append(f"Resume score {direction} by {abs(facts.resume_score_delta)} points.")
     if facts.github_commits_delta:
         changes.append(f"GitHub commit activity changed by {facts.github_commits_delta} commits over the last 30 days.")
+    if facts.github_documentation_trend:
+        changes.append(f"GitHub documentation trend: {facts.github_documentation_trend.lower()}.")
+    if facts.github_testing_trend:
+        changes.append(f"GitHub testing trend: {facts.github_testing_trend.lower()}.")
+    if facts.github_new_technologies:
+        changes.append(f"New technologies appeared in GitHub activity: {', '.join(facts.github_new_technologies[:3])}.")
     if facts.leetcode_solved_delta:
         changes.append(f"Solved {facts.leetcode_solved_delta} more LeetCode problems.")
 

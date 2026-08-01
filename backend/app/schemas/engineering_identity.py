@@ -13,6 +13,7 @@ class IdentityFacts(BaseModel):
     resume_score: float | None = None
     resume_grade: str | None = None
     github_summary: dict = {}
+    github_progress: dict = {}
     architecture_maturity: dict = {}
     technology_depth_highlights: list[dict] = []     # top N by depth score
     leetcode_summary: dict = {}

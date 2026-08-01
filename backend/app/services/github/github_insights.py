@@ -6,6 +6,7 @@ Tracker. If a field is just GitHub metadata in a nicer shape, it
 belongs in the raw snapshot, not here.
 """
 from datetime import datetime, timezone
+from app.services.github.github_taxonomy import ARCHITECTURE_DEPTH_POINTS
 
 
 def build_repo_headline(repo: dict) -> str:
@@ -91,7 +92,8 @@ def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
     return candidates[:6]
 
 ARCHITECTURE_MATURITY_ORDER = ["flat_script", "basic_structure", "layered", "well_architected"]
-_MATURITY_LABEL_POINTS = {"flat_script": 0, "basic_structure": 33, "layered": 67, "well_architected": 100}
+# _MATURITY_LABEL_POINTS removed — now imported as ARCHITECTURE_DEPTH_POINTS,
+# shared with github_skill_depth.py's per-technology depth score.
 
 
 def build_architecture_maturity_rollup(repositories: list[dict]) -> dict:
@@ -137,7 +139,7 @@ def build_architecture_maturity_rollup(repositories: list[dict]) -> dict:
         label: round((count / total_assessed) * 100) for label, count in counts.items() if count > 0
     }
     maturity_score = round(
-        sum(_MATURITY_LABEL_POINTS[label] * count for label, count in counts.items()) / total_assessed
+        sum(ARCHITECTURE_DEPTH_POINTS[label] * count for label, count in counts.items()) / total_assessed
     )
 
     if maturity_score >= 75:
