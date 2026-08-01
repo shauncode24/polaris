@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.facts import Experience, Project, GithubSnapshot, LeetcodeSnapshot, Certificate
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence, ProfileSnapshot
+from app.models.github_analysis import GithubProjectAnalysis
 
 
 async def analyze_evidence(
@@ -205,7 +206,7 @@ async def analyze_evidence(
             elif source_type == "certificate":
                 skill_evidence[canonical]["in_certificate"] = True
 
-    # ── GitHub language evidence ────────────────────────────────────────────
+    # ── GitHub language + technology evidence ───────────────────────────────
     gh_rows = await db.execute(
         select(GithubSnapshot.languages).where(GithubSnapshot.user_id == user_id)
     )
@@ -214,6 +215,14 @@ async def analyze_evidence(
         langs = row[0]
         if langs:
             github_langs.update(k.lower() for k in langs.keys())
+
+    gh_tech_rows = await db.execute(
+        select(GithubProjectAnalysis.technologies).where(GithubProjectAnalysis.user_id == user_id)
+    )
+    for row in gh_tech_rows.fetchall():
+        techs = row[0]
+        if techs:
+            github_langs.update(t.lower() for t in techs)
 
     # ── Assign confidence ───────────────────────────────────────────────────
     skills_list: list[dict] = []

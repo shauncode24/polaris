@@ -5,7 +5,8 @@ No LLM call: strength is already a real, computed number per bullet
 (bullet_strength.py); this module just orders and thresholds it.
 """
 
-WEAK_THRESHOLD = 40
+WEAK_THRESHOLD = 40  # absolute ceiling — never treat a bullet above this as "weak"
+WEAK_PERCENTILE = 0.25  # bottom quartile of THIS resume's own bullets
 MAX_STRONG_PER_SOURCE = 4
 TOP_OVERALL_COUNT = 8
 
@@ -19,9 +20,13 @@ def detect_dilution(bullets: list[dict]) -> dict:
 
     ranked = sorted(bullets, key=lambda b: b["strength"]["score"], reverse=True)
 
+    scores = sorted(b["strength"]["score"] for b in ranked)
+    percentile_idx = max(0, int(len(scores) * WEAK_PERCENTILE) - 1)
+    relative_weak_threshold = min(WEAK_THRESHOLD, scores[percentile_idx]) if scores else WEAK_THRESHOLD
+
     weak_bullets = [
         {"bullet_id": b["bullet_id"], "source_label": b["source_label"], "score": b["strength"]["score"]}
-        for b in ranked if b["strength"]["score"] < WEAK_THRESHOLD
+        for b in ranked if b["strength"]["score"] < relative_weak_threshold
     ]
 
     by_source: dict[str, list[dict]] = {}

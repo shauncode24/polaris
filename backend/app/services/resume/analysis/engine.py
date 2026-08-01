@@ -21,7 +21,7 @@ from app.services.resume.analysis.content     import analyze_content
 from app.services.resume.analysis.metrics     import analyze_metrics
 from app.services.resume.analysis.keywords    import analyze_keywords
 from app.services.resume.analysis.evidence    import analyze_evidence
-from app.services.resume.analysis.scoring     import compute_overall_score, get_grade, get_label, get_grade_color
+from app.services.resume.analysis.scoring     import get_grade, get_label, get_grade_color
 from app.services.resume.analysis.suggestions import generate_suggestions
 
 
@@ -181,9 +181,9 @@ async def run_analysis(
     label = get_label(overall)
     grade_color = get_grade_color(overall)
 
-    # ── 6. AI Role Compatibility ─────────────────────────────────────────────
-    from app.services.resume.analysis.role_fit import compute_role_fit_via_ai
-    role_fit = await compute_role_fit_via_ai(raw_text)
+    # ── 6. Role Compatibility (deterministic — never LLM-invented) ──────────
+    from app.services.resume.analysis.role_fit import compute_role_fit
+    role_fit = compute_role_fit(evidence.get("skills", []))
 
     # ── 7. Suggestions ───────────────────────────────────────────────────────
     suggestions = generate_suggestions(

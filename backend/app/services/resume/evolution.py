@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inference import ProfileSnapshot
 from app.schemas.resume_evolution import EvolutionReport, SkillDelta
+from app.services.evidence import get_all_skill_confidences
 
 SIGNIFICANT_DELTA = 0.05
 
@@ -44,7 +45,10 @@ async def build_evolution_report(db: AsyncSession, user_id) -> EvolutionReport:
         )
 
     current, previous = snapshots[0], snapshots[1]
-    current_skills = _skills_map(current)
+    # "Current" reflects live, decay-aware confidence (same number every
+    # other consumer sees today); "previous" stays the frozen historical
+    # snapshot on purpose — that's the point of comparison.
+    current_skills = await get_all_skill_confidences(db)
     previous_skills = _skills_map(previous)
 
     gained = sorted(set(current_skills) - set(previous_skills))

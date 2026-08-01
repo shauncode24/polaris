@@ -29,6 +29,7 @@ from app.services.resume.analysis.coherence import compute_narrative_facts
 from app.services.resume.analysis.dilution import detect_dilution
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.resume.text_sanitize import sanitize_ai_text
+from app.services.resume.bullet_analysis import build_bullet_units
 
 
 class CoherenceGenerationError(Exception):
@@ -86,32 +87,20 @@ async def build_bullets_with_strength(
         raw_stack_strings.update(p.stack or [])
     resolved = await resolve_skills(raw_stack_strings, db) if raw_stack_strings else {}
 
-    bullets: list[dict] = []
-    for exp in experiences:
-        label = f"{exp.role} at {exp.company}"
-        canonicals = [resolved.get(s) for s in (exp.stack or []) if resolved.get(s)]
-        for i, bullet in enumerate(exp.bullets or []):
-            if not bullet.strip():
-                continue
-            strength = compute_bullet_strength(bullet, exp.stack or [], skill_confidence, canonicals)
-            bullets.append({
-                "bullet_id": f"exp_{exp.id}_{i}", "source_type": "experience",
-                "source_label": label, "text": bullet,
-                "context_stack": exp.stack or [], "canonical_stack": canonicals,
-                "strength": strength,
-            })
+    raw_units = build_bullet_units(experiences, projects)
+    canonicals_by_source: dict[str, list[str]] = {}
+    for e in experiences:
+        canonicals_by_source[f"exp_{e.id}"] = [resolved.get(s) for s in (e.stack or []) if resolved.get(s)]
+    for p in projects:
+        canonicals_by_source[f"proj_{p.id}"] = [resolved.get(s) for s in (p.stack or []) if resolved.get(s)]
 
-    for proj in projects:
-        canonicals = [resolved.get(s) for s in (proj.stack or []) if resolved.get(s)]
-        lines = [l.strip("-•* \t") for l in (proj.description or "").split("\n") if l.strip()]
-        for i, line in enumerate(lines):
-            strength = compute_bullet_strength(line, proj.stack or [], skill_confidence, canonicals)
-            bullets.append({
-                "bullet_id": f"proj_{proj.id}_{i}", "source_type": "project",
-                "source_label": proj.name, "text": line,
-                "context_stack": proj.stack or [], "canonical_stack": canonicals,
-                "strength": strength,
-            })
+    bullets: list[dict] = []
+    for unit in raw_units:
+        prefix = "exp" if unit["source_type"] == "experience" else "proj"
+        key = f"{prefix}_{unit['source_id']}"
+        canonicals = canonicals_by_source.get(key, [])
+        strength = compute_bullet_strength(unit["text"], unit["context_stack"], skill_confidence, canonicals)
+        bullets.append({**unit, "canonical_stack": canonicals, "strength": strength})
 
     return bullets
 

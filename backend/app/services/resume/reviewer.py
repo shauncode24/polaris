@@ -25,10 +25,10 @@ from app.schemas.resume_review import (
     BulletRewriteSuggestion,
 )
 from app.services.resume.ats_checks import run_ats_checks
-from app.services.resume.bullet_analysis import analyze_bullet
+from app.services.resume.bullet_analysis import analyze_bullet, build_bullet_units as _build_review_units
 from app.services.resume.text_sanitize import sanitize_ai_text as sanitize_ai_review_text
 
-from app.models.inference import ResumeAnalysis
+from app.models.inference import ResumeAnalysis, ProjectClaimAuditReview
 
 class ReviewGenerationError(Exception):
     """Raised when the narrative/rewrite LLM call fails or returns
@@ -48,41 +48,7 @@ async def _get_latest_resume(db: AsyncSession, user_id) -> Resume | None:
     return result.scalar_one_or_none()
 
 
-def _build_review_units(experiences: list[Experience], projects: list[Project]) -> list[dict]:
-    """Every Experience bullet is already a discrete unit. Project
-    descriptions are one text blob (see extraction.py's prompt), so we
-    split on newlines to get bullet-like units for the same treatment —
-    this avoids any change to the Project/Experience schema itself.
-    """
-    units: list[dict] = []
 
-    for exp in experiences:
-        label = f"{exp.role} at {exp.company}"
-        for i, bullet in enumerate(exp.bullets or []):
-            if not bullet.strip():
-                continue
-            units.append({
-                "bullet_id": f"exp_{exp.id}_{i}",
-                "source_type": "experience",
-                "source_id": str(exp.id),
-                "source_label": label,
-                "text": bullet,
-                "context_stack": exp.stack or [],
-            })
-
-    for proj in projects:
-        lines = [l.strip("-•* \t") for l in (proj.description or "").split("\n") if l.strip()]
-        for i, line in enumerate(lines):
-            units.append({
-                "bullet_id": f"proj_{proj.id}_{i}",
-                "source_type": "project",
-                "source_id": str(proj.id),
-                "source_label": proj.name,
-                "text": line,
-                "context_stack": proj.stack or [],
-            })
-
-    return units
 
 
 def _compute_score(flagged_count: int, unit_count: int, ats_flags: list[dict]) -> float:
@@ -144,34 +110,10 @@ async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewr
         raise ReviewGenerationError(f"Resume review rewrites LLM call failed: {e}") from e
 
 
-# def sanitize_ai_review_text(text: str) -> str:
-#     if not text:
-#         return text
-#     # Match uuid-based keys like exp_uuid_idx or proj_uuid_idx (with optional quotes)
-#     raw_id_pattern = r"['\"]?(?:exp|proj)_[a-fA-F0-9\-]{32,36}_\d+['\"]?"
-#     # Replace list of IDs inside parentheses, e.g., (exp_1, exp_2)
-#     text = re.sub(rf"\(\s*{raw_id_pattern}(?:\s*,\s*{raw_id_pattern})*\s*\)", "", text)
-#     # Replace individual IDs
-#     text = re.sub(raw_id_pattern, "", text)
-#     # Clean up spaces & parentheses
-#     text = re.sub(r"\s+", " ", text)
-#     text = text.replace(" ( )", "").replace("()", "").strip()
-#     # Clean up empty quotes/braces and double commas
-#     text = re.sub(r"\s*,\s*,", ",", text)
-#     text = re.sub(r",\s*\.", ".", text)
-#     # If the text ends or starts with a comma/space
-#     text = text.strip(", ")
-#     return text
-
-async def _get_canonical_analysis_score(db: AsyncSession, resume_id) -> float | None:
-    """Single source of truth for 'how good is this resume': the
-    deterministic Analysis Engine's overall_score (analysis/engine.py,
-    via analyze_ats_v2). Resume Review used to compute its own
-    independent formula here — 100 - ats_penalty - bullet_penalty — which
-    meant the ATS Score panel and the AI Review panel could show two
-    different numbers for the same resume at the same time. There is now
-    exactly one deterministic scorer; Resume Review reads its number
-    instead of recomputing one.
+async def _get_canonical_analysis(db: AsyncSession, resume_id) -> dict | None:
+    """Single source of truth for both score AND ATS warnings — replaces
+    the separate run_ats_checks() call below, which duplicated
+    analyze_ats_v2()'s warnings with different logic and could disagree.
     """
     result = await db.execute(
         select(ResumeAnalysis)
@@ -182,7 +124,8 @@ async def _get_canonical_analysis_score(db: AsyncSession, resume_id) -> float | 
     row = result.scalar_one_or_none()
     if row is None or not isinstance(row.analysis_json, dict):
         return None
-    return row.analysis_json.get("overall_score")
+    return row.analysis_json
+
 
 async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewReport:
     resume = await _get_latest_resume(db, user_id)
@@ -201,8 +144,24 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
     )
     projects = list(proj_result.scalars().all())
 
+    # Surface any existing claim-audit risk findings for this resume's
+    # projects — previously the Projects module and Resume Reviewer never
+    # talked to each other despite reasoning about the same claims.
+    claim_flags: list[str] = []
+    if projects:
+        audit_result = await db.execute(
+            select(ProjectClaimAuditReview).where(
+                ProjectClaimAuditReview.project_id.in_([p.id for p in projects])
+            )
+        )
+        for row in audit_result.scalars().all():
+            narrative_dict = (row.report_json or {}).get("narrative", {})
+            if narrative_dict.get("risk_level") in ("high", "medium"):
+                claim_flags.append(f"{narrative_dict.get('headline', 'Claim risk detected')} (project claim audit)")
+
     units = _build_review_units(experiences, projects)
-    ats_flags = run_ats_checks(resume.raw_text)
+    canonical_analysis = await _get_canonical_analysis(db, resume.id)
+    ats_flags = canonical_analysis.get("warnings", []) if canonical_analysis else run_ats_checks(resume.raw_text)
 
     bullet_reviews: list[BulletReview] = []
     flagged_for_llm: list[dict] = []
@@ -292,12 +251,8 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
             br.rewrite = match.rewrite
             br.rewrite_rationale = match.rationale
 
-    canonical_score = await _get_canonical_analysis_score(db, resume.id)
+    canonical_score = canonical_analysis.get("overall_score") if canonical_analysis else None
     if canonical_score is None:
-        # No Analysis Engine run yet for this resume — fall back to the
-        # local estimate rather than blocking the review. Once
-        # POST /resume/analyze has run once for this resume, this branch
-        # stops being hit and both panels agree on one number.
         canonical_score = _compute_score(len(flagged_for_llm), len(units), ats_flags)
     score = canonical_score
 
@@ -313,7 +268,9 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
         overall_score=score,
         summary=sanitize_ai_review_text(narrative.summary),
         strengths=[sanitize_ai_review_text(s) for s in narrative.strengths] if narrative.strengths else [],
-        top_priority_fixes=[sanitize_ai_review_text(f) for f in narrative.top_priority_fixes] if narrative.top_priority_fixes else [],
+        top_priority_fixes=(
+            [sanitize_ai_review_text(f) for f in narrative.top_priority_fixes] if narrative.top_priority_fixes else []
+        ) + claim_flags,
         bullet_reviews=bullet_reviews,
         ats_flags=[ATSFlag(**f) for f in ats_flags],
         stats=stats,

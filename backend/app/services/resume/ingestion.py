@@ -142,6 +142,11 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
 
     # Deterministically extract skills directly from the SKILLS section text to avoid LLM token use/flakiness
     raw_skills_from_text = extract_skills_from_text(raw_text)
+    if not raw_skills_from_text and extraction.skills:
+        # Deterministic SKILLS-section parser found nothing (non-standard
+        # resume formatting) — fall back to the LLM-extracted skills list
+        # rather than silently discarding it.
+        raw_skills_from_text = extraction.skills
     raw_skill_strings: set[str] = set(raw_skills_from_text)
     for proj in extraction.projects:
         raw_skill_strings.update(proj.stack)
@@ -199,8 +204,13 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
             bullet_hits = [b for b in exp_extracted.bullets if _mentions_skill(b, raw_name)]
 
             if bullet_hits:
+                # Only the FIRST bullet mention within a single experience
+                # contributes weight — repeated mentions of the same skill
+                # in one job shouldn't out-weigh genuinely independent
+                # evidence from other sources. All mentions still show up
+                # in evidence_entries for transparency.
+                weights.append(WEIGHTS["experience"])
                 for bullet in bullet_hits:
-                    weights.append(WEIGHTS["experience"])
                     evidence_entries.append({
                         "source_type": "experience",
                         "source_id": str(exp_row.id),
@@ -354,8 +364,13 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
             bullet_hits = [b for b in (exp_row.bullets or []) if _mentions_skill(b, raw_name)]
 
             if bullet_hits:
+                # Only the FIRST bullet mention within a single experience
+                # contributes weight — repeated mentions of the same skill
+                # in one job shouldn't out-weigh genuinely independent
+                # evidence from other sources. All mentions still show up
+                # in evidence_entries for transparency.
+                weights.append(WEIGHTS["experience"])
                 for bullet in bullet_hits:
-                    weights.append(WEIGHTS["experience"])
                     evidence_entries.append({
                         "source_type": "experience",
                         "source_id": str(exp_row.id),

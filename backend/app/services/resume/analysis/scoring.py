@@ -1,33 +1,3 @@
-"""Score Aggregator — weighted average across all analysis modules."""
-
-# Weights must sum to 1.0
-WEIGHTS: dict[str, float] = {
-    "content":    0.28,
-    "structure":  0.20,
-    "metrics":    0.15,
-    "parsing":    0.14,
-    "keywords":   0.10,
-    "evidence":   0.08,
-    "formatting": 0.05,
-}
-
-
-def compute_overall_score(module_scores: dict[str, int | float]) -> int:
-    """DEPRECATED — do not call this. analyze_ats_v2() in ats_scorer_v2.py
-    is now the single canonical "how good is this resume" score; every
-    surface (Resume Analysis Engine, Resume Review) reads that one number.
-    This function is kept only so old callers/tests referencing it don't
-    hard-crash on import; it is intentionally unused in engine.py.
-    """
-    total = 0.0
-    weight_sum = 0.0
-    for key, weight in WEIGHTS.items():
-        if key in module_scores:
-            total      += module_scores[key] * weight
-            weight_sum += weight
-    return round(total / weight_sum) if weight_sum > 0 else 0
-
-
 def get_grade(score: int) -> str:
     if score >= 93: return "A+"
     if score >= 90: return "A"

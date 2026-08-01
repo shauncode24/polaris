@@ -137,18 +137,9 @@ async def get_resume_workspace(
         .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
         .where(Experience.user_id == uid, Experience.resume_id == latest.id)
     )
-    if ev_check_result.scalar_one() == 0:
-        from app.services.resume.ingestion import sync_resume_skills_deterministically
-        from sqlalchemy import delete
-        try:
-            await sync_resume_skills_deterministically(db, latest, uid)
-            # Clear cached ResumeAnalysis rows for this user to trigger a fresh analysis run with full skills
-            await db.execute(delete(ResumeAnalysis).where(ResumeAnalysis.user_id == uid))
-            await db.commit()
-        except Exception as e:
-            import traceback
-            print("Deterministic skill sync failed:", flush=True)
-            traceback.print_exc()
+    # Read-only: flag it instead of writing on a GET. The client should
+    # call POST /resume/analyze (or a dedicated sync trigger) explicitly.
+    needs_skill_sync = ev_check_result.scalar_one() == 0
 
     # ── Counts (snapshot) ───────────────────────────────────────────────────
     async def count(model, extra_filter=None):
@@ -189,15 +180,12 @@ async def get_resume_workspace(
     )
     analysis_row = analysis_result.scalar_one_or_none()
     
-    # Trigger synchronous analysis run if missing, old scoring format, or missing AI role fits
-    if not analysis_row or "warnings" not in analysis_row.analysis_json or "role_fit" not in analysis_row.analysis_json:
-        from app.services.resume.analysis.engine import run_analysis
-        try:
-            latest_analysis = await run_analysis(db, uid)
-        except Exception:
-            latest_analysis = analysis_row.analysis_json if analysis_row else None
-    else:
-        latest_analysis = analysis_row.analysis_json
+    latest_analysis = analysis_row.analysis_json if analysis_row else None
+    needs_analysis = (
+        latest_analysis is None
+        or "warnings" not in latest_analysis
+        or "role_fit" not in latest_analysis
+    )
 
     # ── ATS health flags ────────────────────────────────────────────────────
     ats_flags = latest_analysis.get("warnings", []) if latest_analysis else []
@@ -377,6 +365,8 @@ async def get_resume_workspace(
         "resume_vs_jobs": resume_vs_jobs,
         "role_fit": role_fit,
         "coverage_gaps": coverage_gaps,
+        "needs_skill_sync": needs_skill_sync,
+        "needs_analysis": needs_analysis,
     }
 
 @router.get("/coherence", response_model=CoherenceReport)
