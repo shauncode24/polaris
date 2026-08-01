@@ -30,25 +30,31 @@ def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
     summary_parts = []
     if best_role:
         summary_parts.append(
-            f"Your strongest evidenced fit is {best_role['role']} ({best_role['match_pct']}% category coverage)."
+            f"Your strongest evidenced fit is {best_role['role']} (rated {best_role['rating']}/5)."
         )
     if top_names:
         summary_parts.append(f"Your most-evidenced skills are {', '.join(top_names)}.")
     if facts.resume_score is not None:
         summary_parts.append(f"Resume score is currently {facts.resume_score}/100.")
+    if facts.engineering_quadrant:
+        summary_parts.append(f"Engineering placement: {facts.engineering_quadrant['quadrant_label']}.")
 
     gaps = []
     if facts.coverage_gaps.get("github_gaps"):
         gaps.append(f"{len(facts.coverage_gaps['github_gaps'])} GitHub-evidenced skill(s) missing from your resume")
     if facts.timeline_plausibility_notes:
         gaps.append(f"{len(facts.timeline_plausibility_notes)} timeline note(s) worth reviewing")
+    if facts.claim_risk_details:
+        gaps.append(f"{len(facts.claim_risk_details)} project(s) with unresolved claim-vs-implementation risk")
 
     return IdentityLLMOutput(
         headline=best_role["role"] if best_role else "Engineering profile",
         summary=" ".join(summary_parts) or "Not enough evidence yet to summarize your profile.",
         strongest_signals=top_names,
         biggest_gaps=gaps,
-        contradictions=[],
+        contradictions=[
+            f"{c['project']}: {c['headline']}" for c in facts.claim_risk_details[:2]
+        ],
         recommended_focus=(
             "Sync GitHub and LeetCode, then re-run this once more evidence exists."
             if not top_names else ""

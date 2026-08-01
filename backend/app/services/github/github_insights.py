@@ -7,14 +7,10 @@ belongs in the raw snapshot, not here.
 """
 from datetime import datetime, timezone
 from app.services.github.github_taxonomy import ARCHITECTURE_DEPTH_POINTS
+from app.services.github.github_trend import compute_trend
 
 
 def build_repo_headline(repo: dict) -> str:
-    """One synthesized sentence per repo so the explorer stops reading
-    like a repeated data table. Every clause is a real, checked fact —
-    never invented. Deterministic, same philosophy as the rest of this
-    file: no LLM call, just prioritized templating.
-    """
     if repo.get("is_fork") and repo.get("is_meaningful_fork_contribution") is False:
         return "Fork — no significant original contribution detected"
 
@@ -44,12 +40,6 @@ def build_repo_headline(repo: dict) -> str:
     return f"{lead} — " + "; ".join(parts) if parts else lead
 
 
-# Impact constants mirror the EXACT point values awarded by score_repository()
-# in github_scoring.py — keep these in sync if that formula changes:
-#   documentation: has_readme -> +10 pts (plus 5 for description, not actionable here)
-#   engineering:   has_tests  -> +12 pts
-#   engineering:   has_ci     -> +8 pts
-#   hygiene:       score/100 * 5, so a score<40 repo loses ~3 pts vs. a score>=80 repo
 _IMPACT_README = 10
 _IMPACT_TESTS = 12
 _IMPACT_CI = 8
@@ -58,13 +48,6 @@ _IMPACT_STALE = 4
 
 
 def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
-    """Estimates the score-point gain from fixing the single biggest gap
-    on each repo, using the exact same weights as github_scoring.py so
-    the number shown is never fabricated — it's a real delta of that
-    formula. Sorted descending so 'highest ROI' is genuinely highest ROI.
-    Skips forks with no real contribution — there's nothing to recommend
-    improving on someone else's code.
-    """
     candidates = []
     for r in repositories:
         if r.get("is_fork") and r.get("is_meaningful_fork_contribution") is False:
@@ -92,23 +75,9 @@ def build_ranked_recommendations(repositories: list[dict]) -> list[dict]:
     return candidates[:6]
 
 ARCHITECTURE_MATURITY_ORDER = ["flat_script", "basic_structure", "layered", "well_architected"]
-# _MATURITY_LABEL_POINTS removed — now imported as ARCHITECTURE_DEPTH_POINTS,
-# shared with github_skill_depth.py's per-technology depth score.
 
 
 def build_architecture_maturity_rollup(repositories: list[dict]) -> dict:
-    """Portfolio-wide architecture-maturity metric — previously
-    assess_architecture_depth's output (github_architecture_analyzer.py)
-    was computed per-repo and never rolled up into a single headline
-    number Career Planner or Skill Gap Analyzer could act on. This
-    answers "what % of your real portfolio is well-architected", not
-    just "here's one repo's read."
-
-    Only repos that got a confident (non-"low") architecture read are
-    counted in the percentage breakdown — repos with no assessment or a
-    low-confidence one are reported separately as "unassessed" rather
-    than silently excluded or silently counted as the weakest label.
-    """
     eligible = [
         r for r in repositories
         if not (r.get("is_fork") and r.get("is_meaningful_fork_contribution") is False)
@@ -170,7 +139,6 @@ def build_github_insights(
     total = len(repositories) or 1
     category_counts = {cat: sum(techs.values()) for cat, techs in tech_distribution.items()}
 
-    # 1. Portfolio Profile (Domains and Project Types)
     domains = []
     if category_counts.get("frontend", 0) > 0 or category_counts.get("backend", 0) > 0 or category_counts.get("databases", 0) > 0:
         domains.append("Web Applications")
@@ -208,7 +176,6 @@ def build_github_insights(
 
     project_types = sorted(list(project_types_set))
 
-    # 2. Engineering Habits / Practices
     repos_with_readme = sum(1 for r in repositories if r.get("has_readme"))
     doc_score = round((repos_with_readme / total) * 100)
 
@@ -231,7 +198,6 @@ def build_github_insights(
 
     collaborative_repos = sum(1 for r in repositories if (r.get("collaboration") or {}).get("mode") in ("collaborative", "mixed"))
 
-    # 3. Progress and Trends
     dominant_languages = [
         lang for lang, _ in sorted(total_language_bytes.items(), key=lambda kv: kv[1], reverse=True)[:2]
     ]
@@ -245,22 +211,18 @@ def build_github_insights(
     if prev_insights:
         prev_backend_count = sum(prev_insights.get("technology_distribution", {}).get("backend", {}).values())
         curr_backend_count = sum(tech_distribution.get("backend", {}).values())
-        if curr_backend_count > prev_backend_count:
-            backend_activity = "Increasing"
-        elif curr_backend_count < prev_backend_count:
-            backend_activity = "Decreasing"
+        # Fix #7 — single shared trend function, instead of a bespoke
+        # inline "if curr > prev: Increasing elif < : Decreasing" block
+        # repeated three times with three slightly different vocabularies.
+        backend_activity = {
+            "Improving": "Increasing", "Declining": "Decreasing", "Unchanged": "Unchanged",
+        }[compute_trend(curr_backend_count, prev_backend_count)]
 
         prev_doc_score = prev_insights.get("engineering_practices", {}).get("documentation", {}).get("score", 0)
-        if doc_score > prev_doc_score:
-            documentation_trend = "Improving"
-        elif doc_score < prev_doc_score:
-            documentation_trend = "Declining"
+        documentation_trend = compute_trend(doc_score, prev_doc_score)
 
         prev_test_score = prev_insights.get("engineering_practices", {}).get("testing", {}).get("score", 0)
-        if test_score > prev_test_score:
-            testing_trend = "Improving"
-        elif test_score < prev_test_score:
-            testing_trend = "Declining"
+        testing_trend = compute_trend(test_score, prev_test_score)
 
         curr_techs = set()
         for techs in tech_distribution.values():
@@ -272,10 +234,8 @@ def build_github_insights(
 
         new_technologies = sorted(list(curr_techs - prev_techs))
 
-    # 4. Recommendations
     recommendations = build_ranked_recommendations(repositories)
 
-    # Softer, non-absolute observations for strengths
     strengths_list = []
     if category_counts.get("frontend", 0) >= 2 or any(lang.lower() in {"javascript", "typescript"} for lang in dominant_languages):
         strengths_list.append("Portfolio contains multiple frontend applications demonstrating sustained JavaScript/TypeScript usage.")

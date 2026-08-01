@@ -23,6 +23,8 @@ from app.services.resume.analysis.keywords    import analyze_keywords
 from app.services.resume.analysis.evidence    import analyze_evidence
 from app.services.resume.analysis.scoring     import get_grade, get_label, get_grade_color
 from app.services.resume.analysis.suggestions import generate_suggestions
+from app.services.identity.role_fit import get_role_fit
+from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, RESUME_SOURCE_TYPES
 
 
 EXCLUDED_SKILLS = {
@@ -61,7 +63,6 @@ async def run_analysis(
 ) -> dict:
     """Run the full deterministic analysis pipeline and persist the result."""
 
-    # ── 1. Fetch latest resume ───────────────────────────────────────────────
     resume_result = await db.execute(
         select(Resume)
         .where(Resume.user_id == user_id)
@@ -74,7 +75,6 @@ async def run_analysis(
 
     raw_text = resume.raw_text or ""
 
-    # ── 2. Fetch experiences & projects tied to this resume ─────────────────
     exp_result = await db.execute(
         select(Experience).where(
             Experience.user_id == user_id,
@@ -101,7 +101,6 @@ async def run_analysis(
 
     all_bullets = _collect_bullets(experiences, projects)
 
-    # ── 3. JD keyword extraction (if provided) ───────────────────────────────
     jd_keywords: set[str] | None = None
     if job_description_id:
         jd_id = uuid.UUID(str(job_description_id))
@@ -117,17 +116,14 @@ async def run_analysis(
             if skills:
                 jd_keywords = {s.lower() for s in skills if s}
 
-    # ── 4. Run all modules ───────────────────────────────────────────────────
     structure  = analyze_structure(raw_text)
     parsing    = analyze_parsing(raw_text)
     formatting = analyze_formatting(raw_text)
     content    = analyze_content(all_bullets)
     metrics    = analyze_metrics(all_bullets)
 
-    # Fetch user's profile skills to use as keyword pool if no target JD is chosen
     profile_skills = set()
     if not jd_keywords:
-        # GitHub
         gh_rows = await db.execute(
             select(GithubSnapshot.languages).where(GithubSnapshot.user_id == user_id)
         )
@@ -135,7 +131,6 @@ async def run_analysis(
             if row[0]:
                 profile_skills.update(k.lower() for k in row[0].keys())
 
-        # Leetcode
         lc_ev_rows = await db.execute(
             select(Skill.canonical_name)
             .join(LeetcodeSnapshot, (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name))
@@ -143,7 +138,6 @@ async def run_analysis(
         )
         profile_skills.update(r[0].lower() for r in lc_ev_rows.fetchall() if r[0])
 
-        # Certificates
         cert_ev_rows = await db.execute(
             select(Certificate.skills).where(Certificate.user_id == user_id)
         )
@@ -151,7 +145,6 @@ async def run_analysis(
             if row[0]:
                 profile_skills.update(s.lower() for s in row[0])
 
-        # Experience & Project stacks
         for exp in experiences:
             if exp.stack:
                 profile_skills.update(s.lower() for s in exp.stack)
@@ -159,13 +152,11 @@ async def run_analysis(
             if proj.stack:
                 profile_skills.update(s.lower() for s in proj.stack)
 
-        # Filter out generic/algorithmic Leetcode topics that shouldn't be recommended as resume keywords
         profile_skills = {s for s in profile_skills if s not in EXCLUDED_SKILLS}
 
     keywords   = analyze_keywords(raw_text, jd_keywords, profile_skills if profile_skills else None)
     evidence   = await analyze_evidence(db, user_id, resume.id)
 
-    # ── 5. Run ATS v2 Scorer ────────────────────────────────────────────────
     from app.services.resume.analysis.ats_scorer_v2 import analyze_ats_v2
     ats_res = analyze_ats_v2(
         raw_text=raw_text,
@@ -181,15 +172,14 @@ async def run_analysis(
     label = get_label(overall)
     grade_color = get_grade_color(overall)
 
-    # ── 6. Role Compatibility (deterministic — never LLM-invented) ──────────
-    from app.services.resume.analysis.role_fit import compute_role_fit
-    role_fit = compute_role_fit(evidence.get("skills", []))
+    # ── Role Compatibility — deliberately, entirely LLM-generated
+    # (Engineering Identity fix #2). See services/identity/role_fit.py's
+    # module docstring for why this is not a deterministic category-
+    # coverage formula and never should be again.
+    resume_scoped_evidence = await build_scoped_skill_evidence(db, RESUME_SOURCE_TYPES)
+    role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
+    role_fit = [r.model_dump() for r in role_fit_results]
 
-    # ── 7. Suggestions ───────────────────────────────────────────────────────
-    # FIX (Critical #1): ats_res["warnings"] is the SAME warnings list that
-    # produced `overall`/`grade`/`label` above — passing it in guarantees the
-    # displayed score and the displayed reasons for that score can never
-    # disagree.
     suggestions = generate_suggestions(
         structure, parsing, formatting, content, metrics, keywords, evidence,
         ats_warnings=ats_res.get("warnings", []),
@@ -217,7 +207,6 @@ async def run_analysis(
         "created_at":  datetime.now(timezone.utc).isoformat(),
     }
 
-    # ── 7. Persist ───────────────────────────────────────────────────────────
     row = ResumeAnalysis(
         user_id=user_id,
         resume_id=resume.id,

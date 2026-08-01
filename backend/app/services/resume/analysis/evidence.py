@@ -3,8 +3,13 @@
 For each skill associated with the user's resume, checks whether there
 is corroborating evidence in: Projects, Experience, or GitHub.
 
-Assigns a confidence level (high / medium / low) per skill based on
-how many sources back it up.
+Assigns a CORROBORATION level (high / medium / low) per skill based on
+how many independent SOURCES back it up. This is deliberately NOT called
+"confidence" (Engineering Identity fix #1) — the canonical, numeric
+confidence score lives in resume/confidence.py's decayed-weight formula;
+this module answers a different question ("how many places mention this
+skill"), and giving it the same name as the real confidence score is
+exactly what let three different labeling systems drift apart.
 """
 import uuid
 from sqlalchemy import select
@@ -45,20 +50,18 @@ async def analyze_evidence(
             "score": 0,
             "skills": [],
             "total_skills": 0,
-            "high_confidence": 0,
-            "medium_confidence": 0,
-            "low_confidence": 0,
+            "high_corroboration": 0,
+            "medium_corroboration": 0,
+            "low_corroboration": 0,
         }
 
     # ── Fetch skill evidence linked to those sources ────────────────────────
-    # 1. Experience & Project evidence for this resume
     ev_rows = await db.execute(
         select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
         .where(SkillEvidence.source_id.in_([uuid.UUID(sid) for sid in all_source_ids]))
     )
     evidence_list = list(ev_rows.fetchall())
 
-    # 2. Leetcode evidence for this user
     lc_ev_rows = await db.execute(
         select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
         .join(Skill, SkillEvidence.skill_id == Skill.id)
@@ -70,7 +73,6 @@ async def analyze_evidence(
     )
     evidence_list.extend(lc_ev_rows.fetchall())
 
-    # 3. Certificate evidence for this user
     cert_ev_rows = await db.execute(
         select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
         .join(Certificate, SkillEvidence.source_id == Certificate.id)
@@ -78,7 +80,6 @@ async def analyze_evidence(
     )
     evidence_list.extend(cert_ev_rows.fetchall())
 
-    # ── Fetch skill display names ───────────────────────────────────────────
     skill_ids = {row[0] for row in evidence_list}
     skill_rows = await db.execute(
         select(Skill.id, Skill.name, Skill.canonical_name).where(Skill.id.in_(skill_ids))
@@ -89,14 +90,13 @@ async def analyze_evidence(
         for sid, name, canonical in skill_rows.fetchall():
             skill_map[str(sid)] = {"name": name, "canonical": canonical}
 
-    # ── Also pull project skills via ProjectSkill join ──────────────────────
     proj_skill_rows = await db.execute(
         select(ProjectSkill.project_id, ProjectSkill.skill_id, Skill.name, Skill.canonical_name)
         .join(Skill, ProjectSkill.skill_id == Skill.id)
         .where(ProjectSkill.project_id.in_([uuid.UUID(pid) for pid in proj_ids]))
     ) if proj_ids else None
 
-    project_skill_set: dict[str, dict] = {}  # canonical → info
+    project_skill_set: dict[str, dict] = {}
     if proj_skill_rows:
         for proj_id, skill_id, name, canonical in proj_skill_rows.fetchall():
             if canonical not in project_skill_set:
@@ -112,7 +112,6 @@ async def analyze_evidence(
             else:
                 project_skill_set[canonical]["in_project"] = True
 
-    # ── Fetch resume skills from latest snapshot to show all of them ────────
     snapshot_result = await db.execute(
         select(ProfileSnapshot)
         .where(ProfileSnapshot.user_id == user_id, ProfileSnapshot.note == "resume upload")
@@ -120,12 +119,11 @@ async def analyze_evidence(
         .limit(1)
     )
     snapshot = snapshot_result.scalar_one_or_none()
-    
+
     resume_skills_set = set()
     if snapshot and snapshot.skills_json:
         resume_skills_set = {k.lower() for k in snapshot.skills_json.keys()}
 
-    # Merge ProjectSkill keys and Experience/Project linked SkillEvidence canonicals
     linked_resume_skills_set = set()
     for canonical in project_skill_set.keys():
         linked_resume_skills_set.add(canonical.lower())
@@ -136,7 +134,6 @@ async def analyze_evidence(
             canonical = info.get("canonical", sid)
             linked_resume_skills_set.add(canonical.lower())
 
-    # Complete set of resume skills
     all_resume_skills = resume_skills_set | linked_resume_skills_set
 
     skill_evidence: dict[str, dict] = {}
@@ -158,13 +155,11 @@ async def analyze_evidence(
                 "skill_id": str(skill_id),
             }
 
-        # Merge project_skill_set evidence
         for canonical, info in project_skill_set.items():
             canonical_lower = canonical.lower()
             if canonical_lower in skill_evidence:
                 skill_evidence[canonical_lower]["in_project"] = True
 
-        # Merge SkillEvidence rows
         for skill_id, source_id, source_type in evidence_list:
             sid = str(skill_id)
             info = skill_map.get(sid, {})
@@ -181,7 +176,6 @@ async def analyze_evidence(
                 elif source_type == "certificate":
                     skill_evidence[canonical_lower]["in_certificate"] = True
     else:
-        # Fallback old behavior
         skill_evidence = dict(project_skill_set)
         for skill_id, source_id, source_type in evidence_list:
             sid = str(skill_id)
@@ -206,7 +200,6 @@ async def analyze_evidence(
             elif source_type == "certificate":
                 skill_evidence[canonical]["in_certificate"] = True
 
-    # ── GitHub language + technology evidence ───────────────────────────────
     gh_rows = await db.execute(
         select(GithubSnapshot.languages).where(GithubSnapshot.user_id == user_id)
     )
@@ -224,9 +217,9 @@ async def analyze_evidence(
         if techs:
             github_langs.update(t.lower() for t in techs)
 
-    # ── Assign confidence ───────────────────────────────────────────────────
+    # ── Assign CORROBORATION level (renamed from "confidence" — fix #1) ────
     skills_list: list[dict] = []
-    high_conf = medium_conf = low_conf = 0
+    high_corr = medium_corr = low_corr = 0
 
     for canonical, data in skill_evidence.items():
         in_gh = canonical.lower() in github_langs or data.get("name", "").lower() in github_langs
@@ -235,41 +228,41 @@ async def analyze_evidence(
         in_leetcode = data.get("in_leetcode", False)
         in_certificate = data.get("in_certificate", False)
 
-        sources = sum([
+        source_count = sum([
             data["in_experience"],
             data["in_project"],
             in_gh,
             in_leetcode,
-            in_certificate
+            in_certificate,
         ])
+        data["corroboration_count"] = source_count
 
-        if sources >= 3:
-            data["confidence"] = "high"
-            high_conf += 1
-        elif sources >= 1:
-            data["confidence"] = "medium"
-            medium_conf += 1
+        if source_count >= 3:
+            data["corroboration_level"] = "high"
+            high_corr += 1
+        elif source_count >= 1:
+            data["corroboration_level"] = "medium"
+            medium_corr += 1
         else:
-            data["confidence"] = "low"
-            low_conf += 1
+            data["corroboration_level"] = "low"
+            low_corr += 1
 
         skills_list.append({k: v for k, v in data.items() if k != "skill_id"})
 
     total = len(skills_list)
     if total > 0:
-        score = round(((high_conf * 1.0 + medium_conf * 0.6 + low_conf * 0.15) / total) * 100)
+        score = round(((high_corr * 1.0 + medium_corr * 0.6 + low_corr * 0.15) / total) * 100)
     else:
         score = 0
 
-    # Sort: high → medium → low, then alphabetically
     order = {"high": 0, "medium": 1, "low": 2}
-    skills_list.sort(key=lambda s: (order.get(s["confidence"], 3), s.get("name", "")))
+    skills_list.sort(key=lambda s: (order.get(s["corroboration_level"], 3), s.get("name", "")))
 
     return {
         "score": min(100, score),
         "skills": skills_list,
         "total_skills": total,
-        "high_confidence": high_conf,
-        "medium_confidence": medium_conf,
-        "low_confidence": low_conf,
+        "high_corroboration": high_corr,
+        "medium_corroboration": medium_corr,
+        "low_corroboration": low_corr,
     }

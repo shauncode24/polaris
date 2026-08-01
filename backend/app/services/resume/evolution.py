@@ -25,10 +25,14 @@ async def _get_recent_resume_snapshots(db: AsyncSession, user_id, limit: int = 2
 
 
 def _skills_map(snapshot: ProfileSnapshot) -> dict[str, float]:
+    """Reads the FROZEN, upload-time confidence — deliberately (per this
+    module's own original design) diffed against the LIVE decayed number
+    elsewhere in this file. Key renamed to confidence_at_upload (fix #10)
+    so this distinction is enforced by the schema, not by a comment."""
     if not isinstance(snapshot.skills_json, dict):
         return {}
     return {
-        canonical: data.get("confidence", 0.0)
+        canonical: data.get("confidence_at_upload", data.get("confidence", 0.0))
         for canonical, data in snapshot.skills_json.items()
         if isinstance(data, dict)
     }
@@ -45,9 +49,6 @@ async def build_evolution_report(db: AsyncSession, user_id) -> EvolutionReport:
         )
 
     current, previous = snapshots[0], snapshots[1]
-    # "Current" reflects live, decay-aware confidence (same number every
-    # other consumer sees today); "previous" stays the frozen historical
-    # snapshot on purpose — that's the point of comparison.
     current_skills = await get_all_skill_confidences(db)
     previous_skills = _skills_map(previous)
 

@@ -1,5 +1,14 @@
 # backend/app/services/resume/analysis/role_fit.py
-from sqlalchemy.ext.asyncio import AsyncSession
+"""ROLE_ARCHETYPES is the shared vocabulary of role names + their
+associated skill categories — used for keyword/category alignment
+(resume/analysis/coherence.py's target-role matching). It is NOT used to
+compute a role-fit rating anymore.
+
+Role-fit itself is deliberately and entirely LLM-generated — see
+services/identity/role_fit.py's module docstring (Engineering Identity
+fix #2). There is no deterministic compute_role_fit function in this
+codebase anymore; do not add one back here.
+"""
 from app.services.jobs.skill_categories import CATEGORY_MAP
 
 ROLE_ARCHETYPES = {
@@ -16,53 +25,3 @@ _VALID_CATEGORIES = set(CATEGORY_MAP.values())
 assert all(
     cat in _VALID_CATEGORIES for cats in ROLE_ARCHETYPES.values() for cat in cats
 ), "ROLE_ARCHETYPES references a category not present in skill_categories.CATEGORY_MAP"
-
-
-def compute_role_fit(evidence_skills: list[dict]) -> list[dict]:
-    covered_categories = set()
-    for s in evidence_skills:
-        if s.get("confidence") == "low":
-            continue
-        # Check canonical first, then fall back to name
-        key = s.get("canonical") or s.get("name") or ""
-        cat = CATEGORY_MAP.get(key.lower())
-        if cat:
-            covered_categories.add(cat)
-            
-    results = []
-    for role, needed in ROLE_ARCHETYPES.items():
-        overlap = len(needed & covered_categories)
-        pct = round((overlap / len(needed)) * 100)
-        results.append({"role": role, "match_pct": pct})
-        
-    return sorted(results, key=lambda r: r["match_pct"], reverse=True)
-
-
-async def get_confident_canonical_skills(db: AsyncSession) -> list[dict]:
-    """Retrieves all skill confidence scores from the database and maps them
-    to structured dictionaries with confidence levels (high, medium, low).
-    """
-    from app.services.evidence import get_all_skill_confidences
-    confidences = await get_all_skill_confidences(db)
-    
-    confident_skills = []
-    for canonical, score in confidences.items():
-        if score >= 0.5:
-            conf_label = "high"
-        elif score >= 0.15:
-            conf_label = "medium"
-        else:
-            conf_label = "low"
-            
-        confident_skills.append({
-            "canonical": canonical,
-            "name": canonical,
-            "confidence": conf_label,
-            "score": score
-        })
-    return confident_skills
-
-
-def compute_combined_role_fit(confident_skills: list[dict]) -> list[dict]:
-    """Wrapper around compute_role_fit that takes mapped confident skills."""
-    return compute_role_fit(confident_skills)

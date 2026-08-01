@@ -38,6 +38,7 @@ from app.services.github.github_architecture_analyzer import (
     assess_architecture_depth,
 )
 from app.services.github.github_cache import get_repo_cache, cache_is_fresh, upsert_repo_cache
+from app.services.github.github_skill_depth import build_technology_depth_map
 
 logger = logging.getLogger(__name__)
 
@@ -85,16 +86,6 @@ async def _compute_slow_repo_signals(
     client: httpx.AsyncClient, username: str, repo_name: str, token: str,
     default_branch: str, is_fork: bool, quality_score_hint: float | None,
 ) -> dict:
-    """Runs the four expensive per-repo operations (commit-hygiene sample,
-    PR/review lookup, fork-contribution count, architecture LLM pass) from
-    scratch. Only ever called on a cache miss — see the branch in
-    sync_github() below. `quality_score_hint` is None on a cache miss for
-    a repo we haven't analyzed yet this sync, which is fine: the
-    architecture eligibility check below runs again with the REAL
-    quality_score once analyze_repo() has computed it, so this hint is
-    only used to skip an obviously-ineligible tree fetch early when
-    available (it isn't, on first pass — kept for future callers).
-    """
     recent_commits_task = fetch_recent_commits(client, username, repo_name, token, limit=30)
     pr_stats_task = fetch_pull_request_stats(client, username, repo_name, token)
     fork_contribution_task = (
@@ -121,8 +112,6 @@ async def _compute_slow_repo_signals(
 
 
 async def _immediate(value):
-    """Tiny helper so fork-contribution can share the same asyncio.gather
-    call shape whether or not it actually needs to hit the network."""
     return value
 
 
@@ -159,14 +148,10 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 datetime.fromisoformat(raw_created_at.replace("Z", "+00:00")) if raw_created_at else None
             )
 
-            # --- Cheap per-repo calls: always refetched, every sync ---
             languages_task = fetch_languages(client, username, repo_name, token)
             commits_task = fetch_commit_count_last_30d(client, username, repo_name, username, token)
             readme_task = fetch_readme_exists(client, username, repo_name, token)
             ci_task = fetch_ci_config_exists(client, username, repo_name, token)
-            # Fetched once, reused for both test-signal detection AND the
-            # architecture pass below — previously each fetched their own
-            # copy of the same recursive tree.
             tree_task = fetch_repo_tree(client, username, repo_name, token, default_branch)
             package_json_task = fetch_repo_file(client, username, repo_name, "package.json", token)
             requirements_task = fetch_repo_file(client, username, repo_name, "requirements.txt", token)
@@ -201,7 +186,6 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
             current_sha = last_commit_info["sha"] if last_commit_info else None
             last_commit_at = last_commit_info["date"] if last_commit_info else None
 
-            # --- Cache check: decides whether the 4 slow operations run ---
             cache_row = await get_repo_cache(db, user.id, repo_name)
             if cache_is_fresh(cache_row, current_sha):
                 cache_hits += 1
@@ -220,7 +204,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 pr_stats = slow_signals["pr_stats"]
                 collaboration_result = slow_signals["collaboration"]
                 fork_contribution_commits = slow_signals["fork_contribution_commits"]
-                cached_architecture_result = None  # computed fresh below, after quality_score exists
+                cached_architecture_result = None
                 logger.debug("Cache MISS for %s (sha=%s)", repo_name, current_sha[:8] if current_sha else None)
 
             repo_language_map[repo_name] = languages
@@ -268,16 +252,12 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 commits_30d=commits_30d,
                 last_commit_at=last_commit_at,
                 is_archived=is_archived,
-                score_breakdown=score["breakdown"],   # NEW — single source of truth
+                score_breakdown=score["breakdown"],
                 is_fork=is_fork,
                 is_meaningful_fork_contribution=score["is_meaningful_fork_contribution"],
-                topics=topics,                         # NEW — taxonomy reconciliation
+                topics=topics,
             )
 
-            # --- Architecture pass: only run on a cache miss, and only if
-            # the repo clears the deterministic bar with its FRESH quality
-            # score. On a cache hit, reuse whatever was cached (which may
-            # legitimately be None if the repo wasn't eligible last time). ---
             if cache_is_fresh(cache_row, current_sha):
                 architecture_result = cached_architecture_result
             elif is_eligible_for_architecture_pass(
@@ -286,18 +266,12 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 is_fork=is_fork,
                 contributed_as_fork=score["is_meaningful_fork_contribution"],
             ):
-                # tree_paths already fetched above — no second network call.
                 architecture_result = await assess_architecture_depth(
                     repo_name, analysis["technologies"], tree_paths
                 )
             else:
                 architecture_result = None
 
-            # Persist the cache row for next sync — always written on a
-            # miss (even if current_sha is None, e.g. an empty repo,
-            # since cache_is_fresh() will simply never match None again
-            # and this repo will always take the fresh path, which is
-            # correct — nothing to gain by caching an empty repo).
             if not cache_is_fresh(cache_row, current_sha) and current_sha is not None:
                 await upsert_repo_cache(
                     db, user_id=user.id, repo_name=repo_name, last_commit_sha=current_sha,
@@ -378,15 +352,11 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         db.add(row)
     await db.flush()
 
-    from app.services.github.github_evidence import sync_github_skill_evidence
-    evidence_result = await sync_github_skill_evidence(db, user)
-    logger.info("GitHub-derived skill evidence rebuilt: %s", evidence_result)
-
-    # Technology depth (skill-depth, not just skill-presence) — queries the
-    # just-upserted GithubProjectAnalysis rows fresh, since they already
-    # carry technologies/architecture/hygiene in the exact shape
-    # github_skill_depth.py needs.
-    from app.services.github.github_skill_depth import build_technology_depth_map
+    # --- FIX #3: technology depth is now computed BEFORE skill evidence
+    # is synced, since evidence weight scaling now depends on it. Reads
+    # the just-upserted GithubProjectAnalysis rows (execute() above
+    # already sent them to the DB within this transaction, so this select
+    # sees current data regardless of ordering relative to the flush). ---
     analysis_rows_result = await db.execute(
         select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user.id)
     )
@@ -404,6 +374,10 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         }
         for a in eligible_for_depth
     ])
+
+    from app.services.github.github_evidence import sync_github_skill_evidence
+    evidence_result = await sync_github_skill_evidence(db, user, technology_depth=technology_depth)
+    logger.info("GitHub-derived skill evidence rebuilt (depth-weighted): %s", evidence_result)
 
     logger.info("GitHub sync cache: %d hits, %d misses.", cache_hits, cache_misses)
 
@@ -439,7 +413,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
         repositories_report, scores, tech_distribution, total_language_bytes, prev_insights
     )
     insights["recommendations"] = build_ranked_recommendations(repositories_report)
-    insights["technology_depth"] = technology_depth
+    insights["technology_depth"] = technology_depth  # already computed above — no second call
 
     summary = {
         "repos_synced": len(repositories_report),
@@ -469,9 +443,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
     )
     db.add(snapshot)
     await db.flush()
-    # --- Portfolio-wide rollup, now actually wired up. This table and
-    # build_portfolio_analysis() already existed but were never called —
-    # every sync from here on writes one real, diffable row. ---
+
     prev_portfolio_result = await db.execute(
         select(PortfolioAnalysis)
         .where(PortfolioAnalysis.user_id == user.id)

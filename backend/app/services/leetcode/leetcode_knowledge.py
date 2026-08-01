@@ -6,15 +6,23 @@ from app.services.github.github_knowledge import build_github_knowledge_object
 from app.services.leetcode.engineering_snapshot import compute_engineering_snapshot
 
 
-async def build_leetcode_knowledge_object(db: AsyncSession, user_id) -> dict | None:
+async def build_leetcode_knowledge_object(
+    db: AsyncSession,
+    user_id,
+    github_knowledge: dict | None = None,
+    engineering_snapshot: dict | None = None,
+) -> dict | None:
     """Aggregates a user's latest LeetCode snapshot data with a high-level
     summary of their GitHub engineering profile, for the on-demand AI
-    Coach review call. The cross-module inferences (Engineering Maturity
-    Quadrant, company readiness, resume-claim check) are computed fresh
-    via engineering_snapshot.compute_engineering_snapshot() — the exact
-    same function used to persist historical trend rows at sync time —
-    so the coach always reasons over the same deterministic facts the
-    page shows, never a separately-derived copy.
+    Coach review call.
+
+    `github_knowledge` / `engineering_snapshot` can be passed in by a
+    caller that has ALREADY computed them this request (Engineering
+    Identity fix #6 — identity_builder.py used to trigger this function,
+    which independently re-fetched github_knowledge AND recomputed
+    compute_engineering_snapshot, duplicating work identity_builder had
+    already done itself). When omitted (e.g. leetcode_reviewer.py's
+    standalone call), this computes them fresh exactly as before.
     """
     result = await db.execute(
         select(ProfileSnapshot)
@@ -27,7 +35,9 @@ async def build_leetcode_knowledge_object(db: AsyncSession, user_id) -> dict | N
     if lc_snapshot is None or not isinstance(lc_snapshot.skills_json, dict):
         return None
 
-    gh_knowledge = await build_github_knowledge_object(db, user_id)
+    if github_knowledge is None:
+        github_knowledge = await build_github_knowledge_object(db, user_id)
+    gh_knowledge = github_knowledge
 
     payload = lc_snapshot.skills_json
     insights = payload.get("insights", {})
@@ -35,7 +45,9 @@ async def build_leetcode_knowledge_object(db: AsyncSession, user_id) -> dict | N
     topic_mastery = insights.get("topic_mastery", [])
     repositories = gh_knowledge.get("repositories", []) if gh_knowledge else []
 
-    engineering = await compute_engineering_snapshot(db, user_id)
+    if engineering_snapshot is None:
+        engineering_snapshot = await compute_engineering_snapshot(db, user_id)
+    engineering = engineering_snapshot
 
     return {
         "leetcode_summary": {

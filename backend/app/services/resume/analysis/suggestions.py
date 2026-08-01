@@ -17,7 +17,6 @@ from __future__ import annotations
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 _WARNING_SUGGESTION_COPY: dict[str, tuple[str, str]] = {
-    # warning type -> (title, impact)
     "missing_email": ("Add a contact email address", "ATS and recruiters require a reachable email."),
     "missing_phone": ("Add a phone number", "Recruiters often prefer a direct line for scheduling."),
     "missing_github": ("Add your GitHub profile link", "Lets reviewers verify real project work."),
@@ -57,11 +56,8 @@ def generate_suggestions(
 ) -> list[dict]:
     suggestions: list[dict] = []
 
-    # ── Canonical ATS warnings (same source as the displayed score) ────────
     if ats_warnings:
         suggestions.extend(_suggestions_from_ats_warnings(ats_warnings))
-
-    # ── HIGH ─────────────────────────────────────────────────────────────
 
     density = metrics.get("metric_density", 100)
     no_metric = metrics.get("bullets_without_metrics", 0)
@@ -83,8 +79,6 @@ def generate_suggestions(
             "ownership. Replace with strong action verbs like 'Built', 'Designed', 'Automated'.",
             "Recruiters spend ~7 seconds per resume — strong action verbs catch and hold attention.",
         ))
-
-    # ── MEDIUM ────────────────────────────────────────────────────────────
 
     if 30 <= density < 55 and no_metric > 0:
         suggestions.append(_s(
@@ -124,7 +118,9 @@ def generate_suggestions(
             "ATS filters resumes by keyword presence before a human reads them.",
         ))
 
-    low_ev = evidence.get("low_confidence", 0)
+    # Renamed to match evidence.py's "corroboration_level" fix (#1) —
+    # this used to read "low_confidence", which no longer exists.
+    low_ev = evidence.get("low_corroboration", 0)
     if low_ev > 1:
         suggestions.append(_s(
             "medium", "evidence",
@@ -142,8 +138,6 @@ def generate_suggestions(
             "Each bullet should describe what you did, how, and with what result.",
         ))
 
-    # ── LOW ───────────────────────────────────────────────────────────────
-
     too_long_bullets = content.get("issue_type_counts", {}).get("too_long", 0)
     if too_long_bullets > 0:
         suggestions.append(_s(
@@ -153,8 +147,6 @@ def generate_suggestions(
             "Recruiters skim; shorter, punchier bullets have higher read rates.",
         ))
 
-    # De-dupe (an ats-warning-derived suggestion and a module-derived one
-    # could theoretically overlap in title) and sort high → medium → low.
     seen_titles = set()
     deduped = []
     for s in suggestions:

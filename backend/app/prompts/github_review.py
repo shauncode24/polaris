@@ -28,6 +28,9 @@ that a technology sits at "Deep expertise" (multiple recent, well-architected re
 honest claim than just "uses FastAPI". If "architecture_maturity.maturity_score" is null (not enough
 assessed repos), say so plainly rather than guessing at portfolio maturity.
 
+Note: do NOT produce a "role_fit" field — that is generated separately by a dedicated call and will be
+overwritten regardless of what you return here.
+
 Produce the following:
 
 1. "engineering_assessment": 3-5 sentences, written like a senior engineer's honest read of this portfolio —
@@ -36,41 +39,32 @@ Produce the following:
 2. "flagship_projects": pick 1-3 repos from "repositories" that best represent this candidate, each with a
    "name" (must match exactly) and a "reason" grounded in that repo's real technologies/capabilities/scores.
 
-3. "role_fit": rate the candidate's evidenced fit for these five roles — "Backend Engineer", "Frontend Engineer",
-   "Full Stack Engineer", "AI/ML Engineer", "DevOps / Platform" — each as {"role": str, "rating": int 1-5,
-   "rationale": str}. The "role_fit_anchor" field in the knowledge object gives you a deterministic code-computed
-   baseline match percentage per role. Your rating WILL BE CLAMPED to a band derived from that anchor after this
-   call, so there is no benefit to inflating or padding a rating beyond what the anchor supports — spend your
-   effort on a specific, evidence-grounded "rationale" instead. Use ONLY these exact role name strings — any
-   other role name will be silently dropped.
-
-4. "skill_confidence_explanations": for up to 5 of the most-evidenced entries in "all_technologies", explain WHY
+3. "skill_confidence_explanations": for up to 5 of the most-evidenced entries in "all_technologies", explain WHY
    confidence is justified — e.g. it appears across multiple unrelated repos vs. only once. Each as
    {"skill": str, "explanation": str}.
 
-5. "engineering_habits": 4-7 real observed patterns, each {"observation": str, "is_strength": bool}. Ground every
+4. "engineering_habits": 4-7 real observed patterns, each {"observation": str, "is_strength": bool}. Ground every
    one in "engineering_practices" (documentation/testing/CI/maintenance/commit_hygiene/collaboration) or
    repo-level patterns visible in "repositories" — never a generic platitude that could apply to any portfolio.
 
-6. "recruiter_perspective": {"notices": [4-7 things a recruiter would notice skimming this for 20 seconds,
+5. "recruiter_perspective": {"notices": [4-7 things a recruiter would notice skimming this for 20 seconds,
    most-positive-first], "decision": one honest sentence on whether this portfolio alone would earn an
    interview, and for what kind of role/level}.
 
-7. "resume_integration_suggestions": up to 5 short, concrete suggestions naming a real technology/capability
+6. "resume_integration_suggestions": up to 5 short, concrete suggestions naming a real technology/capability
    from this portfolio that's under-represented and should be added to the resume.
 
-8. "growth_story": 2-3 sentences describing a trajectory ONLY if the data genuinely supports one (e.g.
+7. "growth_story": 2-3 sentences describing a trajectory ONLY if the data genuinely supports one (e.g.
    increasing technology breadth, recent projects touching new capabilities). If there isn't enough evidence
    for a real trajectory, say so plainly instead of inventing one.
 
-9. "improvement_roadmap": 3-5 concrete, prioritized next actions (e.g. "Add automated tests to X", "Write a
+8. "improvement_roadmap": 3-5 concrete, prioritized next actions (e.g. "Add automated tests to X", "Write a
    README for Y") — each citing a real repo name where applicable.
 
 Output ONLY valid JSON matching this schema, no prose, no markdown fences:
 {
   "engineering_assessment": str,
   "flagship_projects": [{"name": str, "reason": str}],
-  "role_fit": [{"role": str, "rating": int, "rationale": str}],
   "skill_confidence_explanations": [{"skill": str, "explanation": str}],
   "engineering_habits": [{"observation": str, "is_strength": bool}],
   "recruiter_perspective": {"notices": [str], "decision": str},

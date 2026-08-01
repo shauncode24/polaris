@@ -14,6 +14,8 @@ from app.models.structure import Skill, SkillAlias
 from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
 from app.services.resume.ats_checks import run_ats_checks
+from app.services.identity.role_fit import get_role_fit
+from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, RESUME_SOURCE_TYPES
 
 
 from uuid import UUID
@@ -74,14 +76,6 @@ async def download_resume(
     current_user: User = Depends(get_current_user_from_query),
     db: AsyncSession = Depends(get_db),
 ):
-    """Serve the latest resume PDF bytes for inline preview.
-
-    Accepts an optional ?token=... query param as a fallback so that
-    browser <embed> tags (which cannot set Authorization headers) can
-    still authenticate.  The standard bearer header is preferred and
-    validated first by get_current_user; this param is only a UX
-    convenience for the preview embed.
-    """
     result = await db.execute(
         select(Resume)
         .where(Resume.user_id == current_user.id)
@@ -118,7 +112,6 @@ async def get_resume_workspace(
     """Single aggregated endpoint for the Resume page."""
     uid = current_user.id
 
-    # ── Latest resume ───────────────────────────────────────────────────────
     resumes_result = await db.execute(
         select(Resume)
         .where(Resume.user_id == uid)
@@ -131,17 +124,13 @@ async def get_resume_workspace(
 
     latest = resumes[0]
 
-    # Deterministically synchronize skills from raw text if missing to avoid LLM token waste
     ev_check_result = await db.execute(
         select(func.count(SkillEvidence.id))
         .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
         .where(Experience.user_id == uid, Experience.resume_id == latest.id)
     )
-    # Read-only: flag it instead of writing on a GET. The client should
-    # call POST /resume/analyze (or a dedicated sync trigger) explicitly.
     needs_skill_sync = ev_check_result.scalar_one() == 0
 
-    # ── Counts (snapshot) ───────────────────────────────────────────────────
     async def count(model, extra_filter=None):
         stmt = select(func.count()).select_from(model).where(model.user_id == uid)
         if extra_filter is not None:
@@ -154,16 +143,12 @@ async def get_resume_workspace(
     edu_count = await count(Education)
     cert_count = await count(Certificate)
 
-    # Skill count: unique skills extracted from latest resume (via resume_id join)
     skill_count_result = await db.execute(
         select(func.count(func.distinct(Experience.id)))
         .where(Experience.user_id == uid, Experience.resume_id == latest.id)
     )
     resume_exp_count = skill_count_result.scalar_one()
 
-    # Count skills unique to latest resume using the snapshot approach —
-    # use raw_text word count as proxy for "skills" until a better signal exists
-    # Real skill count: count Skill rows linked via SkillEvidence → Experience → latest resume
     skill_names_result = await db.execute(
         select(func.count(func.distinct(SkillEvidence.skill_id)))
         .join(Experience, (SkillEvidence.source_id == Experience.id) & (SkillEvidence.source_type == "experience"))
@@ -171,7 +156,6 @@ async def get_resume_workspace(
     )
     resume_skill_count = skill_names_result.scalar_one()
 
-    # ── Latest deterministic analysis ────────────────────────────────────────
     analysis_result = await db.execute(
         select(ResumeAnalysis)
         .where(ResumeAnalysis.user_id == uid)
@@ -179,7 +163,7 @@ async def get_resume_workspace(
         .limit(1)
     )
     analysis_row = analysis_result.scalar_one_or_none()
-    
+
     latest_analysis = analysis_row.analysis_json if analysis_row else None
     needs_analysis = (
         latest_analysis is None
@@ -187,10 +171,8 @@ async def get_resume_workspace(
         or "role_fit" not in latest_analysis
     )
 
-    # ── ATS health flags ────────────────────────────────────────────────────
     ats_flags = latest_analysis.get("warnings", []) if latest_analysis else []
 
-    # ── Latest review (LLM) ─────────────────────────────────────────────────
     review_result = await db.execute(
         select(ResumeReview)
         .where(ResumeReview.user_id == uid, ResumeReview.resume_id == latest.id)
@@ -211,7 +193,6 @@ async def get_resume_workspace(
             "created_at": review_row.created_at.isoformat(),
         }
 
-    # ── Version history ─────────────────────────────────────────────────────
     versions = []
     for idx, r in enumerate(reversed(resumes)):
         v_num = idx + 1
@@ -222,9 +203,8 @@ async def get_resume_workspace(
             "created_at": r.created_at.isoformat(),
             "is_current": r.id == latest.id,
         })
-    versions = list(reversed(versions))  # newest first
+    versions = list(reversed(versions))
 
-    # ── Resume vs jobs ───────────────────────────────────────────────────────
     jobs_result = await db.execute(
         select(JobDescription)
         .where(
@@ -248,25 +228,26 @@ async def get_resume_workspace(
         for j in jobs
     ]
 
-    # ── Role compatibility & Cross-source gaps ───────────────────────────────
     from app.services.resume.analysis.evidence import analyze_evidence
-    from app.services.resume.analysis.role_fit import compute_role_fit
     from app.services.resume.analysis.coverage import analyze_cross_source_coverage
 
     evidence_res = await analyze_evidence(db, uid, latest.id)
+
+    # Role Compatibility — deliberately, entirely LLM-generated (fix #2).
+    # Previously computed via a deterministic category-coverage formula
+    # (compute_role_fit) fed the source-count-bucketed evidence from
+    # analyze_evidence(); now it goes through the single shared LLM-based
+    # get_role_fit(), scoped to this resume's own project/experience evidence.
     role_fit = None
     if latest_analysis and isinstance(latest_analysis, dict):
         role_fit = latest_analysis.get("role_fit")
     if not role_fit:
-        role_fit = compute_role_fit(evidence_res.get("skills", []))
+        resume_scoped_evidence = await build_scoped_skill_evidence(db, RESUME_SOURCE_TYPES)
+        role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
+        role_fit = [r.model_dump() for r in role_fit_results]
 
     coverage_gaps = await analyze_cross_source_coverage(db, uid, latest.id)
 
-    # FIX (Critical #2): profile_consistency.missing_from_resume used to be
-    # computed a second time, inline, with slightly different logic than
-    # coverage_gaps (analyze_cross_source_coverage) — the two could disagree.
-    # Derive it FROM coverage_gaps instead, so there is exactly one
-    # cross-source-gap computation in the codebase.
     missing_from_resume = sorted(
         {g["skill"].title() for g in coverage_gaps.get("github_gaps", [])}
         | {g["skill"].title() for g in coverage_gaps.get("leetcode_gaps", [])}

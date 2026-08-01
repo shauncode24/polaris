@@ -19,26 +19,22 @@ from app.services.resume.review import flag_for_review, REVIEW_THRESHOLD
 
 
 def extract_skills_from_text(raw_text: str) -> list[str]:
-    """Deterministically extracts skills from the 'SKILLS' section of the resume text."""
     skills = []
     lines = raw_text.split("\n")
     in_skills_section = False
-    
+
     for line in lines:
         stripped = line.strip()
         lower_line = stripped.lower()
-        
-        # Detect start of skills section
+
         if lower_line == "skills" or lower_line.startswith("technical skills") or lower_line.startswith("core skills"):
             in_skills_section = True
             continue
-            
-        # Detect end of section (another header)
+
         if in_skills_section:
             if stripped and stripped[0].isupper() and not any(stripped.startswith(prefix) for prefix in ["•", "◦", "*", "-", "Languages:", "Frontend", "Backend", "Database", "AI/ML", "Tools:"]):
                 break
-                
-            # If the line starts with a bullet and contains skills
+
             if any(stripped.startswith(bullet) for bullet in ["•", "◦", "*", "-"]):
                 content = re.sub(r"^[•◦*\-\s]+", "", stripped)
                 if ":" in content:
@@ -46,12 +42,12 @@ def extract_skills_from_text(raw_text: str) -> list[str]:
                     skills_list = parts[1]
                 else:
                     skills_list = content
-                
+
                 for s in re.split(r"[,;]", skills_list):
                     skill_name = s.strip()
                     if skill_name:
                         skills.append(skill_name)
-                        
+
     return skills
 
 
@@ -85,20 +81,18 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
         raise ValueError("No extractable text found in PDF")
 
     extraction = await extract_resume_data(raw_text)
-    # Filter out empty or invalid items resulting from LLM extraction noise
     extraction.experiences = [
-        e for e in extraction.experiences 
+        e for e in extraction.experiences
         if e.role and e.role.strip() and e.company and e.company.strip()
     ]
     extraction.projects = [
-        p for p in extraction.projects 
+        p for p in extraction.projects
         if p.name and p.name.strip()
     ]
     extraction.education = [
-        edu for edu in extraction.education 
+        edu for edu in extraction.education
         if edu.institution and edu.institution.strip()
     ]
-    # user is now passed in directly — no more default-user lookup
 
     resume_row = Resume(
         user_id=user.id, raw_text=raw_text, raw_bytes=raw_bytes, filename=filename,
@@ -140,12 +134,8 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
 
     await db.flush()
 
-    # Deterministically extract skills directly from the SKILLS section text to avoid LLM token use/flakiness
     raw_skills_from_text = extract_skills_from_text(raw_text)
     if not raw_skills_from_text and extraction.skills:
-        # Deterministic SKILLS-section parser found nothing (non-standard
-        # resume formatting) — fall back to the LLM-extracted skills list
-        # rather than silently discarding it.
         raw_skills_from_text = extraction.skills
     raw_skill_strings: set[str] = set(raw_skills_from_text)
     for proj in extraction.projects:
@@ -192,9 +182,6 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
                 proj_extracted.description, raw_name
             )
             if stack_match or desc_match:
-                # Only stack-listed with no corroborating description text
-                # gets the discounted weight — a real description mention
-                # (even alongside a stack listing) earns full weight.
                 weight = WEIGHTS["project"] if desc_match else WEIGHTS["project"] * STACK_ONLY_MULTIPLIER
                 weights.append(weight)
                 evidence_entries.append({
@@ -210,11 +197,6 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
             bullet_hits = [b for b in exp_extracted.bullets if _mentions_skill(b, raw_name)]
 
             if bullet_hits:
-                # Only the FIRST bullet mention within a single experience
-                # contributes weight — repeated mentions of the same skill
-                # in one job shouldn't out-weigh genuinely independent
-                # evidence from other sources. All mentions still show up
-                # in evidence_entries for transparency.
                 weights.append(WEIGHTS["experience"])
                 for i, bullet in enumerate(bullet_hits):
                     evidence_entries.append({
@@ -244,7 +226,13 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
                 weight=weight,
             ))
 
-        skills_json[canonical] = {"confidence": confidence, "evidence": evidence_entries}
+        # RENAMED (fix #10): this is a raw, non-decayed, computed-once-at-
+        # write-time number — deliberately different from the LIVE decayed
+        # confidence resume/evolution.py compares it against. The old key
+        # name ("confidence") looked identical to the live number and
+        # nothing enforced the distinction anywhere a skills_json blob got
+        # read later. Now the schema itself says which one this is.
+        skills_json[canonical] = {"confidence_at_upload": confidence, "evidence": evidence_entries}
 
         if confidence >= 0.6:
             high_conf += 1
@@ -283,7 +271,6 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
 
 
 async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume, user_id: UUID):
-    # 1. Fetch experiences and projects
     exp_result = await db.execute(
         select(Experience).where(Experience.resume_id == resume.id)
     )
@@ -294,7 +281,6 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
     )
     projects = list(proj_result.scalars().all())
 
-    # 2. Extract raw skill strings
     raw_skill_strings = set(extract_skills_from_text(resume.raw_text))
     for proj in projects:
         if proj.stack:
@@ -306,7 +292,6 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
     if not raw_skill_strings:
         return
 
-    # 3. Resolve skills using the cache/DB (instant, no LLM)
     resolved = await resolve_skills(raw_skill_strings, db)
 
     canonical_to_raw: dict[str, str] = {}
@@ -314,12 +299,10 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
         if canonical is not None:
             canonical_to_raw[canonical] = raw
 
-    # 4. Get or create skill objects
     skill_objs: dict[str, Skill] = {}
     for canonical, raw in canonical_to_raw.items():
         skill_objs[canonical] = await _get_or_create_skill(db, canonical, raw)
 
-    # 5. Populate ProjectSkill linkages if missing
     for proj_row in projects:
         if not proj_row.stack:
             continue
@@ -335,11 +318,10 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
             )
             await db.execute(link_stmt)
 
-    # 6. Clear existing SkillEvidence for this resume's experiences and projects to prevent duplicates
     exp_ids = [exp.id for exp in experiences]
     proj_ids = [proj.id for proj in projects]
     all_source_ids = list(set(exp_ids + proj_ids))
-    
+
     if all_source_ids:
         from sqlalchemy import delete
         await db.execute(
@@ -348,9 +330,8 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
             )
         )
 
-    # 7. Re-generate SkillEvidence and skills_json
     skills_json: dict[str, dict] = {}
-    
+
     for canonical, skill in skill_objs.items():
         evidence_entries: list[dict] = []
         weights: list[float] = []
@@ -362,9 +343,6 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
                 proj_row.description, raw_name
             )
             if stack_match or desc_match:
-                # Only stack-listed with no corroborating description text
-                # gets the discounted weight — a real description mention
-                # (even alongside a stack listing) earns full weight.
                 weight = WEIGHTS["project"] if desc_match else WEIGHTS["project"] * STACK_ONLY_MULTIPLIER
                 weights.append(weight)
                 evidence_entries.append({
@@ -380,11 +358,6 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
             bullet_hits = [b for b in (exp_row.bullets or []) if _mentions_skill(b, raw_name)]
 
             if bullet_hits:
-                # Only the FIRST bullet mention within a single experience
-                # contributes weight — repeated mentions of the same skill
-                # in one job shouldn't out-weigh genuinely independent
-                # evidence from other sources. All mentions still show up
-                # in evidence_entries for transparency.
                 weights.append(WEIGHTS["experience"])
                 for i, bullet in enumerate(bullet_hits):
                     evidence_entries.append({
@@ -414,9 +387,9 @@ async def sync_resume_skills_deterministically(db: AsyncSession, resume: Resume,
                 weight=weight,
             ))
 
-        skills_json[canonical] = {"confidence": confidence, "evidence": evidence_entries}
+        # Renamed for the same reason as ingest_resume() above (fix #10).
+        skills_json[canonical] = {"confidence_at_upload": confidence, "evidence": evidence_entries}
 
-    # 8. Create a new ProfileSnapshot
     snapshot = ProfileSnapshot(
         user_id=user_id, taken_at=datetime.now(timezone.utc),
         skills_json=skills_json, note="resume upload",
