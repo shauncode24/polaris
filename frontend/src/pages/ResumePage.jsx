@@ -6,19 +6,16 @@ import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
 import ResumePdfViewer from '../components/resume/ResumePdfViewer'
-import ResumeSnapshot from '../components/resume/ResumeSnapshot'
+import ExecutiveSummary from '../components/resume/ExecutiveSummary'
+import PriorityFixes from '../components/resume/PriorityFixes'
 
 import ResumeAnalysisPanel from '../components/resume/ResumeAnalysisPanel'
 import ResumeReviewPanel from '../components/resume/ResumeReviewPanel'
-import ResumeVersions from '../components/resume/ResumeVersions'
-import ResumeConsistency from '../components/resume/ResumeConsistency'
-import RoleFitPanel from '../components/resume/RoleFitPanel'
+import SkillsCoveragePanel from '../components/resume/SkillsCoveragePanel'
 import ResumeVsJobsPanel from '../components/resume/ResumeVsJobsPanel'
-import CoverageGapsPanel from '../components/resume/CoverageGapsPanel'
 import ResumeEvolution from '../components/resume/ResumeEvolution'
 import ResumeCoherence from '../components/resume/ResumeCoherence'
 import ResumeTailoring from '../components/resume/ResumeTailoring'
-import CollapsibleSection from '../components/common/CollapsibleSection'
 import './ResumePage.css'
 
 export default function ResumePage() {
@@ -35,7 +32,6 @@ export default function ResumePage() {
 
   // Evolution
   const [evolution, setEvolution] = useState(null)
-  const [evolutionLoading, setEvolutionLoading] = useState(false)
 
   // Coherence
   const [coherence, setCoherence] = useState(null)
@@ -60,14 +56,11 @@ export default function ResumePage() {
   }
 
   async function loadEvolution() {
-    setEvolutionLoading(true)
     try {
       const data = await getResumeEvolution(token)
       setEvolution(data)
     } catch (_) {
       // Evolution is non-critical — silently ignore
-    } finally {
-      setEvolutionLoading(false)
     }
   }
 
@@ -113,9 +106,10 @@ export default function ResumePage() {
   }
 
   async function handleRunAnalysis(jobId = null) {
+    const actualJobId = typeof jobId === 'string' ? jobId : null
     setAnalyzeLoading(true)
     try {
-      await runResumeAnalysis(token, jobId)
+      await runResumeAnalysis(token, actualJobId)
       await loadWorkspace()
     } catch (e) {
       setError(e.message)
@@ -151,6 +145,9 @@ export default function ResumePage() {
   }
 
   const hasResume = workspace?.has_resume
+  const analysis = workspace?.latest_analysis
+  const review = workspace?.latest_review
+  const evidenceModule = analysis?.modules?.evidence
 
   return (
     <div className="resume-layout">
@@ -171,15 +168,8 @@ export default function ResumePage() {
           {/* Page hero */}
           <div className="resume-hero">
             <div>
-              <p className="resume-hero__eyebrow">How are you presenting yourself to recruiters?</p>
               <h1 className="resume-hero__title">Resume</h1>
-              {hasResume && (
-                <div className="resume-hero__meta">
-                  <span>Your resume workspace</span>
-                  <span className="resume-hero__meta-dot" />
-                  <span>{workspace.versions?.length || 1} version{workspace.versions?.length !== 1 ? 's' : ''} on record</span>
-                </div>
-              )}
+              <p className="resume-hero__eyebrow">How are you presenting yourself to recruiters?</p>
             </div>
           </div>
 
@@ -237,7 +227,7 @@ export default function ResumePage() {
 
           {/* Main workspace */}
           {!loading && !error && hasResume && (
-            <>
+            <div className="resume-flow">
               <ResumeHeader
                 workspace={workspace}
                 onUpload={handleUpload}
@@ -251,57 +241,59 @@ export default function ResumePage() {
                 onTogglePreview={() => setShowPreview(!showPreview)}
               />
 
-              <div className="resume-columns">
-                {/* Left column */}
-                <div className="resume-col">
-                  {showPreview && (
-                    <ResumePdfViewer hasPdf={workspace.current_resume?.has_pdf} />
-                  )}
+              {showPreview && (
+                <ResumePdfViewer hasPdf={workspace.current_resume?.has_pdf} />
+              )}
 
-                  <ResumeAnalysisPanel
-                    analysis={workspace.latest_analysis}
-                    onRunAnalysis={handleRunAnalysis}
-                    analysisLoading={analyzeLoading}
-                  />
-                  <ResumeReviewPanel
-                    review={workspace.latest_review}
-                    onRunReview={handleRunReview}
-                    reviewLoading={reviewLoading}
-                  />
-                  {workspace.coverage_gaps && (
-                    <CoverageGapsPanel coverage={workspace.coverage_gaps} />
-                  )}
+              {/* Tier 1 — the 15-second answer */}
+              <ExecutiveSummary analysis={analysis} review={review} />
 
-                  {/* Narrative Coherence — on-demand LLM, left col for full width */}
-                  <ResumeCoherence
-                    token={token}
-                    onFetch={handleFetchCoherence}
-                    data={coherence}
-                    loading={coherenceLoading}
-                    error={coherenceError}
-                  />
-
-                  {/* Resume Tailoring — requires JD selection */}
-                  <ResumeTailoring
-                    jobs={jobs}
-                    onFetch={handleFetchTailoring}
-                    data={tailoring}
-                    loading={tailoringLoading}
-                    error={tailoringError}
-                  />
-                </div>
-
-                {/* Right column */}
-                <div className="resume-col">
-                  <ResumeVersions versions={workspace.versions} />
-                  <ResumeSnapshot snapshot={workspace.snapshot} />
-                  <ResumeConsistency profile_consistency={workspace.profile_consistency} />
-                  <RoleFitPanel role_fit={workspace.role_fit} />
-                  <ResumeVsJobsPanel resume_vs_jobs={workspace.resume_vs_jobs} />
-                  <ResumeEvolution evolution={evolution} />
-                </div>
+              <div id="priority-fixes">
+                <PriorityFixes suggestions={analysis?.suggestions || []} />
               </div>
-            </>
+
+              {/* Tier 2 — improve & strengthen */}
+              <ResumeReviewPanel
+                review={review}
+                onRunReview={handleRunReview}
+                reviewLoading={reviewLoading}
+              />
+
+              <SkillsCoveragePanel
+                profile_consistency={workspace.profile_consistency}
+                evidence={evidenceModule}
+                coverage_gaps={workspace.coverage_gaps}
+              />
+
+              <ResumeVsJobsPanel resume_vs_jobs={workspace.resume_vs_jobs} />
+
+              {/* Tier 3 — advanced / on-demand intelligence */}
+              <div className="resume-advanced">
+                <ResumeAnalysisPanel
+                  analysis={analysis}
+                  onRunAnalysis={handleRunAnalysis}
+                  analysisLoading={analyzeLoading}
+                />
+
+                <ResumeCoherence
+                  token={token}
+                  onFetch={handleFetchCoherence}
+                  data={coherence}
+                  loading={coherenceLoading}
+                  error={coherenceError}
+                />
+
+                <ResumeTailoring
+                  jobs={jobs}
+                  onFetch={handleFetchTailoring}
+                  data={tailoring}
+                  loading={tailoringLoading}
+                  error={tailoringError}
+                />
+
+                <ResumeEvolution evolution={evolution} />
+              </div>
+            </div>
           )}
         </div>
       </div>

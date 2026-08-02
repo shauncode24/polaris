@@ -1,14 +1,17 @@
+import VersionHistoryDrawer from './VersionHistoryDrawer'
 import './ResumeHeader.css'
 
 function formatDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function getScoreTone(score) {
+  if (score == null) return ''
+  if (score >= 75) return 'strong'
+  if (score >= 50) return 'partial'
+  return 'weak'
+}
 
 export default function ResumeHeader({
   workspace,
@@ -22,19 +25,15 @@ export default function ResumeHeader({
   showPreview,
   onTogglePreview,
 }) {
-  const { current_resume, latest_analysis, latest_review, ats_flags = [], versions = [] } = workspace
-  const analysisScore = latest_analysis?.overall_score
-  const reviewScore = latest_review?.overall_score
-  const atsPassed = ats_flags.filter(f => f.severity !== 'low').length === 0
+  const { current_resume, latest_analysis, latest_review, versions = [] } = workspace
 
   const atsScore = latest_analysis?.overall_score ?? null
+  const resumeScore = latest_review?.overall_score ?? null
+  const grade = latest_analysis?.grade
+  const label = latest_analysis?.label
 
-
-  function getScoreTone(score) {
-    if (score == null) return ''
-    if (score >= 75) return 'strong'
-    if (score >= 50) return 'partial'
-    return 'weak'
+  function scrollToPriorityFixes() {
+    document.getElementById('priority-fixes')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
@@ -43,20 +42,12 @@ export default function ResumeHeader({
         <div className="rh__meta" style={{ paddingLeft: 0 }}>
           <div className="rh__filename-row">
             <div className="rh__filename">{current_resume.filename}</div>
-            {versions.length > 0 && (
-              <span className="rh__version-badge">
-                {versions[0]?.version || 'v1'}
-              </span>
-            )}
+            <VersionHistoryDrawer versions={versions} />
           </div>
           <div className="rh__sub">
             <span>Uploaded {formatDate(current_resume.created_at)}</span>
-            {versions.length > 1 && (
-              <>
-                <span className="rh__sep" />
-                <span>{versions.length} versions</span>
-              </>
-            )}
+            <span className="rh__sep" />
+            <span>{versions.length} version{versions.length !== 1 ? 's' : ''}</span>
           </div>
         </div>
 
@@ -64,18 +55,21 @@ export default function ResumeHeader({
 
         <div className="rh__stats-strip">
           <div className={`rh__stat-item rh__stat-item--primary tone-${getScoreTone(atsScore)}`}>
-            <span className="rh__stat-val">{atsScore != null ? `${atsScore}` : '—'}</span>
+            <span className="rh__stat-val">{atsScore != null ? atsScore : '—'}</span>
             <span className="rh__stat-lbl">ATS SCORE</span>
           </div>
 
-          {reviewScore != null && (
-            <div className={`rh__stat-item tone-${getScoreTone(reviewScore)}`}>
-              <span className="rh__stat-val">{reviewScore}</span>
-              <span className="rh__stat-lbl">AI REVIEW</span>
+          <div className={`rh__stat-item tone-${getScoreTone(resumeScore)}`}>
+            <span className="rh__stat-val">{resumeScore != null ? resumeScore : '—'}</span>
+            <span className="rh__stat-lbl">AI REVIEW</span>
+          </div>
+
+          {grade && (
+            <div className={`rh__stat-item tone-${getScoreTone(atsScore)}`}>
+              <span className="rh__stat-val">{grade}</span>
+              <span className="rh__stat-lbl">{label || 'GRADE'}</span>
             </div>
           )}
-
-
         </div>
       </div>
 
@@ -87,6 +81,7 @@ export default function ResumeHeader({
           hidden
           onChange={(e) => onUpload(e.target.files?.[0])}
         />
+
         <button
           type="button"
           className="rh__btn"
@@ -108,7 +103,7 @@ export default function ResumeHeader({
             </>
           )}
         </button>
-        
+
         <button
           type="button"
           className={`rh__btn ${showPreview ? 'rh__btn--active' : ''}`}

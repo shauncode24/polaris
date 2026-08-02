@@ -273,10 +273,7 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
             br.rewrite = match.rewrite
             br.rewrite_rationale = match.rationale
 
-    canonical_score = canonical_analysis.get("overall_score") if canonical_analysis else None
-    if canonical_score is None:
-        canonical_score = _compute_score(len(flagged_for_llm), len(units), ats_flags)
-    score = canonical_score
+    score = _compute_score(len(flagged_for_llm), len(units), ats_flags)
 
     stats = ResumeReviewStats(
         total_bullets=len(units),

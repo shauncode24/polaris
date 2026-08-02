@@ -1,0 +1,70 @@
+.scov.csec {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.scov .csec__body { padding: 0; border-top: 1px solid var(--border); }
+
+.scov__body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scov__ratio-row { display: flex; align-items: center; gap: 14px; }
+.scov__ratio-text { font-size: 24px; font-weight: 800; color: var(--ink); min-width: 56px; }
+.scov__bar-wrap { flex: 1; }
+.scov__bar-track { height: 6px; background: var(--surface-soft); border-radius: var(--radius-pill); overflow: hidden; }
+.scov__bar-fill { height: 100%; background: var(--accent); border-radius: var(--radius-pill); transition: width 0.6s ease; }
+.scov__bar-label { font-size: 11.5px; color: var(--text-soft); margin-top: 5px; }
+
+.scov__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+
+.scov__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.scov__chip {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.scov__legend { display: flex; gap: 16px; flex-wrap: wrap; }
+.scov__legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); }
+.scov__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.scov__dot--high { background: var(--success); }
+.scov__dot--medium { background: var(--info); }
+.scov__dot--low { background: var(--warning); }
+
+.scov__detail-toggle {
+  align-self: flex-start;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.scov__detail-toggle:hover { background: var(--accent); color: #fff; }
+
+.scov__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+}
+
+.scov__gaps-wrap .csec { border: 1px solid var(--border); }

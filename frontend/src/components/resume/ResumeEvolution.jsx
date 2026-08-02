@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import CollapsibleSection from '../common/CollapsibleSection'
 import './ResumeEvolution.css'
 
@@ -7,10 +8,11 @@ function formatDate(iso) {
 }
 
 export default function ResumeEvolution({ evolution }) {
-  if (!evolution) return null
+  const [expanded, setExpanded] = useState(false)
+
+  if (!evolution || !evolution.has_previous) return null
 
   const {
-    has_previous,
     previous_snapshot_at,
     current_snapshot_at,
     skills_gained = [],
@@ -20,23 +22,23 @@ export default function ResumeEvolution({ evolution }) {
     summary,
   } = evolution
 
-  const badge = (skills_gained.length + skills_lost.length + skills_strengthened.length + skills_weakened.length) > 0
-    ? <span className="csec__badge" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: 'none', fontSize: 11, padding: '2px 7px', borderRadius: '999px', fontWeight: 700 }}>Updated</span>
-    : null
-
   return (
-    <CollapsibleSection title="Resume Evolution" defaultOpen={false} className="revo" badge={badge}>
+    <CollapsibleSection title="Resume Evolution" defaultOpen={false} className="revo">
       <div className="revo__body">
-        {summary && <div className="revo__summary">{summary}</div>}
+        <div className="revo__compact-row">
+          {skills_gained.length > 0 && <span className="revo__compact-chip revo__compact-chip--up">+{skills_gained.length} Skills</span>}
+          {skills_strengthened.length > 0 && <span className="revo__compact-chip revo__compact-chip--up">+{skills_strengthened.length} Strengthened</span>}
+          {skills_lost.length > 0 && <span className="revo__compact-chip revo__compact-chip--down">-{skills_lost.length} Skills</span>}
+          {skills_weakened.length > 0 && <span className="revo__compact-chip revo__compact-chip--down">{skills_weakened.length} Weakened</span>}
+          <button type="button" className="revo__timeline-btn" onClick={() => setExpanded(v => !v)}>
+            {expanded ? 'Hide Timeline' : 'View Timeline'}
+          </button>
+        </div>
 
-        {!has_previous && (
-          <div className="revo__empty">
-            Upload a second resume version to see how your skills have evolved.
-          </div>
-        )}
-
-        {has_previous && (
+        {expanded && (
           <>
+            {summary && <div className="revo__summary">{summary}</div>}
+
             {previous_snapshot_at && current_snapshot_at && (
               <div className="revo__meta">
                 {formatDate(previous_snapshot_at)} → {formatDate(current_snapshot_at)}
@@ -47,9 +49,7 @@ export default function ResumeEvolution({ evolution }) {
               <div>
                 <div className="revo__section-label">Skills Gained</div>
                 <div className="revo__chips">
-                  {skills_gained.map((s) => (
-                    <span key={s} className="revo__chip revo__chip--gained">{s}</span>
-                  ))}
+                  {skills_gained.map((s) => <span key={s} className="revo__chip revo__chip--gained">{s}</span>)}
                 </div>
               </div>
             )}
@@ -58,9 +58,7 @@ export default function ResumeEvolution({ evolution }) {
               <div>
                 <div className="revo__section-label">Skills Lost</div>
                 <div className="revo__chips">
-                  {skills_lost.map((s) => (
-                    <span key={s} className="revo__chip revo__chip--lost">{s}</span>
-                  ))}
+                  {skills_lost.map((s) => <span key={s} className="revo__chip revo__chip--lost">{s}</span>)}
                 </div>
               </div>
             )}

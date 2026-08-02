@@ -191,3 +191,27 @@
   color: var(--accent);
 }
 
+.rh__secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rh__btn--ghost {
+  font-size: 12px;
+  padding: 6px 11px;
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-soft);
+}
+.rh__btn--ghost:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.rh__btn--ghost.rh__btn--active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}

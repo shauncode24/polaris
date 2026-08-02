@@ -485,3 +485,35 @@
   font-weight: 500;
 }
 
+.rap-collapsible.csec {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.rap-collapsible .csec__body { padding: 16px 18px; border-top: 1px solid var(--border); }
+
+.rap__kw-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.rap__kw-count {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+}
+.rap__kw-count--match { background: var(--success-soft); color: var(--success); }
+.rap__kw-count--missing { background: var(--warning-soft); color: var(--warning); }
+.rap__kw-toggle {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.rap__kw-toggle:hover { text-decoration: underline; }

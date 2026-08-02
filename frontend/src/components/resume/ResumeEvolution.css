@@ -105,3 +105,30 @@
   color: var(--text-soft);
   opacity: 0.75;
 }
+
+.revo__compact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.revo__compact-chip {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+.revo__compact-chip--up { background: var(--success-soft, #d1fae5); color: var(--success, #059669); }
+.revo__compact-chip--down { background: var(--danger-soft); color: var(--danger); }
+
+.revo__timeline-btn {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.revo__timeline-btn:hover { text-decoration: underline; }

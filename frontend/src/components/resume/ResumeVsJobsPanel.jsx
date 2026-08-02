@@ -9,26 +9,22 @@ function pctClass(pct) {
 }
 
 export default function ResumeVsJobsPanel({ resume_vs_jobs = [] }) {
+  const meaningful = resume_vs_jobs.filter(j => j.match_pct != null && j.match_pct > 0)
+
+  if (meaningful.length === 0) return null
+
   return (
     <CollapsibleSection title="Job Matches" defaultOpen={true} className="rvj">
       <div className="rvj__body">
-        {resume_vs_jobs.length === 0 ? (
-          <div className="rvj__empty">
-            No job matches computed. Create job analyses to see matches.
-          </div>
-        ) : (
-          resume_vs_jobs.map((job) => (
-            <div className="rvj__item" key={job.id}>
-              <div className="rvj__info">
-                <div className="rvj__role">{job.role}</div>
-                <div className="rvj__company">{job.company}</div>
-              </div>
-              <div className={`rvj__pct ${pctClass(job.match_pct)}`}>
-                {job.match_pct != null ? `${job.match_pct}%` : '—'}
-              </div>
+        {meaningful.map((job) => (
+          <div className="rvj__item" key={job.id}>
+            <div className="rvj__info">
+              <div className="rvj__role">{job.role}</div>
+              <div className="rvj__company">{job.company}</div>
             </div>
-          ))
-        )}
+            <div className={`rvj__pct ${pctClass(job.match_pct)}`}>{job.match_pct}%</div>
+          </div>
+        ))}
       </div>
     </CollapsibleSection>
   )
