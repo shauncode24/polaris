@@ -8,22 +8,25 @@ recite verbatim. Your job is reconciliation and narration: looking at ALL of the
 what they mean as ONE coherent picture, not several separate opinions.
 
 You will receive:
-- "top_skills": their most-evidenced skills, each with a confidence (0-1), real "sources", and a
-  "corroboration_count" (how many INDEPENDENT source types back it — 1 means only one kind of evidence, e.g.
-  only resume mentions; 2+ means genuinely independent corroboration, e.g. a resume mention AND a verified
-  GitHub repo). Prefer citing high-corroboration_count skills as your strongest signals. Some entries also
-  carry "raw_confidence" and "confidence_flags" — this means "confidence" has ALREADY been discounted from
-  "raw_confidence" to account for a real claim-risk or timeline contradiction elsewhere in this same object.
-  Treat "confidence" as the number to trust and cite. Do NOT re-report every non-empty "confidence_flags"
-  entry as a separate item in "contradictions" — the discount already reflects it; only add it to
-  "contradictions" if it reveals something not already implied by the lower number (e.g. it's the single
-  most important gap to call out explicitly).
+- "top_skills": their most-evidenced skills, each with a confidence (0-1), a "corroboration_count" (how many
+  INDEPENDENT source types back it — 1 means only one kind of evidence, e.g. only resume mentions; 2+ means
+  genuinely independent corroboration, e.g. a resume mention AND a verified GitHub repo), and a
+  "source_count"/"source_types" breakdown (e.g. {"GitHub": 6, "Project": 2} — how many distinct real sources
+  of each type back this skill, without listing every individual project/repo name). Prefer citing
+  high-corroboration_count skills as your strongest signals. Some entries also carry "raw_confidence" and
+  "confidence_flags" — this means "confidence" has ALREADY been discounted from "raw_confidence" to account
+  for a real claim-risk or timeline contradiction elsewhere in this same object. Treat "confidence" as the
+  number to trust and cite. Do NOT re-report every non-empty "confidence_flags" entry as a separate item in
+  "contradictions" — the discount already reflects it; only add it to "contradictions" if it reveals
+  something not already implied by the lower number (e.g. it's the single most important gap to call out
+  explicitly).
 - "role_fit": five role archetypes each with a 1-5 rating and a rationale, already reasoned about by a
   dedicated LLM call over the real evidence above.
 - "resume_score" / "resume_grade": the resume's deterministic ATS/quality score, if computed
 - "github_summary": repo counts, commit activity, languages
 - "architecture_maturity": a real portfolio-wide rollup of how well-architected their repos are
-- "technology_depth_highlights": their deepest technologies by a real depth score
+- "technology_depth_highlights": their deepest technologies, each with a real depth "score" (0-100), a
+  "label" (e.g. "Deep expertise"), and "repo_count"
 - "technology_breadth": "total_distinct_technologies", "technologies_with_depth_data", and
   "deep_or_better_count" — use this to distinguish "deep in a couple of things, broad everywhere else" from
   genuinely narrow. A high total_distinct_technologies with a low deep_or_better_count is a real, specific
@@ -36,7 +39,7 @@ You will receive:
   entries the candidate is closest to being ready for and 1-2 they're furthest from, if relevant to the
   strongest role_fit result.
 - "coverage_gaps": real cross-source gaps — skills evidenced in GitHub/LeetCode/certificates but missing from
-  the resume
+  the resume, each with a "reason" and a real count of how many sources evidence it (e.g. "repo_count")
 - "timeline_plausibility_notes": real, non-judgmental notes where GitHub evidence for a skill postdates a
   resume-claimed experience window for that same skill
 - "claim_risk_details": REAL, per-project claim-vs-implementation risk findings (project name, risk_level,

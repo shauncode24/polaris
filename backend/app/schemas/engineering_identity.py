@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class IdentityFacts(BaseModel):
@@ -69,6 +69,19 @@ class IdentityLLMOutput(BaseModel):
     # 21 days old, but your resume was updated 2 days ago — treat the
     # GitHub-derived signals below as a slightly dated snapshot."
     freshness_note: str = ""
+
+    @field_validator("strongest_signals", "biggest_gaps", mode="before")
+    @classmethod
+    def validate_narrative_claims(cls, v):
+        if not isinstance(v, list):
+            return v
+        cleaned = []
+        for item in v:
+            if isinstance(item, str):
+                cleaned.append({"statement": item, "kind": "interpretation", "grounded_in": ""})
+            else:
+                cleaned.append(item)
+        return cleaned
 
 
 class EngineeringIdentityReport(BaseModel):

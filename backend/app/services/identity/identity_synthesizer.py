@@ -14,6 +14,7 @@ from app.schemas.engineering_identity import (
     NarrativeClaim,
 )
 from app.services.identity.identity_builder import build_identity_facts
+from app.services.projects.linking import normalize_name
 
 
 class IdentitySynthesisError(Exception):
@@ -21,6 +22,131 @@ class IdentitySynthesisError(Exception):
     can't validate. Callers fall back to a deterministic template
     instead of crashing the whole report.
     """
+
+
+# ---------------------------------------------------------------------
+# LLM payload slimming
+#
+# IdentityFacts (the full object, with real per-source labels — project
+# names, repo names, experience labels) remains the single source of
+# truth: it's what gets persisted, returned from the API, and read by
+# the fallback narrative builder below. The functions in this section
+# build a SEPARATE, reduced projection of that object used ONLY for the
+# JSON actually sent to the synthesis LLM call.
+#
+# The redundancy this removes: `top_skills[].sources` and
+# `coverage_gaps.*.repos`/`.certs` were repeating the same project/repo
+# names dozens of times across a profile with many synced repos (e.g.
+# "javascript" evidenced in 22 repos, then the same 21 repo names again
+# under coverage_gaps, then again under a different skill's sources).
+# The prompt never cites these names — it reasons over `confidence` and
+# `corroboration_count`, which are kept untouched. `role_fit_evidence_hash`
+# is dropped entirely; it's cache-key plumbing for identity_builder.py,
+# never referenced by the prompt. `technology_depth_highlights[].breakdown`
+# is dropped too — the prompt only ever cites `score`/`label`.
+#
+# This is what fixed the 413 (Request Entity Too Large) from Groq: the
+# token *estimate* looked fine (~4k), but the raw serialized JSON bytes —
+# inflated by repeated evidence strings — were what actually tripped the
+# request-size ceiling.
+# ---------------------------------------------------------------------
+
+def _summarize_sources(sources: list[str]) -> dict:
+    """Collapses a per-skill evidence source list ("Project: Campus
+    Intel", "GitHub: Attendance-Tracker", ...) into counts by source
+    type, instead of sending every individual label. Deduplicates
+    near-identical labels first (e.g. "Project: Campus Intel" and
+    "Project: Project 1: Campus Intel" refer to the same underlying
+    project — a side effect of resume re-uploads creating duplicate
+    Project rows) using the same normalize_name() the Projects module
+    already uses for exactly this kind of dedup.
+    """
+    deduped: set[tuple[str, str]] = set()
+    type_counts: dict[str, int] = {}
+    for s in sources:
+        prefix, _, rest = s.partition(":")
+        prefix = prefix.strip()
+        key = normalize_name(rest) if rest.strip() else s
+        dedup_key = (prefix, key)
+        if dedup_key in deduped:
+            continue
+        deduped.add(dedup_key)
+        type_counts[prefix] = type_counts.get(prefix, 0) + 1
+    return {"source_count": len(deduped), "source_types": type_counts}
+
+
+def _slim_top_skills(top_skills: list[dict]) -> list[dict]:
+    slimmed = []
+    for s in top_skills:
+        entry = {
+            "skill": s["skill"],
+            "confidence": s["confidence"],
+            "corroboration_count": s.get("corroboration_count", 0),
+        }
+        # Only include raw_confidence/confidence_flags when a real
+        # discount was actually applied — omitting them when there's
+        # nothing to explain is itself a size saving across a profile
+        # where most skills have no flags.
+        if s.get("confidence_flags"):
+            entry["raw_confidence"] = s.get("raw_confidence", entry["confidence"])
+            entry["confidence_flags"] = s["confidence_flags"]
+        entry.update(_summarize_sources(s.get("sources", [])))
+        slimmed.append(entry)
+    return slimmed
+
+
+def _slim_technology_depth(highlights: list[dict]) -> list[dict]:
+    return [
+        {
+            "technology": h.get("technology"),
+            "score": h.get("score"),
+            "label": h.get("label"),
+            "repo_count": h.get("repo_count"),
+        }
+        for h in highlights
+    ]
+
+
+def _slim_coverage_gaps(coverage_gaps: dict) -> dict:
+    """github_gaps/certificate_gaps each repeat a "repos"/"certs" name
+    list that's already summarized in that same entry's "reason" text
+    (e.g. "Evidenced in your GitHub repo 'api-beginner, ...'") — the
+    raw array is redundant with the sentence right next to it. Replaced
+    with a count. leetcode_gaps and project_suggestions carry no such
+    per-entry name lists and are left untouched.
+    """
+    slimmed = dict(coverage_gaps)
+
+    github_gaps = slimmed.get("github_gaps")
+    if github_gaps:
+        slimmed["github_gaps"] = [
+            {"skill": g.get("skill"), "reason": g.get("reason"), "repo_count": len(g.get("repos", []))}
+            for g in github_gaps
+        ]
+
+    certificate_gaps = slimmed.get("certificate_gaps")
+    if certificate_gaps:
+        slimmed["certificate_gaps"] = [
+            {"skill": g.get("skill"), "reason": g.get("reason"), "cert_count": len(g.get("certs", []))}
+            for g in certificate_gaps
+        ]
+
+    return slimmed
+
+
+def _build_synthesis_payload(facts: IdentityFacts) -> dict:
+    """The JSON actually sent to the synthesis LLM call — a reduced
+    projection of IdentityFacts, never a substitute for it. See the
+    module-level comment above for what's cut and why.
+    """
+    dumped = facts.model_dump(mode="json")
+    dumped.pop("role_fit_evidence_hash", None)
+    dumped["top_skills"] = _slim_top_skills(dumped.get("top_skills", []))
+    dumped["technology_depth_highlights"] = _slim_technology_depth(
+        dumped.get("technology_depth_highlights", [])
+    )
+    dumped["coverage_gaps"] = _slim_coverage_gaps(dumped.get("coverage_gaps", {}))
+    return dumped
 
 
 def _fact_claim(statement: str, grounded_in: str) -> NarrativeClaim:
@@ -154,12 +280,19 @@ async def generate_engineering_identity(
 
     degraded = False
     try:
-        print("[TRACING] Requesting Engineering Identity synthesis from LLM...", flush=True)
+        llm_payload = _build_synthesis_payload(facts)
+        print(f"[TRACING] LLM payload JSON:\n{llm_payload}", flush=True)
+        print(
+            f"[TRACING] Requesting Engineering Identity synthesis from LLM "
+            f"(payload ~{len(json.dumps(llm_payload))} chars, "
+            f"full facts ~{len(json.dumps(facts.model_dump(mode='json')))} chars)...",
+            flush=True,
+        )
         response = await chat_completion(
-            model=MODEL,
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": IDENTITY_SYNTHESIS_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(facts.model_dump(mode="json"))},
+                {"role": "user", "content": json.dumps(llm_payload)},
             ],
             response_format={"type": "json_object"},
             temperature=0.3,
