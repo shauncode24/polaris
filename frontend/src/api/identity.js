@@ -24,6 +24,12 @@ export function refreshEngineeringIdentity(token) {
   }).then(handle)
 }
 
+export function getIdentityHistory(token, limit = 10) {
+  return fetch(`${API_BASE_URL}/identity/history?limit=${limit}`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
 export function getWeeklyBrief(token) {
   return fetch(`${API_BASE_URL}/identity/weekly-brief`, { headers: authHeaders(token) }).then(handle)
 }

@@ -1,3 +1,4 @@
+/* frontend/src/components/identity/WeeklyBriefCard.css */
 .weekly-brief.csec {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -65,3 +66,34 @@
   border: 1px solid var(--border);
   color: var(--text);
 }
+
+.weekly-brief__new-tech { font-size: 12.5px; color: var(--text); line-height: 1.5; }
+
+.weekly-brief__skill-deltas { display: flex; flex-direction: column; gap: 6px; }
+.weekly-brief__skill-deltas-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+}
+.weekly-brief__skill-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.weekly-brief__skill-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+}
+.weekly-brief__skill-chip--up { background: var(--success-soft); color: var(--success); }
+.weekly-brief__skill-chip--down { background: var(--danger-soft); color: var(--danger); }
+
+.weekly-brief__goals { display: flex; flex-direction: column; gap: 6px; }
+.weekly-brief__goals-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+}
+.weekly-brief__goal-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text); }

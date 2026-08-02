@@ -1,0 +1,31 @@
+/* frontend/src/components/identity/GithubDeepDivePanel.css */
+.gh-deep { display: flex; flex-direction: column; gap: 16px; }
+.gh-deep__section { display: flex; flex-direction: column; gap: 6px; }
+.gh-deep__section-title { font-size: 12px; font-weight: 700; color: var(--ink); }
+.gh-deep__line { font-size: 13px; color: var(--text); line-height: 1.5; }
+.gh-deep__trends { display: flex; flex-wrap: wrap; gap: 8px; }
+.gh-deep__trend {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+.gh-deep__trend--up { color: var(--success); }
+.gh-deep__trend--down { color: var(--danger); }
+.gh-deep__trend--flat { color: var(--text-soft); }
+.gh-deep__maturity { display: flex; align-items: baseline; gap: 10px; }
+.gh-deep__maturity-score { font-size: 20px; font-weight: 800; color: var(--ink); }
+.gh-deep__maturity-label { font-size: 13px; color: var(--text-soft); }
+.gh-deep__dist { display: flex; flex-wrap: wrap; gap: 8px; }
+.gh-deep__dist-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-transform: capitalize;
+}

@@ -1,0 +1,39 @@
+/* frontend/src/components/identity/ProfileSnapshotStrip.css */
+.snapshot-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+.snapshot-strip__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 160px;
+  flex: 1;
+}
+.snapshot-strip__group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-soft);
+}
+.snapshot-strip__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.snapshot-strip__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.snapshot-strip__stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.snapshot-strip__stat-label {
+  font-size: 10.5px;
+  color: var(--text-soft);
+}

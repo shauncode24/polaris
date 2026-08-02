@@ -1,8 +1,10 @@
+// frontend/src/pages/IdentityPage.jsx
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   getEngineeringIdentity,
   refreshEngineeringIdentity,
+  getIdentityHistory,
   getWeeklyBrief,
   refreshWeeklyBrief,
 } from '../api/identity'
@@ -15,6 +17,13 @@ import SignalsGapsPanel from '../components/identity/SignalsGapsPanel'
 import RecommendedFocusCard from '../components/identity/RecommendedFocusCard'
 import TechDepthGrid from '../components/identity/TechDepthGrid'
 import WeeklyBriefCard from '../components/identity/WeeklyBriefCard'
+import ProfileSnapshotStrip from '../components/identity/ProfileSnapshotStrip'
+import GithubDeepDivePanel from '../components/identity/GithubDeepDivePanel'
+import LeetcodeInsightsPanel from '../components/identity/LeetcodeInsightsPanel'
+import CoverageTimelinePanel from '../components/identity/CoverageTimelinePanel'
+import GoalsMatchesPanel from '../components/identity/GoalsMatchesPanel'
+import ClaimFreshnessPanel from '../components/identity/ClaimFreshnessPanel'
+import IdentityHistoryPanel from '../components/identity/IdentityHistoryPanel'
 import './IdentityPage.css'
 
 export default function IdentityPage() {
@@ -24,6 +33,8 @@ export default function IdentityPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
+
+  const [history, setHistory] = useState([])
 
   const [brief, setBrief] = useState(null)
   const [briefLoading, setBriefLoading] = useState(false)
@@ -40,6 +51,13 @@ export default function IdentityPage() {
         // 404 = never generated yet — leave identity null, empty state handles it
       } finally {
         if (!cancelled) setLoading(false)
+      }
+
+      try {
+        const historyData = await getIdentityHistory(token, 10)
+        if (!cancelled) setHistory(historyData)
+      } catch {
+        // no history yet — non-fatal
       }
 
       try {
@@ -60,6 +78,12 @@ export default function IdentityPage() {
     try {
       const data = await refreshEngineeringIdentity(token)
       setIdentity(data)
+      try {
+        const historyData = await getIdentityHistory(token, 10)
+        setHistory(historyData)
+      } catch {
+        // non-fatal
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -124,9 +148,15 @@ export default function IdentityPage() {
                 narrative={narrative}
                 generatedAt={identity.generated_at}
                 degraded={identity.analysis_degraded}
+                sourceEvent={identity.source_event}
+                isInvalidated={identity.is_invalidated}
+                invalidatedReason={identity.invalidated_reason}
+                invalidatedAt={identity.invalidated_at}
                 onRefresh={handleRefreshIdentity}
                 refreshing={refreshing}
               />
+
+              <ProfileSnapshotStrip facts={facts} />
 
               <div className="identity-columns">
                 <div className="identity-col">
@@ -145,6 +175,17 @@ export default function IdentityPage() {
                   <CollapsibleSection title="Technology Depth" defaultOpen={false}>
                     <TechDepthGrid highlights={facts?.technology_depth_highlights} />
                   </CollapsibleSection>
+
+                  <GithubDeepDivePanel
+                    progress={facts?.github_progress}
+                    architectureMaturity={facts?.architecture_maturity}
+                  />
+
+                  <LeetcodeInsightsPanel
+                    quadrant={facts?.engineering_quadrant}
+                    companyReadiness={facts?.company_readiness}
+                    topicMastery={facts?.leetcode_topic_mastery}
+                  />
                 </div>
 
                 <div className="identity-col">
@@ -163,6 +204,24 @@ export default function IdentityPage() {
                       </div>
                     </CollapsibleSection>
                   )}
+
+                  <GoalsMatchesPanel
+                    goals={facts?.active_goals}
+                    jobMatches={facts?.recent_job_matches}
+                  />
+
+                  <CoverageTimelinePanel
+                    coverageGaps={facts?.coverage_gaps}
+                    timelineNotes={facts?.timeline_plausibility_notes}
+                  />
+
+                  <ClaimFreshnessPanel
+                    claimRiskDetails={facts?.claim_risk_details}
+                    sourceFreshness={facts?.source_freshness}
+                    evidenceCoverage={facts?.evidence_coverage}
+                  />
+
+                  <IdentityHistoryPanel history={history} />
                 </div>
               </div>
             </>

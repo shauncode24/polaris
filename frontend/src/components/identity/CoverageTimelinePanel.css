@@ -1,0 +1,6 @@
+/* frontend/src/components/identity/CoverageTimelinePanel.css */
+.coverage-panel { display: flex; flex-direction: column; gap: 14px; }
+.coverage-panel__section { display: flex; flex-direction: column; gap: 6px; }
+.coverage-panel__section-title { font-size: 12px; font-weight: 700; color: var(--ink); }
+.coverage-panel__list { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; }
+.coverage-panel__list li { font-size: 12.5px; color: var(--text); line-height: 1.5; list-style: disc; }

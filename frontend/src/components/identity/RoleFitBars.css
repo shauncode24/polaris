@@ -1,3 +1,4 @@
+/* frontend/src/components/identity/RoleFitBars.css */
 .rolefit-bars { display: flex; flex-direction: column; gap: 12px; }
 .rolefit-bars__row { display: flex; flex-direction: column; gap: 5px; }
 .rolefit-bars__row-top { display: flex; align-items: center; justify-content: space-between; }
@@ -8,3 +9,4 @@
 .rolefit-bars__fill--strong { background: var(--success); }
 .rolefit-bars__fill--partial { background: var(--warning); }
 .rolefit-bars__fill--weak { background: var(--danger); }
+.rolefit-bars__rationale { font-size: 12px; color: var(--text-soft); line-height: 1.45; }
