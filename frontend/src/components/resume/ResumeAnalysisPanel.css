@@ -258,6 +258,16 @@
   border-bottom: none;
 }
 
+.rap__table th:first-child,
+.rap__table td:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.rap__table th:last-child,
+.rap__table td:last-child {
+  border-left: 1px solid var(--border);
+}
+
 .rap__check-icon {
   color: var(--success);
   font-weight: bold;

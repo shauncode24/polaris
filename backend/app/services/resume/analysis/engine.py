@@ -176,7 +176,7 @@ async def run_analysis(
     # (Engineering Identity fix #2). See services/identity/role_fit.py's
     # module docstring for why this is not a deterministic category-
     # coverage formula and never should be again.
-    resume_scoped_evidence = await build_scoped_skill_evidence(db, RESUME_SOURCE_TYPES)
+    resume_scoped_evidence = await build_scoped_skill_evidence(db, user_id, RESUME_SOURCE_TYPES)
     role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
     role_fit = [r.model_dump() for r in role_fit_results]
 

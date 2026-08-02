@@ -166,7 +166,10 @@ async def get_resume_workspace(
 
     analysis_result = await db.execute(
         select(ResumeAnalysis)
-        .where(ResumeAnalysis.user_id == uid)
+        .where(
+            ResumeAnalysis.user_id == uid,
+            ResumeAnalysis.resume_id == latest.id,
+        )
         .order_by(ResumeAnalysis.created_at.desc())
         .limit(1)
     )

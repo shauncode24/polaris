@@ -170,7 +170,6 @@ export default function ResumeAnalysisPanel({ analysis, onRunAnalysis, analysisL
                       <th style={{ textAlign: 'center' }}>Experience</th>
                       <th style={{ textAlign: 'center' }}>Project</th>
                       <th style={{ textAlign: 'center' }}>GitHub</th>
-                      <th style={{ textAlign: 'center' }}>Leetcode</th>
                       <th style={{ textAlign: 'center' }}>Certs</th>
                       <th style={{ textAlign: 'right' }}>Confidence</th>
                     </tr>
@@ -187,9 +186,6 @@ export default function ResumeAnalysisPanel({ analysis, onRunAnalysis, analysisL
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           {skill.in_github ? <span className="rap__check-icon">✓</span> : <span className="rap__cross-icon">✕</span>}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          {skill.in_leetcode ? <span className="rap__check-icon">✓</span> : <span className="rap__cross-icon">✕</span>}
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           {skill.in_certificate ? <span className="rap__check-icon">✓</span> : <span className="rap__cross-icon">✕</span>}

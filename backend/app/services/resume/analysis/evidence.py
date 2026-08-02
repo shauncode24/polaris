@@ -12,7 +12,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import Experience, Project, GithubSnapshot, LeetcodeSnapshot, Certificate
+from app.models.facts import Experience, Project, GithubSnapshot, Certificate
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence, ProfileSnapshot
 from app.models.github_analysis import GithubProjectAnalysis
@@ -67,20 +67,7 @@ async def analyze_evidence(
     )
     evidence_list = list(ev_rows.fetchall())
 
-    lc_ev_rows = await db.execute(
-        select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
-        .join(Skill, SkillEvidence.skill_id == Skill.id)
-        .join(
-            LeetcodeSnapshot,
-            (LeetcodeSnapshot.tag == Skill.name) | (LeetcodeSnapshot.tag == Skill.canonical_name)
-        )
-        .where(
-            LeetcodeSnapshot.user_id == user_id,
-            SkillEvidence.source_type == "leetcode_tag",
-            SkillEvidence.user_id == user_id,
-        )
-    )
-    evidence_list.extend(lc_ev_rows.fetchall())
+
 
     cert_ev_rows = await db.execute(
         select(SkillEvidence.skill_id, SkillEvidence.source_id, SkillEvidence.source_type)
@@ -118,7 +105,6 @@ async def analyze_evidence(
                     "canonical": canonical,
                     "in_experience": False,
                     "in_project": True,
-                    "in_leetcode": False,
                     "in_certificate": False,
                     "skill_id": str(skill_id),
                 }
@@ -163,7 +149,6 @@ async def analyze_evidence(
                 "canonical": canonical,
                 "in_experience": False,
                 "in_project": False,
-                "in_leetcode": False,
                 "in_certificate": False,
                 "skill_id": str(skill_id),
             }
@@ -184,8 +169,6 @@ async def analyze_evidence(
                     skill_evidence[canonical_lower]["in_experience"] = True
                 elif source_type == "project":
                     skill_evidence[canonical_lower]["in_project"] = True
-                elif source_type == "leetcode_tag":
-                    skill_evidence[canonical_lower]["in_leetcode"] = True
                 elif source_type == "certificate":
                     skill_evidence[canonical_lower]["in_certificate"] = True
     else:
@@ -200,7 +183,6 @@ async def analyze_evidence(
                     "canonical": canonical,
                     "in_experience": False,
                     "in_project": False,
-                    "in_leetcode": False,
                     "in_certificate": False,
                     "skill_id": sid,
                 }
@@ -208,8 +190,6 @@ async def analyze_evidence(
                 skill_evidence[canonical]["in_experience"] = True
             elif source_type == "project":
                 skill_evidence[canonical]["in_project"] = True
-            elif source_type == "leetcode_tag":
-                skill_evidence[canonical]["in_leetcode"] = True
             elif source_type == "certificate":
                 skill_evidence[canonical]["in_certificate"] = True
 
@@ -237,14 +217,12 @@ async def analyze_evidence(
         in_gh = canonical.lower() in github_langs or data.get("name", "").lower() in github_langs
         data["in_github"] = in_gh
 
-        in_leetcode = data.get("in_leetcode", False)
         in_certificate = data.get("in_certificate", False)
 
         source_count = sum([
             data["in_experience"],
             data["in_project"],
             in_gh,
-            in_leetcode,
             in_certificate,
         ])
         data["corroboration_count"] = source_count
@@ -259,6 +237,7 @@ async def analyze_evidence(
             data["corroboration_level"] = "low"
             low_corr += 1
 
+        data["confidence"] = data["corroboration_level"]
         skills_list.append({k: v for k, v in data.items() if k != "skill_id"})
 
     total = len(skills_list)
