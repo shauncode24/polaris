@@ -1,0 +1,37 @@
+.portfolio-list { display: flex; flex-direction: column; gap: 16px; }
+.portfolio-list__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.portfolio-list__header h2 { font-size: 19px; }
+.portfolio-list__lead { font-size: 13px; color: var(--text-soft); margin-top: 2px; }
+
+.portfolio-list__tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+.portfolio-list__tab {
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.portfolio-list__tab--active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+.portfolio-list__loading { font-size: 13px; color: var(--text-soft); }
+
+.portfolio-list__rows {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+/* The outer card already draws the top border — avoid doubling it on the
+   first row (ProjectRow.css adds its own top border when used standalone). */
+.portfolio-list__rows .project-row:first-child { border-top: none; }

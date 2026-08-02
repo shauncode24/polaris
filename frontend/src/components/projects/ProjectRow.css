@@ -1,0 +1,131 @@
+.project-row {
+  display: grid;
+  grid-template-columns: 2fr 1.1fr 1fr;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.project-row:first-child { border-top: 1px solid var(--border); }
+.project-row:hover { background: var(--surface-soft); }
+.project-row--active { background: var(--accent-soft); }
+
+.project-row__main { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+
+.project-row__title-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.project-row__star { font-size: 13px; }
+.project-row__name { font-size: 15px; font-weight: 700; color: var(--ink); }
+
+.project-row__tier {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.project-row__tier--flagship { background: var(--accent-soft); color: var(--accent-strong); }
+.project-row__tier--career { background: var(--success-soft); color: var(--success); }
+.project-row__tier--learning { background: var(--info-soft); color: var(--info); }
+.project-row__tier--prototype { background: var(--surface-soft); color: var(--text-soft); }
+.project-row__tier--archived { background: var(--warning-soft); color: #a2760f; }
+
+.project-row__lead {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.project-row__stack { display: flex; flex-wrap: wrap; gap: 5px; }
+.project-row__stack-item {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+.project-row__stack-item:not(:last-child)::after { content: '•'; margin-left: 5px; color: var(--border); }
+
+.project-row__desc {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-row__center { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.project-row__tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.project-row__tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.project-row__flags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.project-row__status {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+.project-row__status--ongoing { background: var(--success-soft); color: var(--success); }
+.project-row__status--completed { background: var(--surface-soft); color: var(--text-soft); }
+.project-row__status--unknown { background: var(--surface-soft); color: var(--text-soft); }
+
+.project-row__flag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.project-row__flag--high { background: var(--danger-soft); color: var(--danger); }
+.project-row__flag--medium { background: var(--warning-soft); color: #a2760f; }
+.project-row__flag--undersold { background: var(--info-soft); color: var(--info); }
+.project-row__flag--resume_it { background: var(--warning-soft); color: #a2760f; }
+.project-row__flag--retire_it { background: var(--surface-soft); color: var(--text-soft); }
+
+.project-row__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.project-row__updated { font-size: 11.5px; color: var(--text-soft); white-space: nowrap; }
+.project-row__collab {
+  font-size: 10.5px;
+  text-transform: capitalize;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.project-row__actions { display: flex; gap: 6px; }
+.project-row__action {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.project-row__action:hover { border-color: var(--accent); color: var(--accent-strong); }
+
+@media (max-width: 860px) {
+  .project-row { grid-template-columns: 1fr; align-items: flex-start; gap: 10px; }
+  .project-row__side { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+}

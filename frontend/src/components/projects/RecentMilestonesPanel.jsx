@@ -1,5 +1,4 @@
-import InfoCard from '../common/InfoCard'
-import { IconFlag } from '../icons/Icons'
+import CollapsibleSection from '../common/CollapsibleSection'
 import './RecentMilestonesPanel.css'
 
 function formatMilestoneDate(iso) {
@@ -8,9 +7,18 @@ function formatMilestoneDate(iso) {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Doc: "Move to the bottom. Collapse by default. History is secondary
+// information." Same `milestones` data (MilestoneItem[]) as before — now
+// wrapped in CollapsibleSection (defaultOpen=false) instead of an always-
+// expanded InfoCard.
 function RecentMilestonesPanel({ milestones }) {
   return (
-    <InfoCard icon={IconFlag} iconTone="accent" title="Recent milestones">
+    <CollapsibleSection
+      title="Recent activity"
+      subtitle={milestones?.length ? `${milestones.length} recent event(s)` : 'No activity yet'}
+      defaultOpen={false}
+      dense
+    >
       {!milestones || milestones.length === 0 ? (
         <p className="recent-milestones__empty">Sync your profile to start building a milestone history.</p>
       ) : (
@@ -18,14 +26,12 @@ function RecentMilestonesPanel({ milestones }) {
           {milestones.map((m, i) => (
             <li key={i} className="recent-milestones__item">
               <span className="recent-milestones__label">{m.label}</span>
-              {m.occurred_at && (
-                <span className="recent-milestones__date">{formatMilestoneDate(m.occurred_at)}</span>
-              )}
+              {m.occurred_at && <span className="recent-milestones__date">{formatMilestoneDate(m.occurred_at)}</span>}
             </li>
           ))}
         </ul>
       )}
-    </InfoCard>
+    </CollapsibleSection>
   )
 }
 

@@ -1,0 +1,251 @@
+.pin {
+  width: 420px;
+  flex-shrink: 0;
+  height: 100svh;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.pin__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.pin__header-main { min-width: 0; }
+.pin__header-main h2 { font-size: 18px; color: var(--ink); }
+.pin__tagline { font-size: 13px; color: var(--text-soft); margin-top: 3px; }
+.pin__header-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pin__meta-item { font-size: 11.5px; color: var(--text-soft); }
+.pin__meta-item--repo {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pin__close {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pin__close:hover { color: var(--ink); border-color: var(--accent); }
+
+.pin__scroll { flex: 1; overflow-y: auto; }
+
+.pin__section { border-bottom: 1px solid var(--border); }
+.pin__section:last-child { border-bottom: none; }
+
+.pin__section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 22px;
+  background: none;
+  border: none;
+  cursor: default;
+  text-align: left;
+}
+.pin__section-header--toggle { cursor: pointer; }
+.pin__section-header h3 { font-size: 14.5px; color: var(--ink); }
+
+.pin__section-body { padding: 0 22px 20px; display: flex; flex-direction: column; gap: 10px; }
+.pin__section-lead { font-size: 12.5px; color: var(--text-soft); }
+
+.pin__overview-desc { font-size: 13.5px; color: var(--ink); line-height: 1.55; }
+.pin__chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pin__chip {
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.pin__chip--accent { background: var(--accent-soft); border-color: transparent; color: var(--accent-strong); font-weight: 600; }
+
+.pin__risk-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.pin__risk-badge--high { background: var(--danger-soft); color: var(--danger); }
+.pin__risk-badge--medium { background: var(--warning-soft); color: #a2760f; }
+.pin__risk-badge--low { background: var(--success-soft); color: var(--success); }
+
+.pin__headline { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+.pin__alert {
+  font-size: 12.5px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.pin__subsection { display: flex; flex-direction: column; gap: 4px; }
+.pin__subsection-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-soft); }
+.pin__subsection-label--danger { color: var(--danger); }
+.pin__subsection-label--info { color: var(--info); }
+.pin__subsection-label--success { color: var(--success); }
+.pin__subsection ul { display: flex; flex-direction: column; gap: 3px; }
+.pin__subsection li { font-size: 13px; color: var(--ink); list-style: disc; margin-left: 18px; }
+.pin__subsection p { font-size: 13px; color: var(--ink); line-height: 1.5; }
+
+.pin__facts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+.pin__fact {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pin__fact strong { font-size: 9.5px; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.pin__fact span { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.pin__facts-details { font-size: 12.5px; color: var(--text); margin-top: 4px; display: flex; flex-direction: column; gap: 4px; }
+.pin__facts-details p { margin: 0; line-height: 1.4; }
+.pin__facts-details strong { color: var(--ink); }
+
+.pin__field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-soft); }
+.pin__field textarea, .pin__field input {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.pin__generate, .pin__regenerate {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pin__generate:hover, .pin__regenerate:hover { border-color: var(--accent); color: var(--accent-strong); }
+.pin__generate:disabled { opacity: 0.6; cursor: not-allowed; }
+.pin__regenerate { font-size: 11.5px; padding: 6px 12px; opacity: 0.8; }
+
+.pin__result { display: flex; flex-direction: column; gap: 12px; font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+.pin__compare-heading {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface-soft);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+.pin__footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.pin__generated-at { font-size: 11.5px; color: var(--text-soft); }
+
+.pin__toolkit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pin__toolkit-chip {
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pin__toolkit-chip:hover { border-color: var(--accent); color: var(--accent); }
+.pin__toolkit-divider { border-top: 1px solid var(--border); margin: 6px 0 2px; }
+.pin__toolkit-subheading { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+
+.pin__questions { display: flex; flex-direction: column; gap: 10px; }
+.pin__questions li { display: flex; gap: 10px; align-items: flex-start; }
+.pin__question-text { font-size: 13px; color: var(--ink); }
+.pin__grounded-in { font-size: 11.5px; color: var(--text-soft); margin-top: 2px; }
+.pin__difficulty {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.pin__difficulty--easy { background: var(--success-soft); color: var(--success); }
+.pin__difficulty--medium { background: var(--warning-soft); color: #a2760f; }
+.pin__difficulty--hard { background: var(--danger-soft); color: var(--danger); }
+
+.pin__loading, .pin__error { font-size: 13px; color: var(--text-soft); padding: 16px 22px; }
+.pin__error { color: var(--danger); padding: 0; }
+.pin__degraded { font-size: 11px; color: var(--warning); }
+
+.pin__link-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--warning-soft);
+  border: 1px dashed #e2b85a;
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+.pin__notice { font-size: 12.5px; color: var(--ink); margin: 0; }
+.pin__link-row { display: flex; gap: 8px; }
+.pin__link-row select {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--ink);
+  outline: none;
+}
+.pin__link-row select:focus { border-color: var(--accent); }
+.pin__link-button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pin__link-button:hover { background: var(--accent-strong); }
+.pin__link-button:disabled { opacity: 0.6; cursor: not-allowed; }
+.pin__link-error { font-size: 12px; color: var(--danger); margin: 0; }
+
+@media (max-width: 1080px) {
+  .pin {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100svh;
+    z-index: 100;
+  }
+}

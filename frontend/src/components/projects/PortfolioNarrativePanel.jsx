@@ -5,11 +5,18 @@ import InfoCard from '../common/InfoCard'
 import { IconSparkle } from '../icons/DashboardIcons'
 import './PortfolioNarrativePanel.css'
 
+const COLLAPSE_KEY = 'projects-narrative-collapsed'
+
+// Doc (SECTION 1): "Place Portfolio Narrative immediately below the
+// header... Collapsed after first visit." The narrative itself and its
+// data source are unchanged — only added a collapse toggle that persists
+// via localStorage, defaulting open the very first time it's ever loaded.
 function PortfolioNarrativePanel() {
   const { token } = useAuth()
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === 'true')
 
   async function load(regenerate = false) {
     setLoading(true)
@@ -29,13 +36,36 @@ function PortfolioNarrativePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem(COLLAPSE_KEY, String(next))
+      return next
+    })
+  }
+
+  const showToggle = report && !loading && report.eligible !== false
+
   return (
-    <InfoCard icon={IconSparkle} iconTone="accent" title="Portfolio Narrative">
+    <InfoCard
+      icon={IconSparkle}
+      iconTone="accent"
+      title="Portfolio Health"
+      action={
+        showToggle ? (
+          <button type="button" className="pnp__toggle" onClick={toggleCollapsed}>
+            {collapsed ? 'Expand' : 'Collapse'}
+          </button>
+        ) : null
+      }
+    >
       {loading && <p className="pnp__loading">Reading your verified portfolio…</p>}
       {error && <p className="pnp__error">{error}</p>}
       {report && !loading && (
         report.eligible === false ? (
           <p className="pnp__ineligible">{report.narrative}</p>
+        ) : collapsed ? (
+          <p className="pnp__narrative pnp__narrative--collapsed">{report.narrative}</p>
         ) : (
           <div className="pnp__body">
             <p className="pnp__narrative">{report.narrative}</p>
