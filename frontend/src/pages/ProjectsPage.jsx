@@ -134,10 +134,11 @@ function ProjectsPage() {
       {detailProject && (
         <ProjectDetailModal
           project={detailProject}
+          recommendations={insights?.recommendations}
           onClose={() => setDetailProject(null)}
           onLinkConfirmed={loadAll}
         />
-      )}
+)}
     </div>
   )
 }
