@@ -7,6 +7,7 @@ import {
   getLinkOptions,
   confirmProjectLink,
 } from '../../api/projects'
+import InterviewToolkitPanel from './InterviewToolkitPanel'
 import './ProjectDetailModal.css'
 
 const RISK_LABEL = { high: 'High risk', medium: 'Medium risk', low: 'Low risk' }
@@ -328,12 +329,8 @@ function ProjectDetailModal({ project, onClose, onLinkConfirmed }) {
   useEffect(() => {
     if (currentProject && !currentProject.has_repo) {
       getLinkOptions(token)
-        .then((data) => {
-          setAvailableRepos(data.repositories || [])
-        })
-        .catch((err) => {
-          console.error('Failed to load repo options:', err)
-        })
+        .then((data) => setAvailableRepos(data.repositories || []))
+        .catch((err) => console.error('Failed to load repo options:', err))
     }
   }, [currentProject, token])
 
@@ -343,11 +340,7 @@ function ProjectDetailModal({ project, onClose, onLinkConfirmed }) {
     setLinkError('')
     try {
       await confirmProjectLink(token, currentProject.id, selectedRepo)
-      setCurrentProject((prev) => ({
-        ...prev,
-        has_repo: true,
-        matched_repo_name: selectedRepo,
-      }))
+      setCurrentProject((prev) => ({ ...prev, has_repo: true, matched_repo_name: selectedRepo }))
       onLinkConfirmed?.()
     } catch (err) {
       setLinkError(err.message || 'Failed to connect repository.')
@@ -359,8 +352,11 @@ function ProjectDetailModal({ project, onClose, onLinkConfirmed }) {
   if (!currentProject) return null
 
   return (
-    <div className="pdm__overlay" onClick={onClose}>
-      <div className="pdm__panel" onClick={(e) => e.stopPropagation()}>
+    <>
+      {/* Backdrop is deliberately light and click-through-free only for closing,
+          not for dimming the list — the portfolio behind it stays legible. */}
+      <div className="pdm__scrim" onClick={onClose} />
+      <aside className="pdm__panel" role="dialog" aria-label={`${currentProject.name} details`}>
         <div className="pdm__header">
           <div>
             <h2>{currentProject.name}</h2>
@@ -369,49 +365,53 @@ function ProjectDetailModal({ project, onClose, onLinkConfirmed }) {
           <button type="button" className="pdm__close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
-        {!currentProject.has_repo && (
-          <div className="pdm__link-container">
-            <p className="pdm__notice">
-              No matched GitHub repository — claim audit and verified facts aren't available until this
-              project is linked to a synced repo.
-            </p>
-            <div className="pdm__link-selector">
-              <label htmlFor="repo-select">Connect to a GitHub repository:</label>
-              <div className="pdm__link-row">
-                <select
-                  id="repo-select"
-                  value={selectedRepo}
-                  onChange={(e) => setSelectedRepo(e.target.value)}
-                  disabled={linking}
-                >
-                  <option value="">-- Select a repository --</option>
-                  {availableRepos.map((repo) => (
-                    <option key={repo} value={repo}>
-                      {repo}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleLinkProject}
-                  disabled={linking || !selectedRepo}
-                  className="pdm__link-button"
-                >
-                  {linking ? 'Linking...' : 'Connect'}
-                </button>
+        <div className="pdm__scroll">
+          {!currentProject.has_repo && (
+            <div className="pdm__link-container">
+              <p className="pdm__notice">
+                No matched GitHub repository — claim audit and verified facts aren't available until this
+                project is linked to a synced repo.
+              </p>
+              <div className="pdm__link-selector">
+                <label htmlFor="repo-select">Connect to a GitHub repository:</label>
+                <div className="pdm__link-row">
+                  <select
+                    id="repo-select"
+                    value={selectedRepo}
+                    onChange={(e) => setSelectedRepo(e.target.value)}
+                    disabled={linking}
+                  >
+                    <option value="">-- Select a repository --</option>
+                    {availableRepos.map((repo) => (
+                      <option key={repo} value={repo}>{repo}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleLinkProject}
+                    disabled={linking || !selectedRepo}
+                    className="pdm__link-button"
+                  >
+                    {linking ? 'Linking...' : 'Connect'}
+                  </button>
+                </div>
+                {linkError && <p className="pdm__link-error">{linkError}</p>}
               </div>
-              {linkError && <p className="pdm__link-error">{linkError}</p>}
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="pdm__body">
-          {currentProject.has_repo && <ClaimAuditSection project={currentProject} token={token} />}
-          <IntelligenceSection project={currentProject} token={token} />
-          <InterviewQuestionsSection project={currentProject} token={token} />
+          <div className="pdm__body">
+            {currentProject.has_repo && <ClaimAuditSection project={currentProject} token={token} />}
+            <IntelligenceSection project={currentProject} token={token} />
+            <div className="pdm__section">
+              <h3>Interview Toolkit</h3>
+              <InterviewToolkitPanel featuredProjectName={currentProject.name} />
+            </div>
+            <InterviewQuestionsSection project={currentProject} token={token} />
+          </div>
         </div>
-      </div>
-    </div>
+      </aside>
+    </>
   )
 }
 

@@ -1,14 +1,17 @@
 .projects-page { display: flex; min-height: 100svh; background: var(--bg); }
-.projects-page__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.projects-page__main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
+/* Single continuous vertical flow — capped width so long-form panels
+   (narrative, project rows) stay readable instead of stretching edge
+   to edge like the old two-column dashboard did. */
 .projects-page__content {
-  padding: 22px 28px 48px;
+  flex: 1;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  max-width: 1320px;
+  gap: 20px;
   width: 100%;
-  margin: 0 auto;
+  overflow-y: auto;
 }
 
 .projects-page__error {
@@ -20,26 +23,9 @@
   border-radius: var(--radius-sm);
 }
 
-.projects-page__columns {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 14px;
-  align-items: start;
-}
-.projects-page__col { display: flex; flex-direction: column; gap: 14px; }
-
-.projects-page__dilution-warning {
-  font-size: 13px;
-  color: #a2760f;
-  background: var(--warning-soft);
-  border: 1px solid rgba(217, 119, 6, 0.25);
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-}
-
-@media (max-width: 1080px) {
-  .projects-page__columns { grid-template-columns: 1fr; }
-}
+.projects-page__section { display: flex; flex-direction: column; gap: 4px; }
+.projects-page__section-title { font-size: 18px; font-weight: 700; color: var(--ink); }
+.projects-page__section-lead { font-size: 13px; color: var(--text-soft); margin-bottom: 10px; }
 
 /* ── Page Hero ───────────────────────────────── */
 .projects-hero {
@@ -80,4 +66,9 @@
   height: 3px;
   border-radius: 50%;
   background: var(--border);
+}
+
+@media (max-width: 720px) {
+  .projects-page__content { padding: 18px 16px 40px; }
+  .projects-hero { flex-direction: column; align-items: flex-start; }
 }

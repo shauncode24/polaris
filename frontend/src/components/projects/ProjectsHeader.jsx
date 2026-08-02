@@ -20,9 +20,6 @@ export default function ProjectsHeader({
           <div className="projects-header__title-row">
             <span className="projects-header__portfolio-title">Project Portfolio</span>
           </div>
-          <div className="projects-header__sub">
-            <span>What you built — and what each project proves about your engineering ability</span>
-          </div>
         </div>
 
         {projectCount != null && (
@@ -55,19 +52,28 @@ export default function ProjectsHeader({
         </button>
         <button
           type="button"
-          className="projects-header__btn"
-          onClick={onAnalyzeAll}
-          disabled={analyzing}
-        >
-          <IconSparkle size={13} />
-          {analyzing ? 'Analyzing…' : 'Analyze all'}
-        </button>
-        <button
-          type="button"
           className="projects-header__btn projects-header__btn--primary"
           onClick={() => navigate('/profile')}
         >
           + New project
+        </button>
+        <button
+          type="button"
+          className="projects-header__btn projects-header__btn--primary"
+          onClick={onAnalyzeAll}
+          disabled={analyzing}
+        >
+          {analyzing ? (
+            <>
+              <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', marginRight: 4 }} />
+              Analyzing…
+            </>
+          ) : (
+            <>
+              <IconSparkle size={13} style={{ marginRight: 4 }} />
+              Analyze all
+            </>
+          )}
         </button>
       </div>
     </div>

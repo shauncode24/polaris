@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { listProjects, getProjectsInsights } from '../api/projects'
+import { listProjects, getProjectsInsights, getGoalAwareRanking } from '../api/projects'
 import Sidebar from '../components/layout/Sidebar'
 import BreadcrumbBar from '../components/layout/BreadcrumbBar'
 import CollapsibleSection from '../components/common/CollapsibleSection'
 import ProjectsHeader from '../components/projects/ProjectsHeader'
 import ProjectsStatsGrid from '../components/projects/ProjectsStatsGrid'
 import ProjectGallery from '../components/projects/ProjectGallery'
-import InterviewToolkitPanel from '../components/projects/InterviewToolkitPanel'
-import CompareProjectsPanel from '../components/projects/CompareProjectsPanel'
 import AIRecommendationsPanel from '../components/projects/AIRecommendationsPanel'
 import RecentMilestonesPanel from '../components/projects/RecentMilestonesPanel'
 import EvidenceCoveragePanel from '../components/projects/EvidenceCoveragePanel'
-import GoalAwareRankingPanel from '../components/projects/GoalAwareRankingPanel'
 import PortfolioNarrativePanel from '../components/projects/PortfolioNarrativePanel'
 import ProjectDetailModal from '../components/projects/ProjectDetailModal'
 import './ProjectsPage.css'
@@ -24,6 +21,7 @@ function ProjectsPage() {
 
   const [overview, setOverview] = useState(null)
   const [insights, setInsights] = useState(null)
+  const [leadProjectId, setLeadProjectId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState('')
@@ -32,12 +30,14 @@ function ProjectsPage() {
   const loadAll = useCallback(async () => {
     setError('')
     try {
-      const [overviewData, insightsData] = await Promise.all([
+      const [overviewData, insightsData, rankingData] = await Promise.all([
         listProjects(token),
         getProjectsInsights(token),
+        getGoalAwareRanking(token).catch(() => null),
       ])
       setOverview(overviewData)
       setInsights(insightsData)
+      setLeadProjectId(rankingData?.ranked?.[0]?.project_id || null)
     } catch (err) {
       setError(err.message || 'Could not load your projects.')
     }
@@ -66,7 +66,6 @@ function ProjectsPage() {
   }
 
   const projects = overview?.projects || []
-  const featuredProject = projects.find((p) => p.tier === 'Flagship Project') || projects[0]
   const interviewReadyCount = projects.filter(
     (p) => p.tier === 'Flagship Project' || p.tier === 'Career Project'
   ).length
@@ -77,19 +76,12 @@ function ProjectsPage() {
       <div className="projects-page__main">
         <BreadcrumbBar section="Projects" page="Overview" />
 
+        {/* Single continuous vertical flow — no side columns. */}
         <div className="projects-page__content">
-          {/* Page hero */}
           <div className="projects-hero">
             <div>
-              <p className="projects-hero__eyebrow">What proves your hands-on engineering capability?</p>
               <h1 className="projects-hero__title">Projects</h1>
-              {projects.length > 0 && (
-                <div className="projects-hero__meta">
-                  <span>Your project workspace</span>
-                  <span className="projects-hero__meta-dot" />
-                  <span>{projects.length} project{projects.length === 1 ? '' : 's'} on record</span>
-                </div>
-              )}
+              <p className="projects-hero__eyebrow">What proves your hands-on engineering capability?</p>
             </div>
           </div>
 
@@ -104,52 +96,38 @@ function ProjectsPage() {
 
           <ProjectsStatsGrid stats={overview?.stats} />
 
-          <div className="projects-page__columns">
-            <div className="projects-page__col projects-page__col--main">
-              <CollapsibleSection title="Project Gallery" subtitle="Large, evidence-rich work" defaultOpen={true}>
-                <ProjectGallery
-                  projects={projects}
-                  loading={loading}
-                  onOpenProject={handleOpenProject}
-                  onAddProject={() => navigate('/profile')}
-                  onViewDetails={setDetailProject}
-                />
-              </CollapsibleSection>
+          {/* Executive summary of the whole portfolio comes first —
+              collapsed after the first visit is a later enhancement;
+              for now it opens expanded since it's the most useful read. */}
+          <PortfolioNarrativePanel />
 
-              {insights?.comparison && (
-                <CollapsibleSection title="Compare & Recommend" dense defaultOpen={true}>
-                  <CompareProjectsPanel comparison={insights.comparison} />
-                </CollapsibleSection>
-              )}
+          <section className="projects-page__section">
+            <h2 className="projects-page__section-title">Engineering Portfolio</h2>
+            <p className="projects-page__section-lead">
+              One row per project — the recommended lead project is flagged inline.
+            </p>
+            <ProjectGallery
+              projects={projects}
+              loading={loading}
+              leadProjectId={leadProjectId}
+              onOpenProject={handleOpenProject}
+              onAddProject={() => navigate('/profile')}
+              onViewDetails={setDetailProject}
+            />
+          </section>
 
-              {insights?.recommendations?.length > 0 && (
-                <CollapsibleSection title="AI Recommendations" dense defaultOpen={false}>
-                  <AIRecommendationsPanel recommendations={insights.recommendations} />
-                </CollapsibleSection>
-              )}
-            </div>
+          {insights?.recommendations?.length > 0 && (
+            <AIRecommendationsPanel recommendations={insights.recommendations} />
+          )}
 
-            <div className="projects-page__col projects-page__col--side">
-              <GoalAwareRankingPanel />
+          <EvidenceCoveragePanel
+            coverage={insights?.source_coverage}
+            interviewReadyCount={interviewReadyCount}
+          />
 
-              <PortfolioNarrativePanel />
-
-              <CollapsibleSection title="Interview Toolkit" dense defaultOpen={true}>
-                <InterviewToolkitPanel featuredProjectName={featuredProject?.name} />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Evidence Coverage" dense defaultOpen={true}>
-                <EvidenceCoveragePanel
-                  coverage={insights?.source_coverage}
-                  interviewReadyCount={interviewReadyCount}
-                />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Recent Analysis" dense defaultOpen={false}>
-                <RecentMilestonesPanel milestones={insights?.milestones} />
-              </CollapsibleSection>
-            </div>
-          </div>
+          <CollapsibleSection title="Recent Activity" dense defaultOpen={false}>
+            <RecentMilestonesPanel milestones={insights?.milestones} />
+          </CollapsibleSection>
         </div>
       </div>
 

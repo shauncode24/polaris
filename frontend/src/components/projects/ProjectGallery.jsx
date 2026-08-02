@@ -10,7 +10,7 @@ const FILTERS = [
   { key: 'completed', label: 'Completed' },
 ]
 
-function ProjectGallery({ projects, loading, onOpenProject, onAddProject, onViewDetails }) {
+function ProjectGallery({ projects, loading, leadProjectId, onOpenProject, onAddProject, onViewDetails }) {
   const [filter, setFilter] = useState('all')
 
   const filtered = useMemo(() => {
@@ -20,26 +20,20 @@ function ProjectGallery({ projects, loading, onOpenProject, onAddProject, onView
   }, [projects, filter])
 
   return (
-    <section className="project-gallery">
-      <div className="project-gallery__header">
-        <div>
-          <h2>Project gallery</h2>
-          <p className="project-gallery__lead">Large, evidence-rich work — not a passive card list.</p>
-        </div>
-        <div className="project-gallery__tabs" role="tablist">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.key}
-              className={`project-gallery__tab ${filter === f.key ? 'project-gallery__tab--active' : ''}`}
-              onClick={() => setFilter(f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+    <div className="project-gallery">
+      <div className="project-gallery__tabs" role="tablist">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            role="tab"
+            aria-selected={filter === f.key}
+            className={`project-gallery__tab ${filter === f.key ? 'project-gallery__tab--active' : ''}`}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -55,18 +49,19 @@ function ProjectGallery({ projects, loading, onOpenProject, onAddProject, onView
           onCta={projects.length === 0 ? onAddProject : undefined}
         />
       ) : (
-        <div className="project-gallery__grid">
+        <div className="project-gallery__list">
           {filtered.map((project) => (
             <ProjectCard
               key={project.id}
               project={project}
+              isLead={project.id === leadProjectId}
               onOpen={onOpenProject}
               onViewDetails={onViewDetails}
             />
           ))}
         </div>
       )}
-    </section>
+    </div>
   )
 }
 
