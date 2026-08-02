@@ -83,8 +83,14 @@
 
 .rrp__stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .rrp__stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .rrp__stat {
@@ -217,5 +223,14 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.rrp__degraded {
+  font-size: 11px;
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 12px;
 }
 

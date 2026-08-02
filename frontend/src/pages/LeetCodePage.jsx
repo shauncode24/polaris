@@ -19,6 +19,7 @@ import CareerInsights from '../components/leetcode/CareerInsights'
 import CombinedSignal from '../components/leetcode/CombinedSignal'
 import RecruiterPerspective from '../components/leetcode/RecruiterPerspective'
 import RecentActivity from '../components/leetcode/RecentActivity'
+import PracticeRecommendations from '../components/leetcode/PracticeRecommendations'
 import ManualEntryModal from '../components/leetcode/ManualEntryModal'
 import LeetcodeReviewPanel from '../components/leetcode/LeetcodeReviewPanel'
 import EngineeringQuadrant from '../components/leetcode/EngineeringQuadrant'
@@ -116,6 +117,7 @@ function LeetCodePage() {
   const insights = leetcode?.insights
   const summary = leetcode?.summary
   const topicMastery = insights?.topic_mastery || []
+  const practiceHabits = insights?.practice_habits
 
   return (
     <div className="leetcode-layout">
@@ -206,6 +208,14 @@ function LeetCodePage() {
                     <EvidenceGenerated topicMastery={topicMastery} />
                   </CollapsibleSection>
 
+                  {/* NEW — deterministic, rule-based action items from
+                      insights.recommendations (leetcode_insights.build_recommendations).
+                      This was computed by the backend but had no frontend
+                      representation anywhere prior to this change. */}
+                  <CollapsibleSection title="Practice recommendations" dense defaultOpen={true}>
+                    <PracticeRecommendations recommendations={insights?.recommendations} />
+                  </CollapsibleSection>
+
                   <CollapsibleSection title="Difficulty & contests" dense defaultOpen={false}>
                     <div className="leetcode-row-2">
                       <DifficultyDistribution
@@ -257,6 +267,8 @@ function LeetCodePage() {
                       currentStreak={summary?.current_streak}
                       longestStreak={summary?.longest_streak}
                       activeDaysLast30={summary?.active_days_last_30}
+                      preferredDifficulty={practiceHabits?.preferred_difficulty}
+                      averageSessionLength={practiceHabits?.average_session_length}
                     />
                   </CollapsibleSection>
 

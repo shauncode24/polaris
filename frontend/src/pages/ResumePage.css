@@ -224,3 +224,40 @@
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Upload overlay ────────────────────────── */
+.resume-upload-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: resumeFadeIn 0.2s ease-out;
+}
+
+.resume-upload-overlay__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.resume-upload-overlay__text {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+@keyframes resumeFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

@@ -21,8 +21,9 @@ function buildIntensityGrid(activeDaysLast30) {
   })
 }
 
-function PracticeHeatmap({ currentStreak, longestStreak, activeDaysLast30 }) {
+function PracticeHeatmap({ currentStreak, longestStreak, activeDaysLast30, preferredDifficulty, averageSessionLength }) {
   const grid = buildIntensityGrid(activeDaysLast30)
+  const showHabitsLine = (preferredDifficulty && preferredDifficulty !== 'None') || averageSessionLength != null
 
   return (
     <section className="lc-card lc-heatmap">
@@ -36,6 +37,17 @@ function PracticeHeatmap({ currentStreak, longestStreak, activeDaysLast30 }) {
         ))}
       </div>
       <p className="lc-heatmap__longest">Longest streak: {longestStreak || 0} days</p>
+      {showHabitsLine && (
+        <p className="lc-heatmap__habits">
+          {preferredDifficulty && preferredDifficulty !== 'None' && (
+            <>Preferred difficulty: <strong>{preferredDifficulty}</strong></>
+          )}
+          {preferredDifficulty && preferredDifficulty !== 'None' && averageSessionLength != null && ' · '}
+          {averageSessionLength != null && (
+            <>Avg {averageSessionLength} problem{averageSessionLength === 1 ? '' : 's'}/active day (30d)</>
+          )}
+        </p>
+      )}
     </section>
   )
 }

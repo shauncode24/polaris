@@ -43,7 +43,18 @@ function PortfolioNarrativePanel() {
             <div className="pnp__row"><span>Collaboration</span><p>{report.collaboration_pattern}</p></div>
             <div className="pnp__row"><span>Specialization</span><p>{report.specialization}</p></div>
             <div className="pnp__row pnp__row--weakness"><span>Biggest weakness</span><p>{report.biggest_weakness}</p></div>
-            <button type="button" className="pnp__regenerate" onClick={() => load(true)}>Regenerate</button>
+            {report.analysis_degraded && (
+              <div className="pnp__degraded">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Narrative analysis degraded — showing deterministic fallback.
+              </div>
+            )}
+            <div className="pnp__footer">
+              <button type="button" className="pnp__regenerate" onClick={() => load(true)}>Regenerate</button>
+              {report.generated_at && (
+                <span className="pnp__generated-at">Generated {new Date(report.generated_at).toLocaleDateString()}</span>
+              )}
+            </div>
           </div>
         )
       )}

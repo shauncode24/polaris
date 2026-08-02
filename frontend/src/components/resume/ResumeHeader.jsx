@@ -13,6 +13,7 @@ function formatDate(iso) {
 export default function ResumeHeader({
   workspace,
   onUpload,
+  uploadLoading,
   onReview,
   reviewLoading,
   onAnalyze,
@@ -90,18 +91,29 @@ export default function ResumeHeader({
           type="button"
           className="rh__btn"
           onClick={() => uploadInputRef.current?.click()}
+          disabled={uploadLoading || reviewLoading || analyzeLoading}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 15V4" /><path d="M7.5 8.5L12 4l4.5 4.5" />
-            <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-          </svg>
-          Re-upload
+          {uploadLoading ? (
+            <>
+              <span style={{ width: 12, height: 12, border: '2px solid rgba(0,0,0,0.2)', borderTopColor: 'var(--accent)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
+              Uploading…
+            </>
+          ) : (
+            <>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 15V4" /><path d="M7.5 8.5L12 4l4.5 4.5" />
+                <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+              </svg>
+              Re-upload
+            </>
+          )}
         </button>
         
         <button
           type="button"
           className={`rh__btn ${showPreview ? 'rh__btn--active' : ''}`}
           onClick={onTogglePreview}
+          disabled={uploadLoading}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -114,7 +126,7 @@ export default function ResumeHeader({
           type="button"
           className="rh__btn rh__btn--primary"
           onClick={onReview}
-          disabled={reviewLoading}
+          disabled={reviewLoading || uploadLoading}
         >
           {reviewLoading ? 'Reviewing…' : 'AI Review'}
         </button>
@@ -123,7 +135,7 @@ export default function ResumeHeader({
           type="button"
           className="rh__btn rh__btn--primary"
           onClick={() => onAnalyze()}
-          disabled={analyzeLoading}
+          disabled={analyzeLoading || uploadLoading}
         >
           {analyzeLoading ? (
             <>

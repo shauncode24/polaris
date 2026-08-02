@@ -21,3 +21,24 @@
   cursor: pointer;
 }
 .pnp__regenerate:hover { border-color: var(--accent); color: var(--accent-strong); }
+
+.pnp__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.pnp__generated-at {
+  font-size: 11.5px;
+  color: var(--text-soft);
+}
+
+.pnp__degraded {
+  font-size: 11px;
+  color: var(--warning);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}

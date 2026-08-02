@@ -227,3 +227,61 @@
   color: var(--ink);
   border: 1px solid var(--border);
 }
+
+/* Score Breakdown Grid and progress bars */
+.gh-repo-item__score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 20px;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 768px) {
+  .gh-repo-item__score-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .gh-repo-item__score-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gh-repo-item__score-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gh-repo-item__score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.gh-repo-item__score-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.gh-repo-item__score-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.gh-repo-item__score-bar-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.gh-repo-item__score-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+}

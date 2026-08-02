@@ -23,6 +23,7 @@
 .project-card__badge--featured { background: var(--accent-soft); color: var(--accent-strong); }
 .project-card__badge--ongoing { background: var(--success-soft); color: var(--success); }
 .project-card__badge--completed { background: var(--surface-soft); color: var(--text-soft); }
+.project-card__badge--unknown { background: var(--surface-soft); color: var(--text-soft); }
 
 .project-card__tagline { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .project-card__desc {
@@ -115,3 +116,32 @@
 .project-card__flag--undersold { background: var(--info-soft); color: var(--info); }
 .project-card__flag--resume_it { background: var(--warning-soft); color: #a2760f; }
 .project-card__flag--retire_it { background: var(--surface-soft); color: var(--text-soft); }
+
+.project-card__github-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+.project-card__github-meta svg {
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+.project-card__repo-name {
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 4px;
+}
+
+.project-card__github-signal {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10.5px;
+  text-transform: capitalize;
+}

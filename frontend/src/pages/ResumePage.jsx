@@ -13,6 +13,7 @@ import ResumeReviewPanel from '../components/resume/ResumeReviewPanel'
 import ResumeVersions from '../components/resume/ResumeVersions'
 import ResumeConsistency from '../components/resume/ResumeConsistency'
 import RoleFitPanel from '../components/resume/RoleFitPanel'
+import ResumeVsJobsPanel from '../components/resume/ResumeVsJobsPanel'
 import CoverageGapsPanel from '../components/resume/CoverageGapsPanel'
 import ResumeEvolution from '../components/resume/ResumeEvolution'
 import ResumeCoherence from '../components/resume/ResumeCoherence'
@@ -153,6 +154,14 @@ export default function ResumePage() {
 
   return (
     <div className="resume-layout">
+      {uploadLoading && (
+        <div className="resume-upload-overlay">
+          <div className="resume-upload-overlay__card">
+            <div className="resume-spinner" />
+            <span className="resume-upload-overlay__text">Uploading resume...</span>
+          </div>
+        </div>
+      )}
       <Sidebar />
       <div className="resume-main">
         <TopBar section="Profile" page="Resume" />
@@ -232,6 +241,7 @@ export default function ResumePage() {
               <ResumeHeader
                 workspace={workspace}
                 onUpload={handleUpload}
+                uploadLoading={uploadLoading}
                 onReview={handleRunReview}
                 reviewLoading={reviewLoading}
                 onAnalyze={handleRunAnalysis}
@@ -284,8 +294,10 @@ export default function ResumePage() {
                 {/* Right column */}
                 <div className="resume-col">
                   <ResumeVersions versions={workspace.versions} />
+                  <ResumeSnapshot snapshot={workspace.snapshot} />
                   <ResumeConsistency profile_consistency={workspace.profile_consistency} />
                   <RoleFitPanel role_fit={workspace.role_fit} />
+                  <ResumeVsJobsPanel resume_vs_jobs={workspace.resume_vs_jobs} />
                   <ResumeEvolution evolution={evolution} />
                 </div>
               </div>

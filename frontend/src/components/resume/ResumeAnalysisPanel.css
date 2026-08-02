@@ -438,3 +438,40 @@
   font-style: normal;
 }
 
+.rap__evidence-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 600px) {
+  .rap__evidence-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.rap__evidence-stat-card {
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.rap__evidence-stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.rap__evidence-stat-lbl {
+  font-size: 11px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+

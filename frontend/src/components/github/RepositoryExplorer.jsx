@@ -149,6 +149,69 @@ function RepositoryExplorer({ repositories }) {
 
                 {isExpanded && (
                   <div className="gh-repo-item__details">
+                    {/* Score Breakdown */}
+                    {repo.project_score?.breakdown && (
+                      <div className="gh-repo-item__details-section">
+                        <div className="gh-repo-item__details-title">Score Breakdown (Overall: {score}/100)</div>
+                        <div className="gh-repo-item__score-grid">
+                          <div className="gh-repo-item__score-item">
+                            <div className="gh-repo-item__score-row">
+                              <span className="gh-repo-item__score-label">Activity</span>
+                              <span className="gh-repo-item__score-value">{repo.project_score.breakdown.activity}/25</span>
+                            </div>
+                            <div className="gh-repo-item__score-bar-track">
+                              <div className="gh-repo-item__score-bar-fill" style={{ width: `${(repo.project_score.breakdown.activity / 25) * 100}%` }} />
+                            </div>
+                          </div>
+                          <div className="gh-repo-item__score-item">
+                            <div className="gh-repo-item__score-row">
+                              <span className="gh-repo-item__score-label">Engineering</span>
+                              <span className="gh-repo-item__score-value">{repo.project_score.breakdown.engineering}/30</span>
+                            </div>
+                            <div className="gh-repo-item__score-bar-track">
+                              <div className="gh-repo-item__score-bar-fill" style={{ width: `${(repo.project_score.breakdown.engineering / 30) * 100}%` }} />
+                            </div>
+                          </div>
+                          <div className="gh-repo-item__score-item">
+                            <div className="gh-repo-item__score-row">
+                              <span className="gh-repo-item__score-label">Maintenance</span>
+                              <span className="gh-repo-item__score-value">{repo.project_score.breakdown.maintenance}/20</span>
+                            </div>
+                            <div className="gh-repo-item__score-bar-track">
+                              <div className="gh-repo-item__score-bar-fill" style={{ width: `${(repo.project_score.breakdown.maintenance / 20) * 100}%` }} />
+                            </div>
+                          </div>
+                          <div className="gh-repo-item__score-item">
+                            <div className="gh-repo-item__score-row">
+                              <span className="gh-repo-item__score-label">Documentation</span>
+                              <span className="gh-repo-item__score-value">{repo.project_score.breakdown.documentation}/15</span>
+                            </div>
+                            <div className="gh-repo-item__score-bar-track">
+                              <div className="gh-repo-item__score-bar-fill" style={{ width: `${(repo.project_score.breakdown.documentation / 15) * 100}%` }} />
+                            </div>
+                          </div>
+                          <div className="gh-repo-item__score-item">
+                            <div className="gh-repo-item__score-row">
+                              <span className="gh-repo-item__score-label">Commit Hygiene</span>
+                              <span className="gh-repo-item__score-value">{repo.project_score.breakdown.commit_hygiene}/5</span>
+                            </div>
+                            <div className="gh-repo-item__score-bar-track">
+                              <div className="gh-repo-item__score-bar-fill" style={{ width: `${(repo.project_score.breakdown.commit_hygiene / 5) * 100}%` }} />
+                            </div>
+                          </div>
+                          <div className="gh-repo-item__score-item">
+                            <div className="gh-repo-item__score-row">
+                              <span className="gh-repo-item__score-label">Collaboration</span>
+                              <span className="gh-repo-item__score-value">{repo.project_score.breakdown.collaboration}/5</span>
+                            </div>
+                            <div className="gh-repo-item__score-bar-track">
+                              <div className="gh-repo-item__score-bar-fill" style={{ width: `${(repo.project_score.breakdown.collaboration / 5) * 100}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Architecture details */}
                     {!nonContributedFork && repo.architecture_assessment && (
                       <div className="gh-repo-item__details-section">

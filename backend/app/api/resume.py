@@ -199,6 +199,7 @@ async def get_resume_workspace(
             "top_priority_fixes": rj.get("top_priority_fixes", []),
             "bullet_reviews": rj.get("bullet_reviews", []),
             "created_at": review_row.created_at.isoformat(),
+            "analysis_degraded": rj.get("analysis_degraded", False),
         }
 
     versions = []

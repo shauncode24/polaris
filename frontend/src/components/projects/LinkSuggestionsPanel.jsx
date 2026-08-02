@@ -47,13 +47,31 @@ function LinkSuggestionsPanel({ onLinked }) {
       <div className="link-suggestions__list">
         {suggestions.map((s) => (
           <div className="link-suggestions__row" key={s.project_id}>
-            <div>
-              <strong>{s.project_name}</strong>
-              <span className="link-suggestions__arrow"> → </span>
-              <code>{s.candidate_repo}</code>
-              <span className={`link-suggestions__badge link-suggestions__badge--${s.confidence}`}>
-                {s.confidence}
-              </span>
+            <div className="link-suggestions__main-info">
+              <div>
+                <strong>{s.project_name}</strong>
+                <span className="link-suggestions__arrow"> → </span>
+                <code>{s.candidate_repo}</code>
+                <span className={`link-suggestions__badge link-suggestions__badge--${s.confidence}`}>
+                  {s.confidence}
+                </span>
+              </div>
+              {s.other_candidates && s.other_candidates.length > 0 && (
+                <div className="link-suggestions__alternates">
+                  <span className="link-suggestions__alt-label">Alternates:</span>
+                  {s.other_candidates.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className="link-suggestions__alt-btn"
+                      disabled={busyId === s.project_id}
+                      onClick={() => handleConfirm(s.project_id, c)}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               type="button"

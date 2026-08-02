@@ -42,7 +42,13 @@ function GoalAwareRankingPanel() {
                     <span className="garp__item-name">{item.project_name}</span>
                     <span className="garp__item-score">{item.score.toFixed(2)}</span>
                   </div>
-                  <p className="garp__item-reason">{item.reasons[0]}</p>
+                  {item.reasons && item.reasons.length > 0 && (
+                    <ul className="garp__item-reasons">
+                      {item.reasons.map((reason, idx) => (
+                        <li key={idx} className="garp__item-reason">{reason}</li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ol>

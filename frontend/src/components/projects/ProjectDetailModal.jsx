@@ -51,6 +51,19 @@ function ClaimAuditSection({ project, token }) {
       </div>
       <p className="pdm__headline">{narrative.headline}</p>
 
+      {facts.architecture_flag && (
+        <div className="pdm__architecture-flag-alert" style={{ fontSize: '12.5px', color: 'var(--danger)', background: 'var(--danger-soft)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', marginBottom: '10px' }}>
+          <strong>Architecture mismatch:</strong> {facts.architecture_flag}
+        </div>
+      )}
+
+      {facts.confirmed_claims?.length > 0 && (
+        <div className="pdm__subsection">
+          <span className="pdm__subsection-label pdm__subsection-label--success" style={{ color: 'var(--success)' }}>Verified claims</span>
+          <ul>{facts.confirmed_claims.map((c) => <li key={c}>{c}</li>)}</ul>
+        </div>
+      )}
+
       {facts.unsupported_claims.length > 0 && (
         <div className="pdm__subsection">
           <span className="pdm__subsection-label pdm__subsection-label--danger">Unsupported claims</span>
@@ -65,6 +78,44 @@ function ClaimAuditSection({ project, token }) {
         </div>
       )}
 
+      {facts.verified_facts && Object.keys(facts.verified_facts).length > 0 && (
+        <div className="pdm__subsection pdm__subsection--verified-facts">
+          <span className="pdm__subsection-label pdm__subsection-label--info">Verified GitHub evidence</span>
+          <div className="pdm__verified-facts-grid">
+            <div className="pdm__verified-fact-item">
+              <strong>Quality Score</strong>
+              <span>{facts.verified_facts.quality_score ?? 0}/100</span>
+            </div>
+            <div className="pdm__verified-fact-item">
+              <strong>Activity Score</strong>
+              <span>{facts.verified_facts.activity_score ?? 0}/100</span>
+            </div>
+            <div className="pdm__verified-fact-item">
+              <strong>Architecture</strong>
+              <span>{facts.verified_facts.architecture_depth || 'None'}</span>
+            </div>
+            <div className="pdm__verified-fact-item">
+              <strong>Tests</strong>
+              <span>{facts.verified_facts.has_tests ? 'Yes' : 'No'}</span>
+            </div>
+            <div className="pdm__verified-fact-item">
+              <strong>CI/CD</strong>
+              <span>{facts.verified_facts.has_ci ? 'Yes' : 'No'}</span>
+            </div>
+          </div>
+          {(facts.verified_facts.technologies?.length > 0 || facts.verified_facts.capabilities?.length > 0) && (
+            <div className="pdm__verified-facts-details">
+              {facts.verified_facts.technologies?.length > 0 && (
+                <p><strong>Verified Tech:</strong> {facts.verified_facts.technologies.join(', ')}</p>
+              )}
+              {facts.verified_facts.capabilities?.length > 0 && (
+                <p><strong>Verified Capabilities:</strong> {facts.verified_facts.capabilities.join(', ')}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {narrative.talking_points.length > 0 && (
         <div className="pdm__subsection">
           <span className="pdm__subsection-label">Talking points</span>
@@ -76,6 +127,13 @@ function ClaimAuditSection({ project, token }) {
         <div className="pdm__subsection">
           <span className="pdm__subsection-label">Suggested fixes</span>
           <ul>{narrative.fixes.map((f, i) => <li key={i}>{f}</li>)}</ul>
+        </div>
+      )}
+
+      {report.analysis_degraded && (
+        <div className="pdm__degraded" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--warning)', marginTop: '8px', marginBottom: '8px' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Claim audit analysis degraded — showing deterministic fallback.
         </div>
       )}
 
@@ -143,6 +201,11 @@ function IntelligenceSection({ project, token }) {
             <p className="pdm__error">{report.context_note || 'Not enough data on this project to answer that.'}</p>
           ) : (
             <>
+              {report.comparison_target && (
+                <div className="pdm__comparison-target-heading" style={{ fontSize: '13px', fontWeight: '700', color: 'var(--ink)', background: 'var(--surface-soft)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', marginBottom: '8px' }}>
+                  Comparing against: {report.comparison_target}
+                </div>
+              )}
               <p>{report.explanation}</p>
               {report.strongest_technical_decision && (
                 <div className="pdm__subsection">
@@ -162,7 +225,18 @@ function IntelligenceSection({ project, token }) {
                   <p>{report.comparison_notes}</p>
                 </div>
               )}
-              <button type="button" className="pdm__regenerate" onClick={() => generate(true)}>Regenerate</button>
+              {report.analysis_degraded && (
+                <div className="pdm__degraded" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--warning)', marginTop: '8px' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Intelligence analysis degraded — showing deterministic fallback.
+                </div>
+              )}
+              <div className="pdm__footer-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                <button type="button" className="pdm__regenerate" onClick={() => generate(true)}>Regenerate</button>
+                {report.generated_at && (
+                  <span className="pdm__generated-at" style={{ fontSize: '11.5px', color: 'var(--text-soft)' }}>Generated {new Date(report.generated_at).toLocaleDateString()}</span>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -213,7 +287,18 @@ function InterviewQuestionsSection({ project, token }) {
               </li>
             ))}
           </ul>
-          <button type="button" className="pdm__regenerate" onClick={() => load(true)}>Regenerate</button>
+          {report.analysis_degraded && (
+            <div className="pdm__degraded" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--warning)', marginTop: '8px', marginBottom: '8px' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Interview questions analysis degraded — showing deterministic fallback.
+            </div>
+          )}
+          <div className="pdm__footer-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+            <button type="button" className="pdm__regenerate" onClick={() => load(true)}>Regenerate</button>
+            {report.generated_at && (
+              <span className="pdm__generated-at" style={{ fontSize: '11.5px', color: 'var(--text-soft)' }}>Generated {new Date(report.generated_at).toLocaleDateString()}</span>
+            )}
+          </div>
         </>
       )}
     </div>

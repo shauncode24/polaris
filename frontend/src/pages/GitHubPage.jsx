@@ -20,6 +20,7 @@ import SyncHistory from '../components/github/SyncHistory'
 import GitHubConnectPanel from '../components/github/GitHubConnectPanel'
 import CollapsibleSection from '../components/common/CollapsibleSection'
 import PortfolioDepthMaturity from '../components/github/PortfolioDepthMaturity'
+import PortfolioSignals from '../components/github/PortfolioSignals'
 import './GitHubPage.css'
 
 function scoreLabel(score) {
@@ -258,6 +259,10 @@ function GitHubPage() {
 
               <CollapsibleSection title="Portfolio Depth & Maturity" defaultOpen={true}>
                 <PortfolioDepthMaturity insights={insights} />
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Portfolio Signals" defaultOpen={true}>
+                <PortfolioSignals insights={insights} />
               </CollapsibleSection>
 
               <CollapsibleSection title="Stats" dense defaultOpen={false}>

@@ -144,6 +144,24 @@ export default function ResumeAnalysisPanel({ analysis, onRunAnalysis, analysisL
         {evidence.skills && evidence.skills.length > 0 && (
           <CollapsibleSection title="Skill Evidence Matrix" defaultOpen={false}>
             <div className="rap__evidence-section">
+              <div className="rap__evidence-stats">
+                <div className="rap__evidence-stat-card">
+                  <span className="rap__evidence-stat-val">{evidence.score}/100</span>
+                  <span className="rap__evidence-stat-lbl">Evidence Score</span>
+                </div>
+                <div className="rap__evidence-stat-card">
+                  <span className="rap__evidence-stat-val" style={{ color: 'var(--success)' }}>{evidence.high_corroboration}</span>
+                  <span className="rap__evidence-stat-lbl">High Corroboration</span>
+                </div>
+                <div className="rap__evidence-stat-card">
+                  <span className="rap__evidence-stat-val" style={{ color: 'var(--warning)' }}>{evidence.medium_corroboration}</span>
+                  <span className="rap__evidence-stat-lbl">Medium Corroboration</span>
+                </div>
+                <div className="rap__evidence-stat-card">
+                  <span className="rap__evidence-stat-val" style={{ color: 'var(--text)' }}>{evidence.low_corroboration}</span>
+                  <span className="rap__evidence-stat-lbl">Low Corroboration</span>
+                </div>
+              </div>
               <div className="rap__table-wrap">
                 <table className="rap__table">
                   <thead>

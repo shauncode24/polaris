@@ -50,7 +50,7 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
     )
   }
 
-  const { overall_score: score, stats, summary, strengths = [], top_priority_fixes = [], bullet_reviews = [], created_at } = review
+  const { overall_score: score, stats, summary, strengths = [], top_priority_fixes = [], bullet_reviews = [], created_at, analysis_degraded } = review
 
   return (
     <div className="rrp-container">
@@ -95,6 +95,18 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
                   </div>
                   <div className="rrp__stat-lbl">No Metrics</div>
                 </div>
+                <div className="rrp__stat">
+                  <div className="rrp__stat-val" style={{ color: stats.weak_verb_count > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                    {stats.weak_verb_count ?? 0}
+                  </div>
+                  <div className="rrp__stat-lbl">Weak Verbs</div>
+                </div>
+                <div className="rrp__stat">
+                  <div className="rrp__stat-val" style={{ color: stats.passive_voice_count > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                    {stats.passive_voice_count ?? 0}
+                  </div>
+                  <div className="rrp__stat-lbl">Passive Voice</div>
+                </div>
               </div>
             )}
 
@@ -128,6 +140,14 @@ export default function ResumeReviewPanel({ review, onRunReview, reviewLoading }
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Degraded warning */}
+            {analysis_degraded && (
+              <div className="rrp__degraded">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Review analysis degraded — showing deterministic fallback.
               </div>
             )}
           </div>

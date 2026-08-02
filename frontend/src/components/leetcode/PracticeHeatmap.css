@@ -12,3 +12,5 @@
 .lc-heatmap__cell--3 { background: var(--accent); }
 
 .lc-heatmap__longest { font-size: 12px; color: var(--text-soft); margin-top: 12px; }
+.lc-heatmap__habits { font-size: 12px; color: var(--text-soft); margin-top: 4px; }
+.lc-heatmap__habits strong { color: var(--ink); font-weight: 600; }
