@@ -30,8 +30,9 @@ from app.services.projects.portfolio_narrative import generate_portfolio_narrati
 from app.services.projects.recommendations import build_project_recommendations
 from app.services.projects.linking import suggest_repo_links, link_project, unlink_project
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+from app.services.identity.identity_refresh import trigger_identity_refresh
 
+router = APIRouter(prefix="/projects", tags=["projects"])
 
 @router.get("", response_model=ProjectsOverviewResponse)
 async def list_projects(
@@ -152,8 +153,16 @@ async def get_project_claim_audit(
         quality_score=verified.get("quality_score"),
         activity_score=verified.get("activity_score"),
     )
-    return await generate_claim_audit_narrative(db, current_user.id, project_id, facts)
+    report = await generate_claim_audit_narrative(db, current_user.id, project_id, facts)
 
+    # Freshness fix (Important, Engineering Identity audit): a Claim
+    # Audit run can change claim_risk_details, which top_skills'
+    # confidence is now reconciled against — this was previously the
+    # one signal in IdentityFacts most related to the confidence/
+    # contradiction problem that never triggered a refresh at all.
+    await trigger_identity_refresh(db, current_user.id, "claim audit")
+
+    return report
 
 @router.get("/{project_id}/intelligence", response_model=ProjectIntelligenceReport)
 async def get_project_intelligence(
@@ -225,8 +234,13 @@ async def confirm_project_link(
     project = await link_project(db, current_user.id, project_id, payload.repo_name)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    return {"status": "success", "github_repo_name": project.github_repo_name}
 
+    # Freshness fix — confirming a repo link can newly enable (or change
+    # the target of) a Claim Audit finding for this project, which
+    # claim_risk_details/top_skills reconciliation depends on.
+    await trigger_identity_refresh(db, current_user.id, "project link confirmed")
+
+    return {"status": "success", "github_repo_name": project.github_repo_name}
 
 @router.post("/{project_id}/unlink")
 async def remove_project_link(
@@ -237,4 +251,9 @@ async def remove_project_link(
     project = await unlink_project(db, current_user.id, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Freshness fix — removing a repo link can retire a previously-real
+    # claim-risk finding for this project.
+    await trigger_identity_refresh(db, current_user.id, "project link removed")
+
     return {"status": "success"}

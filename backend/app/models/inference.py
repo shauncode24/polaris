@@ -201,12 +201,20 @@ class PortfolioNarrativeReview(Base):
 
 class EngineeringIdentity(Base):
     """The single reconciled cross-module snapshot — one row per
-    generation, append-only like CareerPlan. `source_event` (freshness
-    fix, mirrors LeetcodeEngineeringSnapshot's own field) records WHY
+    generation, append-only like CareerPlan. `source_event` records WHY
     this snapshot exists — "resume upload", "github sync", "leetcode
-    sync", "job description analysis", or "manual_refresh" for an
-    explicit POST /identity/refresh call. Append-only rather than
-    upserted so weekly_brief.py has real snapshot history to diff against.
+    sync", "job description analysis", "claim audit", "project link
+    confirmed", "project link removed", or "manual_refresh".
+
+    Invalidation fields (audit finding #3): rows are still NEVER deleted
+    or rewritten — append-only history stays intact for Weekly Brief's
+    diffing — but a specific past row can now be explicitly flagged as
+    known-bad after the fact (e.g. a transient GitHub API hiccup fed a
+    wrong score into that snapshot's facts_json). This is deliberately
+    NOT full versioning: just enough to distinguish "this was correct
+    at the time and has since genuinely changed" from "this was wrong
+    when it was generated" when something needs to explain a past
+    Identity's claim.
     """
     __tablename__ = "engineering_identities"
 
@@ -216,6 +224,9 @@ class EngineeringIdentity(Base):
     narrative_json: Mapped[dict] = mapped_column(JSONB)
     analysis_degraded: Mapped[bool] = mapped_column(Boolean, default=False)
     source_event: Mapped[str] = mapped_column(String(50), default="manual_refresh")
+    is_invalidated: Mapped[bool] = mapped_column(Boolean, default=False)
+    invalidated_reason: Mapped[str | None] = mapped_column(Text)
+    invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

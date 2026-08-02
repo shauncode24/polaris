@@ -11,6 +11,7 @@ from app.schemas.engineering_identity import (
     EngineeringIdentityReport,
     IdentityFacts,
     IdentityLLMOutput,
+    NarrativeClaim,
 )
 from app.services.identity.identity_builder import build_identity_facts
 
@@ -20,6 +21,28 @@ class IdentitySynthesisError(Exception):
     can't validate. Callers fall back to a deterministic template
     instead of crashing the whole report.
     """
+
+
+def _fact_claim(statement: str, grounded_in: str) -> NarrativeClaim:
+    return NarrativeClaim(statement=statement, kind="fact", grounded_in=grounded_in)
+
+
+def _fallback_freshness_note(facts: IdentityFacts) -> str:
+    stale_or_missing = [
+        source for source, info in facts.source_freshness.items()
+        if not info.get("connected") or info.get("is_stale")
+    ]
+    if not stale_or_missing:
+        return "All connected sources are fresh." if facts.source_freshness else ""
+
+    parts = []
+    for source in stale_or_missing:
+        info = facts.source_freshness[source]
+        if not info.get("connected"):
+            parts.append(f"{source} has never been connected")
+        else:
+            parts.append(f"{source} data is {info.get('age_days')} days old")
+    return "Note: " + "; ".join(parts) + "."
 
 
 def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
@@ -37,19 +60,45 @@ def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
         summary_parts.append(f"Resume score is currently {facts.resume_score}/100.")
     if facts.engineering_quadrant:
         summary_parts.append(f"Engineering placement: {facts.engineering_quadrant['quadrant_label']}.")
+    if facts.evidence_coverage:
+        summary_parts.append(
+            f"Evidence coverage: {facts.evidence_coverage.get('completeness_label', 'unknown').lower()}."
+        )
 
-    gaps = []
+    strongest_signals = [
+        _fact_claim(
+            f"{s['skill'].title()} — confidence {s['confidence']}, corroborated by {s.get('corroboration_count', 0)} independent source(s).",
+            f"top_skills: {s['skill']} (confidence {s['confidence']}, corroboration_count={s.get('corroboration_count', 0)})",
+        )
+        for s in facts.top_skills[:4]
+    ]
+
+    gaps: list[NarrativeClaim] = []
     if facts.coverage_gaps.get("github_gaps"):
-        gaps.append(f"{len(facts.coverage_gaps['github_gaps'])} GitHub-evidenced skill(s) missing from your resume")
+        gaps.append(_fact_claim(
+            f"{len(facts.coverage_gaps['github_gaps'])} GitHub-evidenced skill(s) missing from your resume.",
+            "coverage_gaps.github_gaps",
+        ))
     if facts.timeline_plausibility_notes:
-        gaps.append(f"{len(facts.timeline_plausibility_notes)} timeline note(s) worth reviewing")
+        gaps.append(_fact_claim(
+            f"{len(facts.timeline_plausibility_notes)} timeline note(s) worth reviewing.",
+            "timeline_plausibility_notes",
+        ))
     if facts.claim_risk_details:
-        gaps.append(f"{len(facts.claim_risk_details)} project(s) with unresolved claim-vs-implementation risk")
+        gaps.append(_fact_claim(
+            f"{len(facts.claim_risk_details)} project(s) with unresolved claim-vs-implementation risk.",
+            "claim_risk_details",
+        ))
+    if facts.evidence_coverage.get("missing_sources", 0) > 0:
+        gaps.append(_fact_claim(
+            f"{facts.evidence_coverage['missing_sources']} evidence source(s) have never been connected.",
+            "evidence_coverage.missing_sources",
+        ))
 
     return IdentityLLMOutput(
         headline=best_role["role"] if best_role else "Engineering profile",
         summary=" ".join(summary_parts) or "Not enough evidence yet to summarize your profile.",
-        strongest_signals=top_names,
+        strongest_signals=strongest_signals,
         biggest_gaps=gaps,
         contradictions=[
             f"{c['project']}: {c['headline']}" for c in facts.claim_risk_details[:2]
@@ -58,6 +107,37 @@ def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
             "Sync GitHub and LeetCode, then re-run this once more evidence exists."
             if not top_names else ""
         ),
+        freshness_note=_fallback_freshness_note(facts),
+    )
+
+
+def _validate_claims(claims: list[NarrativeClaim]) -> list[NarrativeClaim]:
+    """Never trust the model's own "kind" labeling blindly — same
+    defensive pattern applied everywhere else in this codebase (e.g.
+    claim_audit's risk_level being overwritten with the deterministic
+    fact, gap_analysis filtering priority_order to real skill names). A
+    claim tagged "fact" with no real citation is, by definition, not
+    grounded — downgrade it to "interpretation" rather than let an
+    ungrounded "fact" label reach the user.
+    """
+    validated = []
+    for claim in claims:
+        if claim.kind == "fact" and not claim.grounded_in.strip():
+            claim = NarrativeClaim(statement=claim.statement, kind="interpretation", grounded_in="")
+        validated.append(claim)
+    return validated
+
+
+def _row_to_report(row: EngineeringIdentity) -> EngineeringIdentityReport:
+    return EngineeringIdentityReport(
+        facts=IdentityFacts.model_validate(row.facts_json),
+        narrative=IdentityLLMOutput.model_validate(row.narrative_json),
+        generated_at=row.created_at,
+        analysis_degraded=row.analysis_degraded,
+        source_event=row.source_event,
+        is_invalidated=row.is_invalidated,
+        invalidated_reason=row.invalidated_reason,
+        invalidated_at=row.invalidated_at,
     )
 
 
@@ -87,6 +167,8 @@ async def generate_engineering_identity(
         content = response.choices[0].message.content
         print(f"[TRACING] Raw Engineering Identity synthesis JSON:\n{content}", flush=True)
         narrative = IdentityLLMOutput.model_validate(json.loads(content))
+        narrative.strongest_signals = _validate_claims(narrative.strongest_signals)
+        narrative.biggest_gaps = _validate_claims(narrative.biggest_gaps)
     except Exception as e:
         print(f"[TRACING] Engineering Identity synthesis degraded, using fallback: {e}", flush=True)
         narrative = _fallback_narrative(facts)
@@ -116,19 +198,62 @@ async def generate_engineering_identity(
 
 
 async def get_latest_engineering_identity(db: AsyncSession, user_id) -> EngineeringIdentityReport | None:
+    """Returns the most recent VALID (non-invalidated) snapshot. An
+    invalidated row is skipped entirely rather than returned with a
+    warning flag — a consumer asking "what's my current Identity"
+    should never be handed something already known to be wrong; that
+    row is only reachable via get_engineering_identity_history() or by
+    id, for someone specifically investigating past behavior.
+    """
     result = await db.execute(
         select(EngineeringIdentity)
         .where(EngineeringIdentity.user_id == user_id)
+        .where(EngineeringIdentity.is_invalidated.is_(False))
         .order_by(EngineeringIdentity.created_at.desc())
         .limit(1)
     )
     row = result.scalar_one_or_none()
+    return _row_to_report(row) if row else None
+
+
+async def get_engineering_identity_history(
+    db: AsyncSession, user_id, limit: int = 10
+) -> list[EngineeringIdentityReport]:
+    """Most-recent-first, INCLUDING invalidated rows (with their
+    is_invalidated/invalidated_reason/invalidated_at set) — this is the
+    one place a consumer can actually see "why did Identity say X three
+    days ago" and whether that snapshot was later flagged as wrong.
+    """
+    result = await db.execute(
+        select(EngineeringIdentity)
+        .where(EngineeringIdentity.user_id == user_id)
+        .order_by(EngineeringIdentity.created_at.desc())
+        .limit(limit)
+    )
+    return [_row_to_report(row) for row in result.scalars().all()]
+
+
+async def invalidate_engineering_identity(
+    db: AsyncSession, user_id, identity_id, reason: str
+) -> EngineeringIdentityReport | None:
+    """Flags one specific past row as known-bad — audit finding #3. Does
+    NOT delete or rewrite the row (append-only history stays intact for
+    Weekly Brief's diffing), and does NOT trigger a new generation —
+    callers that also want a fresh, corrected snapshot should follow
+    this with their own POST /identity/refresh.
+    """
+    result = await db.execute(
+        select(EngineeringIdentity)
+        .where(EngineeringIdentity.id == identity_id)
+        .where(EngineeringIdentity.user_id == user_id)
+    )
+    row = result.scalar_one_or_none()
     if row is None:
         return None
-    return EngineeringIdentityReport(
-        facts=IdentityFacts.model_validate(row.facts_json),
-        narrative=IdentityLLMOutput.model_validate(row.narrative_json),
-        generated_at=row.created_at,
-        analysis_degraded=row.analysis_degraded,
-        source_event=row.source_event,
-    )
+
+    row.is_invalidated = True
+    row.invalidated_reason = reason
+    row.invalidated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    return _row_to_report(row)
