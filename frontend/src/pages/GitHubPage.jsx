@@ -2,25 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProfileData } from '../contexts/ProfileDataContext'
 import { getGithubWorkspace, syncGithub, runGithubPortfolioReview } from '../api/github'
-import { getProfileData } from '../api/profile'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import GitHubHeader from '../components/github/GitHubHeader'
 import GitHubHealthCards from '../components/github/GitHubHealthCards'
 import PortfolioReviewPanel from '../components/github/PortfolioReviewPanel'
-import GitHubStatsStrip from '../components/github/GitHubStatsStrip'
 import RepositoryActivity from '../components/github/RepositoryActivity'
 import ActivityTimeline from '../components/github/ActivityTimeline'
 import RepositoryExplorer from '../components/github/RepositoryExplorer'
-import LanguageAnalytics from '../components/github/LanguageAnalytics'
-import CodingInsights from '../components/github/CodingInsights'
-import AIRecommendations from '../components/github/AIRecommendations'
-import GitHubResumeCoverage from '../components/github/GitHubResumeCoverage'
-import SyncHistory from '../components/github/SyncHistory'
 import GitHubConnectPanel from '../components/github/GitHubConnectPanel'
 import CollapsibleSection from '../components/common/CollapsibleSection'
-import PortfolioDepthMaturity from '../components/github/PortfolioDepthMaturity'
-import PortfolioSignals from '../components/github/PortfolioSignals'
+import ArchitectureMaturityCard from '../components/github/ArchitectureMaturityCard'
+import TechnologyExpertiseCard from '../components/github/TechnologyExpertiseCard'
+import PortfolioProfileCard from '../components/github/PortfolioProfileCard'
 import './GitHubPage.css'
 
 function scoreLabel(score) {
@@ -58,9 +52,6 @@ function GitHubPage() {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [reviewError, setReviewError] = useState('')
 
-  const [resumeProjectNames, setResumeProjectNames] = useState([])
-  const [resumeLoading, setResumeLoading] = useState(true)
-
   const loadWorkspace = useCallback(async () => {
     try {
       const data = await getGithubWorkspace(token)
@@ -75,19 +66,6 @@ function GitHubPage() {
   useEffect(() => {
     loadWorkspace()
   }, [loadWorkspace])
-
-  useEffect(() => {
-    let cancelled = false
-    setResumeLoading(true)
-    getProfileData(token)
-      .then((data) => {
-        if (cancelled) return
-        setResumeProjectNames((data.projects || []).map((p) => p.name).filter(Boolean))
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setResumeLoading(false) })
-    return () => { cancelled = true }
-  }, [token])
 
   function applySyncResult(username, data) {
     const normalized = {
@@ -174,23 +152,6 @@ function GitHubPage() {
   const documentation = scoreLabel(docScore)
   const portfolio = strengthLabel(avgScore)
 
-  const healthMetrics = [
-    { label: 'Repository score', value: avgScore, tone: quality.tone },
-    { label: 'Engineering activity', value: activity.label, tone: activity.tone },
-    { label: 'Code quality', value: quality.label, tone: quality.tone },
-    { label: 'Documentation', value: documentation.label, tone: documentation.tone },
-    { label: 'Portfolio strength', value: portfolio.label, tone: portfolio.tone },
-  ]
-
-  const statItems = [
-    { label: 'Repositories', value: summary.repos_synced ?? repositories.length },
-    { label: 'Commits (30d)', value: summary.total_commits_last_30_days ?? 0 },
-    { label: 'Languages', value: (summary.languages_detected || []).length },
-    { label: 'Stars', value: summary.total_stars ?? 0 },
-    { label: 'Forks', value: summary.total_forks ?? 0 },
-    { label: 'Active repos', value: insights.engineering_practices?.maintenance?.active_projects ?? 0 },
-  ]
-
   return (
     <div className="github-layout">
       <Sidebar />
@@ -201,18 +162,12 @@ function GitHubPage() {
           {/* Page hero */}
           <div className="github-hero">
             <div>
-              <p className="github-hero__eyebrow">How strong is your open source footprint?</p>
               <h1 className="github-hero__title">GitHub</h1>
-              {hasData && (
-                <div className="github-hero__meta">
-                  <span>Your GitHub workspace</span>
-                  <span className="github-hero__meta-dot" />
-                  <span>{repositories.length} repositor{repositories.length === 1 ? 'y' : 'ies'} synced</span>
-                </div>
-              )}
+              <p className="github-hero__eyebrow">How strong is your open source footprint?</p>
             </div>
           </div>
 
+          {/* ── 1. HEADER ─────────────────────────────── */}
           <GitHubHeader
             username={workspace?.username || user?.github_username}
             repoCount={repositories.length}
@@ -221,6 +176,8 @@ function GitHubPage() {
             syncing={syncing}
             onSync={handleSync}
             onAnalyze={handleSync}
+            onRunReview={handleRunReview}
+            reviewLoading={reviewLoading}
             avgScore={avgScore}
             commits30d={summary.total_commits_last_30_days ?? 0}
           />
@@ -241,67 +198,75 @@ function GitHubPage() {
                 overallLabel={quality.label}
                 overallTone={quality.tone}
                 metrics={[
-                  { label: 'Activity', value: activity.label, tone: activity.tone, breakdown: { '30d commits': summary.total_commits_last_30_days ?? 0, 'Formula (Heuristic ⓘ)': 'Commits / 20 per repo' } },
-                  { label: 'Documentation', value: documentation.label, tone: documentation.tone, breakdown: { 'With README': `${insights.engineering_practices?.documentation?.repos_with_readme ?? 0} / ${repositories.length}`, 'Formula': '% of repos with README' } },
-                  { label: 'Portfolio', value: portfolio.label, tone: portfolio.tone, breakdown: { 'Repositories': repositories.length, 'Avg Score': `${avgScore}/100`, 'Formula': 'Average of all repo scores' } },
-                  { label: 'Hygiene', value: quality.label, tone: quality.tone, breakdown: { 'Readme Weight': '30%', 'Tests Weight': '40%', 'CI Weight': '30%', 'Formula (Heuristic ⓘ)': '0.3*README + 0.4*Tests + 0.3*CI' } },
+                  {
+                    label: 'Activity',
+                    value: activity.label,
+                    tone: activity.tone,
+                    progress: Math.min(100, Math.round(((summary.total_commits_last_30_days || 0) / 80) * 100)),
+                    sentence: `${summary.total_commits_last_30_days ?? 0} commits across your repos in the last 30 days.`,
+                    breakdown: { '30d commits': summary.total_commits_last_30_days ?? 0, 'Formula (Heuristic ⓘ)': 'Commits / 20 per repo' },
+                  },
+                  {
+                    label: 'Documentation',
+                    value: documentation.label,
+                    tone: documentation.tone,
+                    progress: docScore,
+                    sentence: `${insights.engineering_practices?.documentation?.repos_with_readme ?? 0} of ${repositories.length} repos have a README.`,
+                    breakdown: { 'With README': `${insights.engineering_practices?.documentation?.repos_with_readme ?? 0} / ${repositories.length}`, 'Formula': '% of repos with README' },
+                  },
+                  {
+                    label: 'Portfolio',
+                    value: portfolio.label,
+                    tone: portfolio.tone,
+                    progress: avgScore,
+                    sentence: `Averaging ${avgScore}/100 across ${repositories.length} synced repositor${repositories.length === 1 ? 'y' : 'ies'}.`,
+                    breakdown: { 'Repositories': repositories.length, 'Avg Score': `${avgScore}/100`, 'Formula': 'Average of all repo scores' },
+                  },
+                  {
+                    label: 'Hygiene',
+                    value: quality.label,
+                    tone: quality.tone,
+                    progress: avgScore,
+                    sentence: 'Blends README coverage, tests, and CI presence into one read.',
+                    breakdown: { 'Readme Weight': '30%', 'Tests Weight': '40%', 'CI Weight': '30%', 'Formula (Heuristic ⓘ)': '0.3*README + 0.4*Tests + 0.3*CI' },
+                  },
                 ]}
               />
 
-              <CollapsibleSection title="AI Portfolio Review" defaultOpen={true}>
+              {/* ── 2. AI PORTFOLIO REVIEW ───────────────── */}
+              <CollapsibleSection title="AI Portfolio Review" subtitle="Summary · strengths · role fit · next steps" defaultOpen={true}>
                 {reviewError && <p className="github-error">{reviewError}</p>}
                 <PortfolioReviewPanel
                   review={workspace?.portfolio_review}
                   onRun={handleRunReview}
                   loading={reviewLoading}
+                  recommendations={insights.recommendations || []}
                 />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Portfolio Depth & Maturity" defaultOpen={true}>
-                <PortfolioDepthMaturity insights={insights} />
+              {/* ── 3. ENGINEERING INTELLIGENCE ──────────── */}
+              <CollapsibleSection title="Engineering Intelligence" subtitle="Architecture, technology depth, and portfolio profile" defaultOpen={true}>
+                <div className="github-columns">
+                  <ArchitectureMaturityCard insights={insights} />
+                  <PortfolioProfileCard insights={insights} />
+                </div>
+                <TechnologyExpertiseCard
+                  technologyDepth={insights.technology_depth || {}}
+                  skillConfidenceExplanations={workspace?.portfolio_review?.skill_confidence_explanations || []}
+                  languages={summary.languages_detected || []}
+                />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Portfolio Signals" defaultOpen={true}>
-                <PortfolioSignals insights={insights} />
+              {/* ── 4. REPOSITORY EXPLORER ───────────────── */}
+              <CollapsibleSection title="Repository Explorer" subtitle="The raw evidence behind every score above" defaultOpen={true}>
+                <RepositoryExplorer repositories={repositories} />
               </CollapsibleSection>
 
-              <CollapsibleSection title="Stats" dense defaultOpen={false}>
-                <GitHubStatsStrip stats={statItems} />
-              </CollapsibleSection>
-
+              {/* ── 5. ACTIVITY ──────────────────────────── */}
               <CollapsibleSection title="Activity" dense defaultOpen={false}>
                 <div className="github-columns">
                   <RepositoryActivity repositories={repositories} />
                   <ActivityTimeline repositories={repositories} />
-                </div>
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Repository Explorer" defaultOpen={true}>
-                <RepositoryExplorer repositories={repositories} />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Languages & Engineering Habits" dense defaultOpen={false}>
-                <div className="github-columns">
-                  <LanguageAnalytics languages={summary.languages_detected || []} />
-                  <CodingInsights insights={insights} />
-                </div>
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Recommendations" defaultOpen={true}>
-                <AIRecommendations
-                  repositories={repositories}
-                  insightRecommendations={insights.recommendations}
-                />
-              </CollapsibleSection>
-
-              <CollapsibleSection title="GitHub → Resume" dense defaultOpen={true}>
-                <div className="github-columns">
-                  <GitHubResumeCoverage
-                    repositories={repositories}
-                    resumeProjectNames={resumeProjectNames}
-                    loading={resumeLoading}
-                  />
-                  <SyncHistory syncedAt={workspace?.synced_at} summary={summary} />
                 </div>
               </CollapsibleSection>
             </>

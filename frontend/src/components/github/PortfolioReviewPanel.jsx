@@ -1,19 +1,23 @@
+import { useState } from 'react'
 import CollapsibleSection from '../common/CollapsibleSection'
 import './PortfolioReviewPanel.css'
 
 function RoleFitRow({ item }) {
+  const [open, setOpen] = useState(false)
   return (
-    <div className="pr-role-row">
-      <span className="pr-role-name">{item.role}</span>
-      <span className="pr-role-stars">
-        {'★'.repeat(item.rating)}{'☆'.repeat(Math.max(0, 5 - item.rating))}
-      </span>
-      <p className="pr-role-rationale">{item.rationale}</p>
+    <div className="pr-role-row" onClick={() => setOpen((v) => !v)} role="button" tabIndex={0}>
+      <div className="pr-role-row__head">
+        <span className="pr-role-name">{item.role}</span>
+        <span className="pr-role-stars">
+          {'★'.repeat(item.rating)}{'☆'.repeat(Math.max(0, 5 - item.rating))}
+        </span>
+      </div>
+      {open && <p className="pr-role-rationale">{item.rationale}</p>}
     </div>
   )
 }
 
-function PortfolioReviewPanel({ review, onRun, loading }) {
+function PortfolioReviewPanel({ review, onRun, loading, recommendations = [] }) {
   if (!review) {
     return (
       <div className="pr-panel">
@@ -32,10 +36,22 @@ function PortfolioReviewPanel({ review, onRun, loading }) {
 
   const {
     engineering_assessment, flagship_projects = [], role_fit = [],
-    skill_confidence_explanations = [], engineering_habits = [],
-    recruiter_perspective, resume_integration_suggestions = [],
-    growth_story, improvement_roadmap = [], analysis_degraded,
+    engineering_habits = [], recruiter_perspective,
+    resume_integration_suggestions = [], growth_story,
+    improvement_roadmap = [], analysis_degraded,
   } = review
+
+  const strengths = engineering_habits.filter((h) => h.is_strength)
+  const weaknesses = engineering_habits.filter((h) => !h.is_strength)
+  const topFlagship = flagship_projects.slice(0, 3)
+
+  // Next Steps = deterministic recommendations first (real, ranked-by-impact
+  // actions), then any LLM roadmap items not already covered by them.
+  const recActions = new Set(recommendations.map((r) => r.action?.toLowerCase()))
+  const roadmapExtras = improvement_roadmap.filter(
+    (s) => !recActions.has(String(s).toLowerCase())
+  )
+  const hasNextSteps = recommendations.length > 0 || roadmapExtras.length > 0
 
   return (
     <div className="pr-container">
@@ -53,14 +69,30 @@ function PortfolioReviewPanel({ review, onRun, loading }) {
       )}
 
       <div className="pr-collapsible-stack">
-        <CollapsibleSection title="Engineering Assessment" defaultOpen={true}>
+        <CollapsibleSection title="Executive Summary" dense defaultOpen={true}>
           <p className="pr-assessment">{engineering_assessment}</p>
         </CollapsibleSection>
 
-        {flagship_projects.length > 0 && (
-          <CollapsibleSection title="Flagship Projects" defaultOpen={true}>
+        {strengths.length > 0 && (
+          <CollapsibleSection title="Strengths" dense defaultOpen={true}>
+            <ul className="pr-checklist pr-checklist--good">
+              {strengths.map((h, i) => <li key={i}>✓ {h.observation}</li>)}
+            </ul>
+          </CollapsibleSection>
+        )}
+
+        {weaknesses.length > 0 && (
+          <CollapsibleSection title="Weaknesses" dense defaultOpen={true}>
+            <ul className="pr-checklist pr-checklist--gap">
+              {weaknesses.map((h, i) => <li key={i}>△ {h.observation}</li>)}
+            </ul>
+          </CollapsibleSection>
+        )}
+
+        {topFlagship.length > 0 && (
+          <CollapsibleSection title="Flagship Projects" dense defaultOpen={true}>
             <div className="pr-flagship-list">
-              {flagship_projects.map((fp) => (
+              {topFlagship.map((fp) => (
                 <div key={fp.name} className="pr-flagship-card">
                   <span className="pr-flagship-name">★ {fp.name}</span>
                   <p className="pr-flagship-reason">{fp.reason}</p>
@@ -71,79 +103,61 @@ function PortfolioReviewPanel({ review, onRun, loading }) {
         )}
 
         {role_fit.length > 0 && (
-          <CollapsibleSection title="Role Fit" defaultOpen={false}>
+          <CollapsibleSection title="Role Fit" subtitle="Tap a role to see the rationale" dense defaultOpen={false}>
             <div className="pr-role-list">
               {role_fit.map((r) => <RoleFitRow key={r.role} item={r} />)}
             </div>
           </CollapsibleSection>
         )}
 
-        {engineering_habits.length > 0 && (
-          <CollapsibleSection title="Engineering Habits" defaultOpen={false}>
-            <div className="pr-habits-grid">
-              <div>
-                <span className="pr-habits-label pr-habits-label--good">Strengths</span>
-                <ul>
-                  {engineering_habits.filter((h) => h.is_strength).map((h, i) => (
-                    <li key={i}>✓ {h.observation}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <span className="pr-habits-label pr-habits-label--gap">Needs work</span>
-                <ul>
-                  {engineering_habits.filter((h) => !h.is_strength).map((h, i) => (
-                    <li key={i}>△ {h.observation}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </CollapsibleSection>
-        )}
-
-        {skill_confidence_explanations.length > 0 && (
-          <CollapsibleSection title="Skill Confidence, Explained" defaultOpen={false}>
-            <div className="pr-skill-explain-list">
-              {skill_confidence_explanations.map((s) => (
-                <div key={s.skill} className="pr-skill-explain-row">
-                  <span className="pr-skill-explain-name">{s.skill}</span>
-                  <p className="pr-skill-explain-text">{s.explanation}</p>
-                </div>
+        {hasNextSteps && (
+          <CollapsibleSection title="Next Steps" dense defaultOpen={true}>
+            <ol className="pr-next-steps">
+              {recommendations.slice(0, 4).map((r, i) => (
+                <li key={`rec-${i}`}>
+                  <span>{i + 1}</span>
+                  <span>{r.action}<em className="pr-next-steps__impact">+{r.impact}</em></span>
+                </li>
               ))}
-            </div>
-          </CollapsibleSection>
-        )}
-
-        {recruiter_perspective && (recruiter_perspective.notices?.length > 0 || recruiter_perspective.decision) && (
-          <CollapsibleSection title="Recruiter Perspective (20-second skim)" defaultOpen={false}>
-            <ul className="pr-recruiter-notices">
-              {recruiter_perspective.notices?.map((n, i) => <li key={i}>{n}</li>)}
-            </ul>
-            {recruiter_perspective.decision && (
-              <p className="pr-recruiter-decision">{recruiter_perspective.decision}</p>
-            )}
-          </CollapsibleSection>
-        )}
-
-        {growth_story && (
-          <CollapsibleSection title="Growth Story" defaultOpen={false}>
-            <p className="pr-growth-story">{growth_story}</p>
-          </CollapsibleSection>
-        )}
-
-        {resume_integration_suggestions.length > 0 && (
-          <CollapsibleSection title="Resume Integration" defaultOpen={false}>
-            <ul className="pr-resume-suggestions">
-              {resume_integration_suggestions.map((s, i) => <li key={i}>{s}</li>)}
-            </ul>
-          </CollapsibleSection>
-        )}
-
-        {improvement_roadmap.length > 0 && (
-          <CollapsibleSection title="Improvement Roadmap" defaultOpen={false}>
-            <ol className="pr-roadmap">
-              {improvement_roadmap.map((s, i) => <li key={i}><span>{i + 1}</span>{s}</li>)}
+              {roadmapExtras.map((s, i) => (
+                <li key={`road-${i}`}>
+                  <span>{recommendations.slice(0, 4).length + i + 1}</span>
+                  <span>{s}</span>
+                </li>
+              ))}
             </ol>
+          </CollapsibleSection>
+        )}
+
+        {(recruiter_perspective?.notices?.length > 0 || recruiter_perspective?.decision || growth_story || resume_integration_suggestions.length > 0) && (
+          <CollapsibleSection title="More Details" subtitle="Recruiter read, growth story, resume integration" dense defaultOpen={false}>
+            {recruiter_perspective && (recruiter_perspective.notices?.length > 0 || recruiter_perspective.decision) && (
+              <div className="pr-more-block">
+                <span className="pr-more-block__label">Recruiter Perspective (20-second skim)</span>
+                <ul className="pr-recruiter-notices">
+                  {recruiter_perspective.notices?.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+                {recruiter_perspective.decision && (
+                  <p className="pr-recruiter-decision">{recruiter_perspective.decision}</p>
+                )}
+              </div>
+            )}
+
+            {growth_story && (
+              <div className="pr-more-block">
+                <span className="pr-more-block__label">Growth Story</span>
+                <p className="pr-growth-story">{growth_story}</p>
+              </div>
+            )}
+
+            {resume_integration_suggestions.length > 0 && (
+              <div className="pr-more-block">
+                <span className="pr-more-block__label">Resume Integration</span>
+                <ul className="pr-resume-suggestions">
+                  {resume_integration_suggestions.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+            )}
           </CollapsibleSection>
         )}
       </div>

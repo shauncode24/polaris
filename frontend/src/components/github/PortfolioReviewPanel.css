@@ -109,3 +109,71 @@
 @media (max-width: 640px) {
   .pr-habits-grid { grid-template-columns: 1fr; }
 }
+
+/* Compact checklist for Strengths / Weaknesses */
+.pr-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.pr-checklist--good { color: var(--text); }
+.pr-checklist--good li { color: var(--ink); }
+.pr-checklist--gap li { color: var(--text); }
+
+/* Role fit: compact clickable row */
+.pr-role-row { cursor: pointer; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.pr-role-row:last-child { border-bottom: none; padding-bottom: 0; }
+.pr-role-row__head { display: flex; align-items: center; justify-content: space-between; }
+.pr-role-row .pr-role-name { margin-right: 0; }
+.pr-role-row .pr-role-rationale { margin-top: 6px; }
+
+/* Next Steps — merges deterministic recommendations + LLM roadmap */
+.pr-next-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.pr-next-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+.pr-next-steps li span:first-child {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--surface-soft); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--ink); flex-shrink: 0;
+}
+.pr-next-steps__impact {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+}
+
+/* "More Details" nested blocks */
+.pr-more-block { margin-bottom: 16px; }
+.pr-more-block:last-child { margin-bottom: 0; }
+.pr-more-block__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}

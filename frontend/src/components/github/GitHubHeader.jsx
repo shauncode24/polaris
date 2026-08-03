@@ -9,8 +9,10 @@ export default function GitHubHeader({
   syncedAt,
   connected,
   syncing,
+  reviewLoading,
   onSync,
   onAnalyze,
+  onRunReview,
   avgScore,
   commits30d,
 }) {
@@ -73,7 +75,7 @@ export default function GitHubHeader({
             type="button"
             className="gh-header__btn"
             onClick={onSync}
-            disabled={syncing}
+            disabled={syncing || reviewLoading}
           >
             {syncing ? 'Syncing…' : '↻ Sync now'}
           </button>
@@ -81,10 +83,25 @@ export default function GitHubHeader({
             type="button"
             className="gh-header__btn gh-header__btn--primary"
             onClick={onAnalyze}
-            disabled={syncing}
+            disabled={syncing || reviewLoading}
           >
-            <IconGithub size={13} style={{ marginRight: 6 }} />
+            <IconGithub size={13} style={{ marginRight: 4 }} />
             {syncing ? 'Analyzing…' : 'Analyze repositories'}
+          </button>
+          <button
+            type="button"
+            className="gh-header__btn gh-header__btn--primary"
+            onClick={onRunReview}
+            disabled={syncing || reviewLoading}
+          >
+            {reviewLoading ? (
+              <>
+                <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', marginRight: 4 }} />
+                Reviewing…
+              </>
+            ) : (
+              'Run AI Review'
+            )}
           </button>
         </div>
       )}
