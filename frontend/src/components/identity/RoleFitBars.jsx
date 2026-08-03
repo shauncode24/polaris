@@ -1,42 +1,62 @@
 // frontend/src/components/identity/RoleFitBars.jsx
+import { useState } from 'react'
 import './RoleFitBars.css'
 
-function toneFor(pct) {
-  if (pct >= 70) return 'strong'
-  if (pct >= 40) return 'partial'
+function Stars({ rating }) {
+  return (
+    <span className="rolefit-cards__stars" aria-label={`${rating} out of 5`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span key={n} className={n <= rating ? 'rolefit-cards__star rolefit-cards__star--on' : 'rolefit-cards__star'}>★</span>
+      ))}
+    </span>
+  )
+}
+
+function toneFor(rating) {
+  if (rating >= 4) return 'strong'
+  if (rating >= 3) return 'partial'
   return 'weak'
 }
 
-// FIX: the backend's RoleFitResult shape is {role, rating (1-5), rationale}.
-// This previously read a `match_pct` field that the API never returns,
-// so every bar silently rendered as 0%/undefined. Now derives a percentage
-// from the real 1-5 rating and also surfaces the rationale, which was
-// computed by the role-fit LLM call but never shown anywhere.
-function RoleFitBars({ roleFit = [] }) {
+// Redesigned from always-open progress bars + paragraphs into compact,
+// tappable cards — rationale is now expand-on-demand per card, which
+// was the single biggest length contributor in the old layout.
+// Architecture maturity (previously its own separate section elsewhere
+// on the page) is folded in here as one line, since it's really a
+// footnote to role fit, not its own module.
+function RoleFitBars({ roleFit = [], architectureMaturity }) {
+  const [expanded, setExpanded] = useState(null)
+
   if (roleFit.length === 0) {
     return <p className="identity-empty-text">Not enough evidence yet to compute role fit.</p>
   }
 
   return (
-    <div className="rolefit-bars">
-      {roleFit.map((r) => {
-        const pct = Math.round((r.rating / 5) * 100)
-        return (
-          <div className="rolefit-bars__row" key={r.role}>
-            <div className="rolefit-bars__row-top">
-              <span className="rolefit-bars__label">{r.role}</span>
-              <span className="rolefit-bars__pct">{r.rating}/5</span>
-            </div>
-            <div className="rolefit-bars__track">
-              <div
-                className={`rolefit-bars__fill rolefit-bars__fill--${toneFor(pct)}`}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            {r.rationale && <p className="rolefit-bars__rationale">{r.rationale}</p>}
-          </div>
-        )
-      })}
+    <div className="rolefit-cards">
+      <div className="rolefit-cards__grid">
+        {roleFit.map((r) => {
+          const isOpen = expanded === r.role
+          return (
+            <button
+              type="button"
+              key={r.role}
+              className={`rolefit-cards__card rolefit-cards__card--${toneFor(r.rating)} ${isOpen ? 'rolefit-cards__card--open' : ''}`}
+              onClick={() => setExpanded(isOpen ? null : r.role)}
+              aria-expanded={isOpen}
+            >
+              <span className="rolefit-cards__role">{r.role}</span>
+              <Stars rating={r.rating} />
+              {isOpen && r.rationale && <span className="rolefit-cards__rationale">{r.rationale}</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {architectureMaturity?.maturity_score != null && (
+        <p className="rolefit-cards__footer">
+          Architecture maturity: <strong>{architectureMaturity.maturity_score}/100</strong> — {architectureMaturity.maturity_label}
+        </p>
+      )}
     </div>
   )
 }

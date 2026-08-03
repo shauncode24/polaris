@@ -12,18 +12,14 @@ import Sidebar from '../components/layout/Sidebar'
 import BreadcrumbBar from '../components/layout/BreadcrumbBar'
 import CollapsibleSection from '../components/common/CollapsibleSection'
 import IdentityHero from '../components/identity/IdentityHero'
+import ProfileSnapshotStrip from '../components/identity/ProfileSnapshotStrip'
 import RoleFitBars from '../components/identity/RoleFitBars'
 import SignalsGapsPanel from '../components/identity/SignalsGapsPanel'
 import RecommendedFocusCard from '../components/identity/RecommendedFocusCard'
-import TechDepthGrid from '../components/identity/TechDepthGrid'
-import WeeklyBriefCard from '../components/identity/WeeklyBriefCard'
-import ProfileSnapshotStrip from '../components/identity/ProfileSnapshotStrip'
-import GithubDeepDivePanel from '../components/identity/GithubDeepDivePanel'
-import LeetcodeInsightsPanel from '../components/identity/LeetcodeInsightsPanel'
-import CoverageTimelinePanel from '../components/identity/CoverageTimelinePanel'
-import GoalsMatchesPanel from '../components/identity/GoalsMatchesPanel'
-import ClaimFreshnessPanel from '../components/identity/ClaimFreshnessPanel'
+import IdentityInsights from '../components/identity/IdentityInsights'
+import IdentityEvolution from '../components/identity/IdentityEvolution'
 import IdentityHistoryPanel from '../components/identity/IdentityHistoryPanel'
+import WeeklyBriefCard from '../components/identity/WeeklyBriefCard'
 import './IdentityPage.css'
 
 export default function IdentityPage() {
@@ -144,6 +140,7 @@ export default function IdentityPage() {
             <>
               {error && <p className="weekly-brief__error">{error}</p>}
 
+              {/* Level 1 — the one conclusion the page exists to deliver */}
               <IdentityHero
                 narrative={narrative}
                 generatedAt={identity.generated_at}
@@ -152,78 +149,49 @@ export default function IdentityPage() {
                 isInvalidated={identity.is_invalidated}
                 invalidatedReason={identity.invalidated_reason}
                 invalidatedAt={identity.invalidated_at}
+                sourceFreshness={facts?.source_freshness}
+                evidenceCoverage={facts?.evidence_coverage}
                 onRefresh={handleRefreshIdentity}
                 refreshing={refreshing}
               />
 
               <ProfileSnapshotStrip facts={facts} />
 
-              <div className="identity-columns">
-                <div className="identity-col">
-                  <CollapsibleSection title="Role Fit" defaultOpen={true}>
-                    <RoleFitBars roleFit={facts?.role_fit} />
-                  </CollapsibleSection>
+              {/* Level 2 — the evidence + guidance that actually changes
+                  how the user understands themselves */}
+              <CollapsibleSection title="Role Fit" defaultOpen={true}>
+                <RoleFitBars roleFit={facts?.role_fit} architectureMaturity={facts?.architecture_maturity} />
+              </CollapsibleSection>
 
-                  <SignalsGapsPanel
-                    strongestSignals={narrative?.strongest_signals}
-                    biggestGaps={narrative?.biggest_gaps}
-                    contradictions={narrative?.contradictions}
-                  />
+              <SignalsGapsPanel
+                strongestSignals={narrative?.strongest_signals}
+                biggestGaps={narrative?.biggest_gaps}
+              />
 
-                  <RecommendedFocusCard text={narrative?.recommended_focus} />
+              <RecommendedFocusCard text={narrative?.recommended_focus} />
 
-                  <CollapsibleSection title="Technology Depth" defaultOpen={false}>
-                    <TechDepthGrid highlights={facts?.technology_depth_highlights} />
-                  </CollapsibleSection>
+              {/* Level 3 — supporting detail, collapsed by default */}
+              <IdentityInsights facts={facts} contradictions={narrative?.contradictions} />
 
-                  <GithubDeepDivePanel
-                    progress={facts?.github_progress}
-                    architectureMaturity={facts?.architecture_maturity}
-                  />
+              <WeeklyBriefCard
+                brief={brief}
+                onRefresh={handleRefreshBrief}
+                loading={briefLoading}
+                error={briefError}
+              />
 
-                  <LeetcodeInsightsPanel
-                    quadrant={facts?.engineering_quadrant}
-                    companyReadiness={facts?.company_readiness}
-                    topicMastery={facts?.leetcode_topic_mastery}
+              {/* Level 4 — history, least important, most compact */}
+              {history.length > 1 && (
+                <div className="identity-evolution-wrap">
+                  <IdentityEvolution
+                    history={history}
+                    currentNarrative={narrative}
+                    currentGeneratedAt={identity.generated_at}
                   />
                 </div>
+              )}
 
-                <div className="identity-col">
-                  <WeeklyBriefCard
-                    brief={brief}
-                    onRefresh={handleRefreshBrief}
-                    loading={briefLoading}
-                    error={briefError}
-                  />
-
-                  {facts?.architecture_maturity?.maturity_score != null && (
-                    <CollapsibleSection title="Architecture Maturity" defaultOpen={false} dense>
-                      <div className="identity-maturity">
-                        <span className="identity-maturity__score">{facts.architecture_maturity.maturity_score}/100</span>
-                        <span className="identity-maturity__label">{facts.architecture_maturity.maturity_label}</span>
-                      </div>
-                    </CollapsibleSection>
-                  )}
-
-                  <GoalsMatchesPanel
-                    goals={facts?.active_goals}
-                    jobMatches={facts?.recent_job_matches}
-                  />
-
-                  <CoverageTimelinePanel
-                    coverageGaps={facts?.coverage_gaps}
-                    timelineNotes={facts?.timeline_plausibility_notes}
-                  />
-
-                  <ClaimFreshnessPanel
-                    claimRiskDetails={facts?.claim_risk_details}
-                    sourceFreshness={facts?.source_freshness}
-                    evidenceCoverage={facts?.evidence_coverage}
-                  />
-
-                  <IdentityHistoryPanel history={history} />
-                </div>
-              </div>
+              <IdentityHistoryPanel history={history} />
             </>
           )}
         </div>

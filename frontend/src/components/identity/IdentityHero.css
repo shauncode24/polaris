@@ -18,6 +18,8 @@
   flex-wrap: wrap;
 }
 
+.identity-hero__intro { flex: 1; min-width: 220px; }
+
 .identity-hero__eyebrow {
   font-size: 11px;
   font-weight: 700;
@@ -38,7 +40,31 @@
   font-size: 12.5px;
   color: var(--text-soft);
   margin-top: 4px;
+  cursor: default;
 }
+
+.identity-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.identity-hero__confidence {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+.identity-hero__confidence-pct { font-size: 16px; font-weight: 800; color: var(--ink); }
+.identity-hero__confidence-label { font-size: 10px; color: var(--text-soft); white-space: nowrap; }
+.identity-hero__confidence--strong .identity-hero__confidence-pct { color: var(--success); }
+.identity-hero__confidence--partial .identity-hero__confidence-pct { color: var(--warning); }
+.identity-hero__confidence--weak .identity-hero__confidence-pct { color: var(--danger); }
 
 .identity-hero__btn {
   flex-shrink: 0;
@@ -63,14 +89,20 @@
   padding-left: 14px;
 }
 
-.identity-hero__freshness {
-  font-size: 12.5px;
-  color: var(--text-soft);
-  background: var(--surface-soft);
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  line-height: 1.5;
+.identity-hero__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
+.identity-hero__source {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+}
+.identity-hero__source--on { color: var(--success); background: var(--success-soft); border-color: transparent; }
+.identity-hero__source--off { color: var(--text-soft); background: var(--surface-soft); }
 
 .identity-hero__degraded {
   font-size: 12px;

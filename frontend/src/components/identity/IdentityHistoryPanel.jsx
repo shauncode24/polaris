@@ -1,18 +1,24 @@
 // frontend/src/components/identity/IdentityHistoryPanel.jsx
+import { useState } from 'react'
 import CollapsibleSection from '../common/CollapsibleSection'
 import './IdentityHistoryPanel.css'
 
-// Surfaces GET /identity/history, which was never called by the
-// frontend at all — every past Engineering Identity snapshot
-// (source_event, generated_at, degraded/invalidated flags, and the
-// headline it produced) was previously invisible.
+const VISIBLE_DEFAULT = 3
+
+// Trimmed from an always-fully-rendered audit log to the last 3
+// snapshots by default — this is developer-grade detail most users
+// never need; "Show all" still gets there for anyone who does.
 function IdentityHistoryPanel({ history = [] }) {
+  const [showAll, setShowAll] = useState(false)
+
   if (history.length === 0) return null
 
+  const visible = showAll ? history : history.slice(0, VISIBLE_DEFAULT)
+
   return (
-    <CollapsibleSection title="Identity Snapshot History" defaultOpen={false}>
+    <CollapsibleSection title="Identity History" defaultOpen={false} subtitle={`Last ${visible.length} of ${history.length}`}>
       <ul className="identity-history__list">
-        {history.map((snap, i) => (
+        {visible.map((snap, i) => (
           <li
             key={i}
             className={`identity-history__item ${snap.is_invalidated ? 'identity-history__item--invalidated' : ''}`}
@@ -32,6 +38,12 @@ function IdentityHistoryPanel({ history = [] }) {
           </li>
         ))}
       </ul>
+
+      {history.length > VISIBLE_DEFAULT && (
+        <button type="button" className="identity-history__toggle" onClick={() => setShowAll((v) => !v)}>
+          {showAll ? 'Show less' : `Show all ${history.length}`}
+        </button>
+      )}
     </CollapsibleSection>
   )
 }
