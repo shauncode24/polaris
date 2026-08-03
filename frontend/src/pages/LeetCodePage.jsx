@@ -9,24 +9,21 @@ import CollapsibleSection from '../components/common/CollapsibleSection'
 
 import LeetCodeHeader from '../components/leetcode/LeetCodeHeader'
 import GroupedStatsBar from '../components/leetcode/GroupedStatsBar'
-import TopicBreakdown from '../components/leetcode/TopicBreakdown'
-import PracticeHeatmap from '../components/leetcode/PracticeHeatmap'
-import WeakAreas from '../components/leetcode/WeakAreas'
-import DifficultyDistribution from '../components/leetcode/DifficultyDistribution'
-import ContestPerformance from '../components/leetcode/ContestPerformance'
-import EvidenceGenerated from '../components/leetcode/EvidenceGenerated'
-import CareerInsights from '../components/leetcode/CareerInsights'
-import CombinedSignal from '../components/leetcode/CombinedSignal'
-import RecruiterPerspective from '../components/leetcode/RecruiterPerspective'
-import RecentActivity from '../components/leetcode/RecentActivity'
-import PracticeRecommendations from '../components/leetcode/PracticeRecommendations'
-import ManualEntryModal from '../components/leetcode/ManualEntryModal'
 import LeetcodeReviewPanel from '../components/leetcode/LeetcodeReviewPanel'
-import EngineeringQuadrant from '../components/leetcode/EngineeringQuadrant'
-import QuadrantHistory from '../components/leetcode/QuadrantHistory'
+import PracticeRecommendations from '../components/leetcode/PracticeRecommendations'
+import EngineeringProgress from '../components/leetcode/EngineeringProgress'
+import TopicBreakdown from '../components/leetcode/TopicBreakdown'
 import CompanyReadiness from '../components/leetcode/CompanyReadiness'
+import RecentActivity from '../components/leetcode/RecentActivity'
 import ResumeClaimsCheck from '../components/leetcode/ResumeClaimsCheck'
+
+import CareerInsights from '../components/leetcode/CareerInsights'
+import PracticeOverview from '../components/leetcode/PracticeOverview'
 import PracticeDiversity from '../components/leetcode/PracticeDiversity'
+import WeakAreas from '../components/leetcode/WeakAreas'
+import CombinedSignal from '../components/leetcode/CombinedSignal'
+
+import ManualEntryModal from '../components/leetcode/ManualEntryModal'
 import DataCeilingNote from '../components/leetcode/DataCeilingNote'
 
 import './LeetCodePage.css'
@@ -74,9 +71,6 @@ function LeetCodePage() {
       if (data.status === 'degraded') {
         setError(data.reason || 'LeetCode sync is temporarily unavailable — try manual entry.')
       } else {
-        // Re-fetch the workspace so cross-module fields (engineering
-        // quadrant, company readiness, resume claims, history) refresh
-        // alongside the raw sync data.
         const workspace = await getLeetcodeWorkspace(token)
         setResult('leetcode', workspace && workspace.has_data ? workspace : { ...data, username })
       }
@@ -129,15 +123,8 @@ function LeetCodePage() {
           {/* Page hero */}
           <div className="leetcode-hero">
             <div>
-              <p className="leetcode-hero__eyebrow">How robust is your data structures & algorithms practice?</p>
               <h1 className="leetcode-hero__title">LeetCode</h1>
-              {leetcode && (
-                <div className="leetcode-hero__meta">
-                  <span>Your LeetCode workspace</span>
-                  <span className="leetcode-hero__meta-dot" />
-                  <span>{summary?.total_solved || 0} solved problems</span>
-                </div>
-              )}
+              <p className="leetcode-hero__eyebrow">How robust is your data structures & algorithms practice?</p>
             </div>
           </div>
 
@@ -148,7 +135,9 @@ function LeetCodePage() {
             onSync={handleSync}
             onManualEntry={() => setShowManual(true)}
             onDisconnect={handleDisconnect}
+            onRunReview={handleRunReview}
             syncing={syncing}
+            reviewLoading={reviewLoading}
             totalSolved={summary?.total_solved}
             contestRating={summary?.contest_rating}
           />
@@ -163,6 +152,7 @@ function LeetCodePage() {
             />
           ) : (
             <>
+              {/* 2. Overview metrics */}
               <GroupedStatsBar
                 totalSolved={summary?.total_solved}
                 activeDays={summary?.active_days_last_30}
@@ -176,62 +166,42 @@ function LeetCodePage() {
 
               <div className="leetcode-columns">
                 <div className="leetcode-col leetcode-col--main">
+                  {/* 3. AI Coach — merged with Recruiter Perspective */}
                   <CollapsibleSection title="AI LeetCode Coach" defaultOpen={true}>
                     <LeetcodeReviewPanel
                       review={leetcode?.portfolio_review}
                       onRun={handleRunReview}
                       loading={reviewLoading}
+                      totalSolved={summary?.total_solved}
+                      topicMastery={topicMastery}
+                      blindSpots={insights?.blind_spots}
                     />
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Engineering maturity quadrant" subtitle="LeetCode vs. GitHub, fused into one signal" defaultOpen={true}>
-                    <EngineeringQuadrant quadrant={leetcode?.engineering_quadrant} />
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Quadrant history" subtitle="How the quadrant has moved across syncs" defaultOpen={false}>
-                    <QuadrantHistory history={leetcode?.engineering_history} />
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Company readiness" defaultOpen={true}>
-                    <CompanyReadiness companyReadiness={leetcode?.company_readiness} />
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Resume vs. LeetCode evidence" defaultOpen={false}>
-                    <ResumeClaimsCheck resumeClaims={leetcode?.resume_claims} />
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Topic breakdown" subtitle="What your problem-solving history can genuinely support" defaultOpen={true}>
-                    <TopicBreakdown topicMastery={topicMastery} />
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Evidence generated" defaultOpen={true}>
-                    <EvidenceGenerated topicMastery={topicMastery} />
-                  </CollapsibleSection>
-
-                  {/* NEW — deterministic, rule-based action items from
-                      insights.recommendations (leetcode_insights.build_recommendations).
-                      This was computed by the backend but had no frontend
-                      representation anywhere prior to this change. */}
+                  {/* 4. Practice Recommendations — moved up, highest-value action */}
                   <CollapsibleSection title="Practice recommendations" dense defaultOpen={true}>
                     <PracticeRecommendations recommendations={insights?.recommendations} />
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Difficulty & contests" dense defaultOpen={false}>
-                    <div className="leetcode-row-2">
-                      <DifficultyDistribution
-                        easy={summary?.easy}
-                        medium={summary?.medium}
-                        hard={summary?.hard}
-                      />
-                      <ContestPerformance
-                        rating={summary?.contest_rating}
-                        globalRanking={summary?.global_ranking}
-                        attendedContestsCount={summary?.attended_contests_count}
-                        trajectory={insights?.contest_trajectory}
-                      />
-                    </div>
+                  {/* 5. Engineering Progress — quadrant + history, merged & shrunk */}
+                  <CollapsibleSection title="Engineering progress" subtitle="LeetCode vs. GitHub, fused into one signal" defaultOpen={true}>
+                    <EngineeringProgress
+                      quadrant={leetcode?.engineering_quadrant}
+                      history={leetcode?.engineering_history}
+                    />
                   </CollapsibleSection>
 
+                  {/* 6. Topic Breakdown — merged with Evidence Generated */}
+                  <CollapsibleSection title="Topic breakdown" subtitle="What your problem-solving history can genuinely support" defaultOpen={true}>
+                    <TopicBreakdown topicMastery={topicMastery} />
+                  </CollapsibleSection>
+
+                  {/* 7. Company Readiness — collapsed, top/bottom 5 */}
+                  <CollapsibleSection title="Company readiness" defaultOpen={false}>
+                    <CompanyReadiness companyReadiness={leetcode?.company_readiness} />
+                  </CollapsibleSection>
+
+                  {/* 8. Recent Activity — collapsed */}
                   <CollapsibleSection title="Recent activity" dense defaultOpen={false}>
                     <RecentActivity
                       skillEvidenceDetail={insights?.skill_evidence_detail}
@@ -240,13 +210,9 @@ function LeetCodePage() {
                     />
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Recruiter perspective" dense defaultOpen={false}>
-                    <RecruiterPerspective
-                      totalSolved={summary?.total_solved}
-                      topicMastery={topicMastery}
-                      blindSpots={insights?.blind_spots}
-                      consistency={insights?.practice_habits?.consistency}
-                    />
+                  {/* 9. Resume Impact — collapsed, compressed verdict card */}
+                  <CollapsibleSection title="Resume impact" dense defaultOpen={false}>
+                    <ResumeClaimsCheck resumeClaims={leetcode?.resume_claims} />
                   </CollapsibleSection>
                 </div>
 
@@ -258,25 +224,28 @@ function LeetCodePage() {
                     />
                   </CollapsibleSection>
 
-                  <CollapsibleSection title="Practice diversity" dense defaultOpen={true}>
-                    <PracticeDiversity diversity={insights?.practice_diversity} />
-                  </CollapsibleSection>
-
-                  <CollapsibleSection title="Practice heatmap" dense defaultOpen={false}>
-                    <PracticeHeatmap
+                  <CollapsibleSection title="Practice overview" dense defaultOpen={true}>
+                    <PracticeOverview
                       currentStreak={summary?.current_streak}
                       longestStreak={summary?.longest_streak}
                       activeDaysLast30={summary?.active_days_last_30}
                       preferredDifficulty={practiceHabits?.preferred_difficulty}
                       averageSessionLength={practiceHabits?.average_session_length}
+                      easy={summary?.easy}
+                      medium={summary?.medium}
+                      hard={summary?.hard}
+                      rating={summary?.contest_rating}
+                      attendedContestsCount={summary?.attended_contests_count}
+                      trajectory={insights?.contest_trajectory}
                     />
                   </CollapsibleSection>
 
+                  <CollapsibleSection title="Practice diversity" dense defaultOpen={true}>
+                    <PracticeDiversity diversity={insights?.practice_diversity} />
+                  </CollapsibleSection>
+
                   <CollapsibleSection title="Weak areas" dense defaultOpen={false}>
-                    <WeakAreas
-                      topicMastery={topicMastery}
-                      longestGapDays={summary?.longest_gap_days}
-                    />
+                    <WeakAreas topicMastery={topicMastery} />
                   </CollapsibleSection>
 
                   <CollapsibleSection title="Combined signal" dense defaultOpen={false}>

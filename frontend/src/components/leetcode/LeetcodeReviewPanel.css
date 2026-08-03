@@ -176,3 +176,7 @@
   font-size: 13px;
   color: var(--ink);
 }
+.lcr-expand { margin-top: 4px; background: none; border: none; padding: 0; font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; align-self: flex-start; }
+.lcr-expand:hover { color: var(--accent-strong); }
+.lcr-badge--muted { color: var(--text-soft); background: var(--surface-soft); }
+.lcr-card-inner--recruiter { background: var(--surface-soft); }

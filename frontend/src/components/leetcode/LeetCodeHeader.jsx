@@ -9,7 +9,9 @@ export default function LeetCodeHeader({
   onSync,
   onManualEntry,
   onDisconnect,
+  onRunReview,
   syncing,
+  reviewLoading,
   totalSolved,
   contestRating,
 }) {
@@ -64,18 +66,50 @@ export default function LeetCodeHeader({
       </div>
 
       <div className="lc-header__right">
-        <button type="button" className="lc-header__btn" onClick={onSync} disabled={syncing}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {connected && (
+          <button
+            type="button"
+            className="lc-header__btn lc-header__btn--danger"
+            onClick={onDisconnect}
+            disabled={syncing || reviewLoading}
+          >
+            Disconnect
+          </button>
+        )}
+        <button
+          type="button"
+          className="lc-header__btn"
+          onClick={onManualEntry}
+          disabled={syncing || reviewLoading}
+        >
+          Manual entry
+        </button>
+        <button
+          type="button"
+          className="lc-header__btn lc-header__btn--primary"
+          onClick={onSync}
+          disabled={syncing || reviewLoading}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
             <path d="M20 11a8 8 0 1 0-2.2 5.7" /><path d="M20 5v6h-6" />
           </svg>
           {syncing ? 'Syncing…' : 'Sync now'}
         </button>
-        <button type="button" className="lc-header__btn" onClick={onManualEntry}>
-          Manual entry
-        </button>
         {connected && (
-          <button type="button" className="lc-header__btn lc-header__btn--danger" onClick={onDisconnect}>
-            Disconnect
+          <button
+            type="button"
+            className="lc-header__btn lc-header__btn--primary"
+            onClick={onRunReview}
+            disabled={syncing || reviewLoading}
+          >
+            {reviewLoading ? (
+              <>
+                <span style={{ width: 12, height: 12, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite', marginRight: 4 }} />
+                Reviewing…
+              </>
+            ) : (
+              'Run AI Coach'
+            )}
           </button>
         )}
       </div>

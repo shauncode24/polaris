@@ -1,6 +1,40 @@
+import { useState } from 'react'
 import './LeetcodeReviewPanel.css'
 
-function LeetcodeReviewPanel({ review, onRun, loading }) {
+// Recruiter Perspective is merged in here as a compact "Recruiter take"
+// (Review §"Recruiter Perspective" — one AI-generated insight section
+// is enough; it was just another narrative summary of the same data).
+function buildRecruiterTake({ totalSolved, topicMastery, blindSpots }) {
+  const strong = (topicMastery || [])
+    .filter((t) => t.mastery === 'Consistent Practice' || t.mastery === 'Extensive Practice')
+    .map((t) => t.topic)
+  const missing = blindSpots?.missing_fundamentals || []
+
+  if (!totalSolved) return null
+  if (missing.length > 0) {
+    return `Strongest in ${strong.length ? strong.slice(0, 2).join(', ') : 'a small set of topics'}. Closing ${missing[0]} would be the highest-leverage next step.`
+  }
+  return `Strongest in ${strong.length ? strong.slice(0, 2).join(', ') : 'a small set of topics'}. Every fundamental interview topic has at least some evidence.`
+}
+
+function Truncated({ text, limit = 220 }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!text) return null
+  const isLong = text.length > limit
+  const shown = expanded || !isLong ? text : text.slice(0, limit).trimEnd() + '…'
+  return (
+    <>
+      <p className="lcr-text lcr-text--highlight">{shown}</p>
+      {isLong && (
+        <button type="button" className="lcr-expand" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </>
+  )
+}
+
+function LeetcodeReviewPanel({ review, onRun, loading, totalSolved, topicMastery, blindSpots }) {
   if (!review) {
     return (
       <div className="lcr-panel">
@@ -25,6 +59,8 @@ function LeetcodeReviewPanel({ review, onRun, loading }) {
     analysis_degraded,
   } = review
 
+  const recruiterTake = buildRecruiterTake({ totalSolved, topicMastery, blindSpots })
+
   return (
     <div className="lcr-container">
       <div className="lcr-header">
@@ -42,15 +78,15 @@ function LeetcodeReviewPanel({ review, onRun, loading }) {
 
       <div className="lcr-section">
         <div className="lcr-card-inner">
-          <div className="lcr-badge">Interview Coach</div>
-          <p className="lcr-text lcr-text--highlight">{interview_coach}</p>
+          <div className="lcr-badge">Executive Summary</div>
+          <Truncated text={interview_coach} />
         </div>
       </div>
 
       <div className="lcr-section">
         <div className="lcr-card-inner">
           <div className="lcr-badge">Learning Strategy</div>
-          <p className="lcr-text">{learning_strategy}</p>
+          <Truncated text={learning_strategy} limit={180} />
 
           {target_focus_topics.length > 0 && (
             <div className="lcr-focus-topics">
@@ -65,9 +101,9 @@ function LeetcodeReviewPanel({ review, onRun, loading }) {
 
           {roadmap_actions.length > 0 && (
             <div className="lcr-roadmap">
-              <span className="lcr-focus-label">Action Roadmap:</span>
+              <span className="lcr-focus-label">Action Plan:</span>
               <ul className="lcr-roadmap-list">
-                {roadmap_actions.map((action, i) => (
+                {roadmap_actions.slice(0, 4).map((action, i) => (
                   <li key={i} className="lcr-roadmap-item">
                     <span className="lcr-roadmap-step">{i + 1}</span>
                     <span className="lcr-roadmap-text">{action}</span>
@@ -78,6 +114,15 @@ function LeetcodeReviewPanel({ review, onRun, loading }) {
           )}
         </div>
       </div>
+
+      {recruiterTake && (
+        <div className="lcr-section">
+          <div className="lcr-card-inner lcr-card-inner--recruiter">
+            <div className="lcr-badge lcr-badge--muted">Recruiter take</div>
+            <p className="lcr-text">{recruiterTake}</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

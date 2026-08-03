@@ -1,0 +1,37 @@
+.po-heatmap-row { display: flex; align-items: center; gap: 16px; margin-top: 4px; }
+.po-heatmap-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; flex: 1; max-width: 160px; }
+.po-cell { display: block; aspect-ratio: 1; border-radius: 3px; background: var(--surface-soft); }
+.po-cell--1 { background: var(--accent-soft); }
+.po-cell--2 { background: color-mix(in srgb, var(--accent) 55%, var(--surface-soft)); }
+.po-cell--3 { background: var(--accent); }
+
+.po-heatmap-stats { display: flex; flex-direction: column; gap: 4px; }
+.po-stat { font-size: 12px; color: var(--text-soft); display: flex; gap: 4px; }
+.po-stat strong { font-size: 14px; font-weight: 800; color: var(--ink); }
+
+.po-habits { font-size: 11.5px; color: var(--text-soft); margin-top: 8px; }
+
+.po-divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+.po-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.po-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-soft); display: block; margin-bottom: 8px; }
+
+.po-diff-bar { display: flex; height: 8px; border-radius: var(--radius-pill); overflow: hidden; background: var(--surface-soft); }
+.po-seg--easy { background: var(--success); }
+.po-seg--medium { background: var(--warning); }
+.po-seg--hard { background: var(--danger); }
+.po-diff-nums { display: flex; gap: 10px; margin-top: 6px; font-size: 11px; }
+.po-diff-num--easy { color: var(--success); }
+.po-diff-num--medium { color: var(--warning); }
+.po-diff-num--hard { color: var(--danger); }
+
+.po-contest-nums { display: flex; gap: 14px; font-size: 13px; color: var(--ink); }
+.po-trend { display: block; margin-top: 6px; font-size: 11.5px; font-weight: 700; }
+.po-trend--improving { color: var(--success); }
+.po-trend--flat { color: var(--warning); }
+.po-trend--declining { color: var(--danger); }
+.po-trend--insufficient_data, .po-trend--no_contests { color: var(--text-soft); font-weight: 500; }
+
+@media (max-width: 620px) {
+  .po-row-2 { grid-template-columns: 1fr; }
+}

@@ -9,3 +9,6 @@
 .rcc-text { font-size: 12.5px; line-height: 1.55; padding: 10px 12px; border-radius: var(--radius-sm); }
 .rcc-text--warn { background: var(--danger-soft); color: var(--danger); }
 .rcc-text--good { background: var(--success-soft); color: var(--success); }
+.rcc-verdict { font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: var(--radius-sm); }
+.rcc-verdict--good { background: var(--success-soft); color: var(--success); }
+.rcc-verdict--warn { background: var(--warning-soft); color: #a2760f; }

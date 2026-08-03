@@ -155,6 +155,18 @@
   background: var(--surface);
 }
 
+.lc-header__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.lc-header__btn--primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--text-on-accent);
+}
+
 .lc-header__btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
