@@ -19,17 +19,24 @@ CATEGORY_MAP: dict[str, str] = {
     "aspnet_core": "Backend Development", "csharp": "Backend Development",
     "ef_core": "Backend Development", "rest_api": "Backend Development",
     "graphql": "Backend Development", "grpc": "Backend Development",
+    "spring_boot": "Backend Development", "java": "Backend Development",
 
     "react": "Frontend Development", "javascript": "Frontend Development",
     "typescript": "Frontend Development", "threejs": "Frontend Development",
     "vue": "Frontend Development", "angular": "Frontend Development",
+    "html": "Frontend Development", "css": "Frontend Development",
 
     "postgres": "Database & Data", "sql_server": "Database & Data",
     "mongodb": "Database & Data", "redis": "Database & Data",
-    "vector_search": "Database & Data",
+    "vector_search": "Database & Data", "mysql": "Database & Data",
+    "sql": "Database & Data",
 
     "docker": "Infrastructure & DevOps", "kubernetes": "Infrastructure & DevOps",
-    "terraform": "Infrastructure & DevOps",
+    "terraform": "Infrastructure & DevOps", "aws": "Infrastructure & DevOps",
+    "git": "Infrastructure & DevOps", "github": "Infrastructure & DevOps",
+    "gitlab": "Infrastructure & DevOps",
+
+    "microservices": "Architecture & Design",
 
     "langgraph": "AI/ML Engineering", "rag": "AI/ML Engineering",
     "langchain": "AI/ML Engineering", "openai": "AI/ML Engineering",
@@ -74,19 +81,26 @@ def categorize_skill(canonical: str, raw: str = "") -> str:
 
 CURRICULUM_PHASES: dict[str, tuple[str, int]] = {
     "docker": ("Foundation", 1), "git": ("Foundation", 1), "linux": ("Foundation", 1),
+    "github": ("Foundation", 1), "gitlab": ("Foundation", 1),
 
     "python": ("Languages", 2), "javascript": ("Languages", 2),
     "typescript": ("Languages", 2), "csharp": ("Languages", 2),
+    "java": ("Languages", 2), "html": ("Languages", 2), "css": ("Languages", 2),
 
     "postgres": ("Databases", 3), "sql_server": ("Databases", 3), "mongodb": ("Databases", 3),
+    "mysql": ("Databases", 3), "sql": ("Databases", 3),
 
     "redis": ("Caching", 4),
 
     "fastapi": ("Advanced APIs", 5), "express": ("Advanced APIs", 5),
     "graphql": ("Advanced APIs", 5), "rest_api": ("Advanced APIs", 5),
     "django": ("Advanced APIs", 5), "flask": ("Advanced APIs", 5),
+    "spring_boot": ("Advanced APIs", 5), "angular": ("Advanced APIs", 5),
+    "react": ("Advanced APIs", 5), "vue": ("Advanced APIs", 5),
 
+    "aws": ("Cloud & Infrastructure", 6),
     "kubernetes": ("Orchestration", 6), "terraform": ("Orchestration", 6),
+    "microservices": ("Architecture", 6),
 
     "langgraph": ("Agent Workflows", 7), "rag": ("Agent Workflows", 7),
     "langchain": ("Agent Workflows", 7), "openai": ("Agent Workflows", 7),

@@ -10,28 +10,82 @@ from app.schemas.skill_classification import SkillClassificationBatch
 
 # Tier 1: hand-seeded, instant, free. Covers the common cases you already
 # know about. Anything not here falls through to tiers 2 and 3 below.
+# IMPORTANT: keys must be lowercase — resolve_skills() lowercases raw input
+# before this lookup, so all casing variants are handled automatically.
 CANONICAL_SKILLS: dict[str, str] = {
+    # React — all common surface forms
     "react": "react", "reactjs": "react", "react.js": "react",
-    "fastapi": "fastapi",
+    "react js": "react",  # spaced, as LLMs often produce
+
+    # Angular
+    "angular": "angular", "angularjs": "angular", "angular.js": "angular",
+    "angular js": "angular",
+
+    # Spring Boot / Java
+    "spring boot": "spring_boot", "spring-boot": "spring_boot",
+    "springboot": "spring_boot", "spring": "spring_boot",
+    "java": "java", "java se": "java", "java ee": "java",
+
+    # AWS
+    "aws": "aws", "amazon web services": "aws",
+    "aws services": "aws", "amazon aws": "aws",
+
+    # Microservices
+    "microservices": "microservices", "micro services": "microservices",
+    "microservice": "microservices", "microservice architecture": "microservices",
+
+    # Python
     "python": "python",
+
+    # FastAPI
+    "fastapi": "fastapi", "fast api": "fastapi",
+
+    # Docker / Kubernetes
     "docker": "docker",
+    "kubernetes": "kubernetes", "k8s": "kubernetes",
+
+    # Database
     "redis": "redis",
     "postgres": "postgres", "postgresql": "postgres",
-    "typescript": "typescript",
-    "javascript": "javascript", "js": "javascript",
+    "mysql": "mysql",
+    "mongodb": "mongodb", "mongo": "mongodb",
     "sql server": "sql_server",
+    "sql": "sql",
+
+    # Frontend
+    "typescript": "typescript", "ts": "typescript",
+    "javascript": "javascript", "js": "javascript",
+    "html": "html", "html5": "html",
+    "css": "css", "css3": "css",
+    "vue": "vue", "vue.js": "vue", "vuejs": "vue", "vue js": "vue",
+
+    # Web frameworks
     "asp.net core": "aspnet_core", "asp.netcore": "aspnet_core", "aspnetcore": "aspnet_core",
     "c#": "csharp", "c sharp": "csharp",
     "ef core": "ef_core",
-    "langgraph": "langgraph",
-    "rest api": "rest_api", "restful api": "rest_api", "restful_api": "rest_api",
-    "rest": "rest_api", "rest apis": "rest_api", "rest_apis": "rest_api",
-    "node.js": "nodejs", "nodejs": "nodejs", "node": "nodejs",
+    "node.js": "nodejs", "nodejs": "nodejs", "node": "nodejs", "node js": "nodejs",
     "express.js": "express", "expressjs": "express", "express": "express",
     "three.js": "threejs", "threejs": "threejs",
-    "mongodb": "mongodb", "mongo": "mongodb",
-    "vector search": "vector_search",
+
+    # REST
+    "rest api": "rest_api", "restful api": "rest_api", "restful_api": "rest_api",
+    "rest": "rest_api", "rest apis": "rest_api", "rest_apis": "rest_api",
+    "restful": "rest_api", "rest api design": "rest_api",
+
+    # Git
+    "git": "git", "git workflows": "git", "github": "github", "gitlab": "gitlab",
+    "version control": "git",
+
+    # AI/ML
+    "langgraph": "langgraph",
     "rag": "rag",
+    "langchain": "langchain",
+    "openai": "openai",
+    "tensorflow": "tensorflow",
+    "pytorch": "pytorch",
+
+    # Vector search
+    "vector search": "vector_search",
 }
 
 from app.prompts.classification import CLASSIFICATION_SYSTEM_PROMPT

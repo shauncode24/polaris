@@ -69,6 +69,17 @@ def _detect_seniority_contradiction(
     return None
 
 
+_ARCHITECTURE_KEYWORDS = [
+    "scalab", "modular", "performance", "reliab", "availab",
+    "non-functional", "nfr", "latency", "throughput", "fault",
+]
+_COMPANY_CONTEXT_KEYWORDS = [
+    "about us", "about the company", "who we are", "our story", "our mission",
+    "our values", "work with us", "culture", "diversity", "inclusion", "dei",
+    "great place to work", "recognition", "award",
+]
+
+
 def _compute_extraction_quality(
     raw_text: str,
     total_requirements: int,
@@ -78,52 +89,100 @@ def _compute_extraction_quality(
     designation: str | None,
     nice_to_have_count: int,
     has_experience_requirement: bool,
+    capabilities: list[str] | None = None,
+    architecture_topics: list[str] | None = None,
+    company_signals_empty: bool = False,
+    has_company_identity: bool = False,
+    has_company_industry: bool = False,
+    has_company_domain: bool = False,
+    has_company_products: bool = False,
+    has_education: bool = False,
 ) -> ExtractionQuality:
     word_count = len(raw_text.split())
     lowered_text = raw_text.lower()
     reasons: list[str] = []
-    score = 1.0
 
-    if word_count < 80:
-        score -= 0.4
-        reasons.append(f"Job description is short (~{word_count} words)")
+    # ── Job completeness ──────────────────────────────────────────────────
+    # 7 checkable job fields; each one that's missing counts against the score.
+    job_checks = {
+        "requirements": total_requirements >= 3,
+        "responsibilities": bool(responsibilities),
+        "capabilities": bool(capabilities),
+        "architecture_topics": bool(architecture_topics),
+        "nice_to_have": nice_to_have_count > 0 or not any(p in lowered_text for p in _NICE_TO_HAVE_PHRASES),
+        "experience": has_experience_requirement or not any(p in lowered_text for p in _EXPERIENCE_PHRASES),
+        "education": has_education or word_count < 80,  # short JDs may not have education
+    }
+    job_completeness = sum(1 for v in job_checks.values() if v) / len(job_checks)
+
     if total_requirements < 3:
-        score -= 0.3
         reasons.append(f"Only {total_requirements} requirement(s) were extracted")
-    if not responsibilities and total_requirements > 0:
-        score -= 0.15
+    if not responsibilities:
         reasons.append("No explicit role responsibilities were extracted")
-
-    contradiction = _detect_seniority_contradiction(seniority, role_title, designation)
-    if contradiction:
-        score -= 0.35
-        reasons.append(contradiction)
-
-    # NEW (review finding #3) — "microservices is an added advantage"
-    # class of miss: a real preference-language phrase exists in the
-    # text but nothing was captured in nice_to_have.
+    if not capabilities and responsibilities:
+        reasons.append("Capabilities were not extracted despite the JD containing responsibilities")
+    if not architecture_topics and any(kw in lowered_text for kw in _ARCHITECTURE_KEYWORDS):
+        reasons.append("Architecture topics were not extracted despite architecture-relevant language")
     if nice_to_have_count == 0 and any(p in lowered_text for p in _NICE_TO_HAVE_PHRASES):
-        score -= 0.2
         reasons.append(
             "The text appears to mark something as preferred/an added advantage, but nothing was "
             "extracted into nice_to_have"
         )
-
-    # NEW (review finding #1) — "hands-on experience through
-    # internships/projects" class of miss: a real experience phrase
-    # exists in the text but qualification_requirements.experience is null.
     if not has_experience_requirement and any(p in lowered_text for p in _EXPERIENCE_PHRASES):
-        score -= 0.15
         reasons.append(
             "The text appears to reference candidate experience, but no structured experience "
             "requirement was extracted"
         )
 
-    score = max(0.0, min(1.0, score))
+    # ── Company completeness ──────────────────────────────────────────────
+    # Only penalize when there's evidence the document actually has company context.
+    has_company_text = any(kw in lowered_text for kw in _COMPANY_CONTEXT_KEYWORDS)
+    if has_company_text:
+        company_checks = {
+            "identity": has_company_identity,
+            "industry": has_company_industry,
+            "domain": has_company_domain,
+            "products": has_company_products,
+            "signals": not company_signals_empty,
+        }
+        company_completeness = sum(1 for v in company_checks.values() if v) / len(company_checks)
+        if not has_company_identity:
+            reasons.append("Company name was not extracted despite company context in the document")
+        if company_signals_empty:
+            reasons.append(
+                "Company signals (culture, values, DEI, recognition) were not extracted despite "
+                "apparent company overview content in the document"
+            )
+    else:
+        # No company context detected — full marks; nothing to extract
+        company_completeness = 1.0
+
+    # ── Seniority contradiction ───────────────────────────────────────────
+    seniority_penalty = 0.0
+    contradiction = _detect_seniority_contradiction(seniority, role_title, designation)
+    if contradiction:
+        seniority_penalty = 0.15
+        reasons.append(contradiction)
+
+    # ── Short JD ─────────────────────────────────────────────────────────
+    if word_count < 80:
+        reasons.append(f"Job description is short (~{word_count} words)")
+
+    # ── Overall composite ─────────────────────────────────────────────────
+    # Weighted: job 55%, company 35%, seniority integrity 10%
+    overall = (job_completeness * 0.55) + (company_completeness * 0.35) + ((1.0 - seniority_penalty) * 0.10)
+    overall = max(0.0, min(1.0, overall))
+
     if not reasons:
         reasons.append("Job description had enough detail to extract confidently")
-    label = "High" if score >= 0.75 else ("Medium" if score >= 0.4 else "Low")
-    return ExtractionQuality(score=round(score, 2), label=label, reasons=reasons)
+    label = "High" if overall >= 0.75 else ("Medium" if overall >= 0.4 else "Low")
+    return ExtractionQuality(
+        score=round(overall, 2),
+        job_completeness=round(job_completeness, 2),
+        company_completeness=round(company_completeness, 2),
+        label=label,
+        reasons=reasons,
+    )
 
 
 async def build_job_intelligence(
@@ -168,11 +227,24 @@ async def build_job_intelligence(
     total_requirements = (
         len(enriched_required) + len(enriched_implicit) + len(job_extraction.architecture_topics)
     )
+    cs = company_extraction.company_signals
+    company_signals_empty = (
+        not cs.culture and not cs.values and not cs.work_environment
+        and not cs.learning_development and not cs.diversity_inclusion and not cs.recognition
+    )
     extraction_quality = _compute_extraction_quality(
         raw_text, total_requirements, job_extraction.responsibilities, seniority,
         resolved_role, job_extraction.role_identity.designation,
         nice_to_have_count=len(enriched_nice),
         has_experience_requirement=job_extraction.qualification_requirements.experience is not None,
+        capabilities=job_extraction.capabilities,
+        architecture_topics=job_extraction.architecture_topics,
+        company_signals_empty=company_signals_empty,
+        has_company_identity=bool(resolved_company),
+        has_company_industry=bool(company_extraction.industry),
+        has_company_domain=bool(company_extraction.domain),
+        has_company_products=bool(company_extraction.products_mentioned),
+        has_education=bool(job_extraction.qualification_requirements.education),
     )
 
     job_profile = JobIntelligenceProfile(

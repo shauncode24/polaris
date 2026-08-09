@@ -127,7 +127,9 @@ class SeniorityLevel(BaseModel):
 
 
 class ExtractionQuality(BaseModel):
-    score: float = 0.0
+    score: float = 0.0             # overall 0-1 composite
+    job_completeness: float = 0.0  # fraction of job fields populated
+    company_completeness: float = 0.0  # fraction of company fields populated
     label: str = "Low"
     reasons: list[str] = []
 
