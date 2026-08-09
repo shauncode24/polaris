@@ -74,6 +74,16 @@ Follow "persona.speaking_style" exactly:
 - "stories_used": exact name(s) copied from the profile (project "name", "{role} at {company}", or a
   github_repos entry's "name") for whatever you genuinely used. Never invent an entry not in the profile.
 
+=== STEP 3b: GROUND INTERVIEW EXPECTATIONS IN target_job_intelligence WHEN PRESENT ===
+
+If "target_job_intelligence" is non-null, it is a REAL, deterministically-computed profile of the target
+role — you do not need to infer seniority or interview focus from the bare "target_role"/"target_company"
+strings anymore. Use "target_job_intelligence.seniority_signal.level" to calibrate how much ownership/scope
+language is appropriate in the answer (e.g. do not write a "staff"-level answer for a role whose seniority
+signal is "junior"). Use "target_job_intelligence.interview_focus_areas" to bias which real stories you pick
+and which "follow_up_questions"/"coaching" you generate toward what this SPECIFIC role's loop would actually
+probe. If "target_job_intelligence" is null, reason from "target_role"/"target_company" as before.
+
 === YOUR OTHER JUDGMENT CALLS ===
 
 - "question_type": whatever label genuinely fits (often, but not always, the blueprint key you used).

@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -11,15 +12,11 @@ from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import ProjectIntelligenceReview
 from app.prompts.project_intelligence import PROJECT_INTELLIGENCE_SYSTEM_PROMPT
 from app.schemas.project_intelligence import ProjectIntelligenceLLMOutput, ProjectIntelligenceReport
+from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.projects.repo_linking import match_project_to_repo
 
 
 async def build_project_context(db: AsyncSession, user_id, project_id) -> dict | None:
-    """Shared by the Project Intelligence agent, the claim audit
-    endpoint, and interview-question generation — one real, verified
-    project context object built once, the same shape every caller
-    reasons over.
-    """
     result = await db.execute(
         select(Project).where(Project.id == project_id, Project.user_id == user_id)
     )
@@ -55,6 +52,24 @@ async def build_project_context(db: AsyncSession, user_id, project_id) -> dict |
     }
 
 
+async def _build_target_job_intelligence(db: AsyncSession, job_intelligence_id: str | None) -> dict | None:
+    """NEW — optional grounding in a real Job Intelligence profile
+    (design doc §6.2). Only exposes the fields the framing prompt can
+    actually act on."""
+    if not job_intelligence_id:
+        return None
+    profile = await get_job_intelligence(db, UUID(job_intelligence_id))
+    if profile is None:
+        return None
+    return {
+        "role": profile.role,
+        "company": profile.company,
+        "seniority_signal": profile.seniority_signal.model_dump(),
+        "architecture_topics": profile.architecture_topics,
+        "required_technologies": profile.all_required_technologies,
+    }
+
+
 def _normalize_comparison_target(comparison_target: str | None) -> str:
     return (comparison_target or "").strip()
 
@@ -62,10 +77,6 @@ def _normalize_comparison_target(comparison_target: str | None) -> str:
 async def get_cached_project_intelligence(
     db: AsyncSession, project_id, framing: str, comparison_target: str | None
 ) -> ProjectIntelligenceReport | None:
-    """Returns the last persisted read for this exact (project, framing,
-    comparison_target) triple, or None if it's never been run. Asking
-    the same framing twice should be instant, not another LLM call.
-    """
     normalized_target = _normalize_comparison_target(comparison_target)
     result = await db.execute(
         select(ProjectIntelligenceReview)
@@ -102,13 +113,25 @@ async def _persist_project_intelligence(
 
 
 async def generate_project_intelligence(
-    db: AsyncSession, user_id, project_id, framing: str, comparison_target: str | None
+    db: AsyncSession, user_id, project_id, framing: str, comparison_target: str | None,
+    job_intelligence_id: str | None = None,
 ) -> ProjectIntelligenceReport:
+    """job_intelligence_id is NOT part of the cache key (framing +
+    comparison_target still are, unchanged) — this is a deliberate,
+    documented limitation for now: regenerating with a different
+    job_intelligence_id for the same framing overwrites the cached
+    report. Extending the cache key would need its own migration
+    (uq_intelligence_project_framing), left for a follow-up.
+    """
     project_context = await build_project_context(db, user_id, project_id)
     if project_context is None:
         raise ValueError("Project not found.")
 
-    payload = {**project_context, "framing": framing, "comparison_target": comparison_target}
+    target_job_intelligence = await _build_target_job_intelligence(db, job_intelligence_id)
+    payload = {
+        **project_context, "framing": framing, "comparison_target": comparison_target,
+        "target_job_intelligence": target_job_intelligence,
+    }
 
     try:
         print(

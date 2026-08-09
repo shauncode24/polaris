@@ -29,6 +29,7 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
 
     context = await build_interview_context(
         db, user.id, payload.question, payload.target_role, payload.target_company,
+        job_intelligence_id=payload.job_intelligence_id,
     )
 
     try:

@@ -4,6 +4,8 @@ untouched. No scoring, no filtering, no pre-selection of stories or
 blueprints: the model decides what's relevant and which blueprint fits,
 not this module.
 """
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +14,7 @@ from app.models.inference import ProfileSnapshot, SkillEvidence, ProjectClaimAud
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
 from app.services.interview.blueprints import get_blueprint_library, get_persona
+from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.resume.confidence import compute_decayed_skill_confidence
 
 
@@ -87,14 +90,6 @@ async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
 
 
 async def _get_all_skills_with_evidence(db: AsyncSession, user_id) -> list[dict]:
-    """FIX (cross-user evidence leak): this function used to manually
-    cross-reference project/experience IDs to fake per-user scoping for
-    two source types, while leaving GitHub/LeetCode/certificate evidence
-    completely unfiltered (an `else: filtered_rows.append(e)` branch that
-    accepted EVERY other user's evidence for that source type). Now that
-    SkillEvidence carries user_id directly, a single WHERE clause is both
-    simpler and actually correct for every source type at once.
-    """
     skill_result = await db.execute(select(Skill))
     skills = skill_result.scalars().all()
 
@@ -182,12 +177,35 @@ async def _get_project_claim_flags(db: AsyncSession, user_id) -> list[dict]:
     return flags
 
 
+async def _get_target_job_intelligence(db: AsyncSession, job_intelligence_id: str | None) -> dict | None:
+    """NEW — optional grounding in a real, deterministic Job Intelligence
+    profile (design doc §6.2). Returns a slim projection, not the whole
+    profile: only the fields the interview prompt can actually act on
+    (seniority calibration, real interview_focus_areas, required
+    technologies) — never the raw enriched-skill/category plumbing that
+    has no narrative use here.
+    """
+    if not job_intelligence_id:
+        return None
+    profile = await get_job_intelligence(db, UUID(job_intelligence_id))
+    if profile is None:
+        return None
+    return {
+        "role": profile.role,
+        "company": profile.company,
+        "seniority_signal": profile.seniority_signal.model_dump(),
+        "interview_focus_areas": profile.interview_focus_areas,
+        "required_technologies": profile.all_required_technologies,
+    }
+
+
 async def build_interview_context(
     db: AsyncSession,
     user_id,
     question: str,
     target_role: str | None,
     target_company: str | None,
+    job_intelligence_id: str | None = None,
 ) -> dict:
     projects = await _get_all_projects(db, user_id)
     experiences = await _get_all_experiences(db, user_id)
@@ -196,11 +214,13 @@ async def build_interview_context(
     github_repos = await _get_github_repo_evidence(db, user_id)
     leetcode_evidence = await _get_leetcode_evidence(db, user_id)
     company_notes = await _get_company_notes(db, user_id, target_company)
+    target_job_intelligence = await _get_target_job_intelligence(db, job_intelligence_id)
 
     return {
         "question": question,
         "target_role": target_role,
         "target_company": target_company,
+        "target_job_intelligence": target_job_intelligence,
         "profile": {
             "projects": projects,
             "experiences": experiences,

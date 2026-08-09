@@ -8,6 +8,11 @@ class InterviewAskRequest(BaseModel):
     question: str
     target_role: str | None = None
     target_company: str | None = None
+    # NEW — optional grounding in a real Job Intelligence profile
+    # (design doc §6.2). When given, the response-generation prompt gets
+    # real seniority_signal/interview_focus_areas instead of inferring
+    # interview expectations purely from target_role/target_company strings.
+    job_intelligence_id: str | None = None
 
 
 class CoachingNote(BaseModel):

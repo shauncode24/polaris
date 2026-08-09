@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import JobDescription, Note, Project, Resume
 from app.models.goals import Goal
+from app.models.job_intelligence import GapAnalysisResultRow
 from app.services.projects.linking import normalize_name
 from app.models.inference import ProfileSnapshot, ResumeReview, SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence import build_evidence_details
 from app.services.career_planner.curriculum import get_curriculum_topics, get_relevant_domains
 from app.services.career_planner.topic_signals import build_topic_signals
+from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.resume.confidence import compute_skill_confidence
 
 MAX_PLAN_DAYS = 14
@@ -44,13 +46,26 @@ async def _get_skills_by_confidence(db: AsyncSession) -> list[dict]:
     return out
 
 
+async def _get_latest_gap_analysis_result(db: AsyncSession, job_intelligence_id) -> dict | None:
+    result = await db.execute(
+        select(GapAnalysisResultRow)
+        .where(GapAnalysisResultRow.job_intelligence_id == job_intelligence_id)
+        .order_by(GapAnalysisResultRow.created_at.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return {"report_json": row.report_json, "overall_match_json": row.overall_match_json}
+
+
 async def _get_job_description_context(db: AsyncSession, user_id, job_description_id) -> dict | None:
     """Full JD + gap-analysis context for the SPECIFIC job this goal was
-    created from, so the planner grounds itself in that job's actual
-    role/company and actual missing skills — not whichever JD happens to
-    be most recently analyzed for this user. Falls back to the user's
-    most recent analyzed JD only for goals that weren't tied to one
-    (e.g. manually-entered goals with no "Analyzed job" selection).
+    created from. Prefers the new Job Intelligence + GapAnalysisResult
+    tables (real, user-independent role facts + the latest comparison
+    against this user) — falling back to the legacy
+    JobDescription.analysis_result blob only for pre-refactor rows that
+    have no job_intelligence_id yet (Phase 4 migration safety net).
     """
     if job_description_id is not None:
         result = await db.execute(
@@ -67,13 +82,42 @@ async def _get_job_description_context(db: AsyncSession, user_id, job_descriptio
             .limit(1)
         )
     jd = result.scalar_one_or_none()
-    if jd is None or not isinstance(jd.analysis_result, dict):
+    if jd is None:
         return None
 
+    if jd.job_intelligence_id is not None:
+        job_intelligence = await get_job_intelligence(db, jd.job_intelligence_id)
+        gap_result = await _get_latest_gap_analysis_result(db, jd.job_intelligence_id)
+        if job_intelligence is not None and gap_result is not None:
+            report = gap_result["report_json"]
+            overall = gap_result["overall_match_json"]
+            return {
+                "role": job_intelligence.role,
+                "company": job_intelligence.company,
+                "required_skills": [s.raw for s in job_intelligence.enriched_required_skills],
+                "implicit_skills": [s.raw for s in job_intelligence.enriched_implicit_skills],
+                "architecture_topics": job_intelligence.architecture_topics,
+                "nice_to_have": [s.raw for s in job_intelligence.enriched_nice_to_have],
+                "overall_match_percentage": overall.get("percentage"),
+                "overall_match_label": overall.get("label"),
+                "missing_skills": [
+                    {"skill": m.get("skill"), "reason": m.get("reason"), "estimated_weeks": m.get("estimated_weeks")}
+                    for m in report.get("missing", [])
+                ],
+                "have_skills": [h.get("skill") for h in report.get("have", [])],
+                "partial_skills": [p.get("skill") for p in report.get("partial", [])],
+                # NEW — real, role-level facts Career Planner had no
+                # access to before this refactor (design doc §6.2).
+                "seniority_signal": job_intelligence.seniority_signal.model_dump(),
+                "interview_focus_areas": job_intelligence.interview_focus_areas,
+            }
+
+    # Legacy fallback — pre-refactor JobDescription rows only.
+    if not isinstance(jd.analysis_result, dict):
+        return None
     report = jd.analysis_result.get("report", {})
     overall = jd.analysis_result.get("overall_match", {})
     extracted = jd.extracted_requirements or {}
-
     return {
         "role": jd.role,
         "company": jd.company,
@@ -151,20 +195,11 @@ async def _get_latest_leetcode_insights(db: AsyncSession, user_id) -> dict:
     return {
         "blind_spots": insights.get("blind_spots", {"missing_fundamentals": [], "advanced_topics": []}),
         "topic_mastery": insights.get("topic_mastery", []),
-        # Real, already-computed adherence to the LeetCode AI Coach's own
-        # prior recommendations (leetcode_insights.build_plan_adherence,
-        # persisted every sync) — previously never reached Career Planner,
-        # even though both modules independently reason about DSA study
-        # priority. Wiring this closes that gap (module audit, §5).
         "plan_adherence": insights.get("plan_adherence", []),
     }
 
 
 async def _get_github_technology_depth(db: AsyncSession, user_id) -> dict[str, dict] | None:
-    """Loads the technology_depth map from the latest GitHub sync snapshot.
-    Returns None if no sync has happened yet (career planner gracefully
-    treats None as no GitHub evidence).
-    """
     result = await db.execute(
         select(ProfileSnapshot)
         .where(ProfileSnapshot.user_id == user_id)
@@ -230,14 +265,9 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
         },
         "days_available": days_available,
         "relevant_domains": relevant_domains,
-        # The scoped curriculum pool — ADVISORY. Coverage/order are hints,
-        # not instructions. The LLM decides real priority and sequencing.
         "target_job": target_job,
         "topic_signals": topic_signals,
         "resume_review_top_fixes": resume_top_fixes,
-        # Kept for grounding cross-cutting tasks (e.g. "use your existing
-        # FastAPI experience to serve the model you build this week") —
-        # NOT used to pick which topics are in scope. That's curriculum's job.
         "profile_skills_summary": [
             {"skill": s["skill"], "confidence": s["confidence"]} for s in skills_by_confidence
         ],

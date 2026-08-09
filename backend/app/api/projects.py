@@ -171,15 +171,18 @@ async def get_project_intelligence(
         "Explain this project in technical depth, as if I'm interviewing at a top-tier tech company."
     ),
     comparison_target: str | None = Query(None),
+    job_intelligence_id: str | None = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """The Project Intelligence agent promised in the design doc's §6.1
-    but never built — a framing-specific, deeply grounded explanation
-    or comparison of one real project.
-    """
+    """The Project Intelligence agent — optionally grounded in a real
+    Job Intelligence profile (job_intelligence_id) instead of relying
+    purely on the free-text framing string (design doc §6.2)."""
     try:
-        return await generate_project_intelligence(db, current_user.id, project_id, framing, comparison_target)
+        return await generate_project_intelligence(
+            db, current_user.id, project_id, framing, comparison_target,
+            job_intelligence_id=job_intelligence_id,
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
