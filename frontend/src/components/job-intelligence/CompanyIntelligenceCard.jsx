@@ -16,6 +16,7 @@ function CompanyIntelligenceCard({ company }) {
   const hasSignal =
     company &&
     (company.industry ||
+      company.domain?.length ||
       company.products_mentioned?.length ||
       company.technologies_mentioned?.length ||
       company.engineering_hints?.length ||
@@ -43,6 +44,14 @@ function CompanyIntelligenceCard({ company }) {
           <p>{company.industry}</p>
         </div>
       )}
+      {company.domain?.length > 0 && (
+        <div className="ci-card__row">
+          <h4>Business domain</h4>
+          <div className="ci-card__tags">
+            {company.domain.map((d) => <span key={d} className="ci-card__tag">{d}</span>)}
+          </div>
+        </div>
+      )}
       {company.products_mentioned?.length > 0 && (
         <div className="ci-card__row">
           <h4>Products mentioned</h4>
@@ -54,6 +63,10 @@ function CompanyIntelligenceCard({ company }) {
       {company.technologies_mentioned?.length > 0 && (
         <div className="ci-card__row">
           <h4>Company tech stack signal</h4>
+          <p className="ci-card__lead">
+            The company's own stated stack — distinct from what this specific role requires (see "What this
+            role requires" above)
+          </p>
           <div className="ci-card__tags">
             {company.technologies_mentioned.map((t) => <span key={t} className="ci-card__tag">{t}</span>)}
           </div>

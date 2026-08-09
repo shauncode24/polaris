@@ -40,3 +40,56 @@ def derive_resume_keywords(
         add(topic)
 
     return sorted(keywords.values())
+
+
+from app.schemas.job_intelligence import ResumeKeywordTiers
+
+def derive_resume_keyword_tiers(
+    enriched_required, enriched_implicit, enriched_nice,
+    raw_required: list[str], raw_implicit: list[str], raw_nice: list[str],
+    architecture_topics: list[str],
+) -> ResumeKeywordTiers:
+    # 1. Raw phrasings de-duplicated by normalized form
+    raw_seen = set()
+    raw_list = []
+    for item in raw_required + raw_implicit + raw_nice + architecture_topics:
+        cleaned = item.strip()
+        if len(cleaned) < MIN_KEYWORD_LEN:
+            continue
+        norm = _normalize_keyword(cleaned)
+        if norm and norm not in raw_seen:
+            raw_seen.add(norm)
+            raw_list.append(cleaned)
+
+    # 2. Canonical forms
+    canon_seen = set()
+    canon_list = []
+    for skill in enriched_required + enriched_implicit + enriched_nice:
+        canon = skill.canonical
+        if canon and canon not in canon_seen:
+            canon_seen.add(canon)
+            canon_list.append(canon)
+
+    # 3. Resume relevant keywords
+    relevant_dict = {}
+    def add_relevant(candidate: str) -> None:
+        candidate = candidate.strip()
+        if len(candidate) < MIN_KEYWORD_LEN:
+            return
+        norm = _normalize_keyword(candidate)
+        if not norm or norm in relevant_dict:
+            return
+        relevant_dict[norm] = candidate.lower()
+
+    for skill in enriched_required + enriched_implicit + enriched_nice:
+        add_relevant(skill.canonical.replace("_", " "))
+    for raw in raw_required + raw_implicit + raw_nice:
+        add_relevant(raw)
+    for topic in architecture_topics:
+        add_relevant(topic)
+
+    return ResumeKeywordTiers(
+        raw=sorted(raw_list),
+        canonical=sorted(canon_list),
+        resume_relevant=sorted(relevant_dict.values()),
+    )

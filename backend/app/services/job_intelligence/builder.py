@@ -1,6 +1,20 @@
 # backend/app/services/job_intelligence/builder.py
 """Stages 9-11 — assembles and persists the complete JobIntelligenceProfile
-+ CompanyIntelligenceProfile from ONE extraction call."""
++ CompanyIntelligenceProfile from ONE extraction call.
+
+Extraction-quality heuristic additions (review findings #3/#12):
+extraction_quality now also penalizes two specific silent-drop patterns
+the review caught on a real JD — an "added advantage" / "nice to have"
+phrase present in the text with nothing landing in nice_to_have, and an
+experience/internship phrase present in the text with no structured
+experience requirement extracted. These are keyword heuristics, not
+proof the LLM got the *content* right — they only catch "a real textual
+signal existed and nothing came out the other end matching it." See
+normalization.py's module docstring for the deeper, more common cause
+of missing required_skills entries (the resume-oriented classifier
+silently dropping process/practice requirements), which this quality
+score does not separately detect.
+"""
 import hashlib
 from datetime import datetime, timezone
 from uuid import UUID
@@ -13,13 +27,24 @@ from app.schemas.company_intelligence import CompanyIntelligenceProfile
 from app.schemas.job_intelligence import ExtractionQuality, JobIntelligenceProfile, SeniorityLevel
 from app.services.job_intelligence.extraction import JobIntelligenceExtractionError, extract_job_and_company
 from app.services.job_intelligence.interview_focus import derive_interview_focus_areas
-from app.services.job_intelligence.keywords import derive_resume_keywords
+from app.services.job_intelligence.keywords import derive_resume_keyword_tiers, derive_resume_keywords
 from app.services.job_intelligence.normalization import enrich_skill_requirements, enrich_skills
 from app.services.job_intelligence.seniority import detect_seniority_with_fallback
 
 __all__ = ["build_job_intelligence", "get_job_intelligence", "JobIntelligenceExtractionError"]
 
 _ENTRY_LEVEL_TITLE_WORDS = ["trainee", "intern", "graduate trainee", "entry level", "entry-level"]
+
+# Review findings #3/#12 — real textual signals that, if present with no
+# matching structured output, mean extraction most likely silently
+# dropped something rather than the JD genuinely having nothing to say.
+_NICE_TO_HAVE_PHRASES = [
+    "added advantage", "nice to have", "nice-to-have", "is a plus",
+    "a plus", "bonus", "preferred", "good to have",
+]
+_EXPERIENCE_PHRASES = [
+    "experience", "internship", "years of", "yrs of", "hands on", "hands-on",
+]
 
 
 def _source_text_hash(raw_text: str) -> str:
@@ -51,8 +76,11 @@ def _compute_extraction_quality(
     seniority: SeniorityLevel,
     role_title: str | None,
     designation: str | None,
+    nice_to_have_count: int,
+    has_experience_requirement: bool,
 ) -> ExtractionQuality:
     word_count = len(raw_text.split())
+    lowered_text = raw_text.lower()
     reasons: list[str] = []
     score = 1.0
 
@@ -70,6 +98,26 @@ def _compute_extraction_quality(
     if contradiction:
         score -= 0.35
         reasons.append(contradiction)
+
+    # NEW (review finding #3) — "microservices is an added advantage"
+    # class of miss: a real preference-language phrase exists in the
+    # text but nothing was captured in nice_to_have.
+    if nice_to_have_count == 0 and any(p in lowered_text for p in _NICE_TO_HAVE_PHRASES):
+        score -= 0.2
+        reasons.append(
+            "The text appears to mark something as preferred/an added advantage, but nothing was "
+            "extracted into nice_to_have"
+        )
+
+    # NEW (review finding #1) — "hands-on experience through
+    # internships/projects" class of miss: a real experience phrase
+    # exists in the text but qualification_requirements.experience is null.
+    if not has_experience_requirement and any(p in lowered_text for p in _EXPERIENCE_PHRASES):
+        score -= 0.15
+        reasons.append(
+            "The text appears to reference candidate experience, but no structured experience "
+            "requirement was extracted"
+        )
 
     score = max(0.0, min(1.0, score))
     if not reasons:
@@ -101,9 +149,16 @@ async def build_job_intelligence(
         raw_text, resolved_role, designation=job_extraction.role_identity.designation,
     )
 
+    raw_required = [s.skill for s in job_extraction.required_skills]
+    raw_implicit = [s.skill for s in job_extraction.implicit_skills]
+    raw_nice_to_have = [s.skill for s in job_extraction.nice_to_have]
+
     resume_keywords = derive_resume_keywords(
-        enriched_required, enriched_implicit,
-        [s.skill for s in job_extraction.required_skills], job_extraction.implicit_skills,
+        enriched_required, enriched_implicit, raw_required, raw_implicit, job_extraction.architecture_topics,
+    )
+    resume_keyword_tiers = derive_resume_keyword_tiers(
+        enriched_required, enriched_implicit, enriched_nice,
+        raw_required, raw_implicit, raw_nice_to_have,
         job_extraction.architecture_topics,
     )
     explicit_focus, inferred_focus, combined_focus = derive_interview_focus_areas(
@@ -116,6 +171,8 @@ async def build_job_intelligence(
     extraction_quality = _compute_extraction_quality(
         raw_text, total_requirements, job_extraction.responsibilities, seniority,
         resolved_role, job_extraction.role_identity.designation,
+        nice_to_have_count=len(enriched_nice),
+        has_experience_requirement=job_extraction.qualification_requirements.experience is not None,
     )
 
     job_profile = JobIntelligenceProfile(
@@ -132,6 +189,7 @@ async def build_job_intelligence(
         qualification_requirements=job_extraction.qualification_requirements,
         seniority_signal=seniority,
         resume_keywords=resume_keywords,
+        resume_keyword_tiers=resume_keyword_tiers,
         interview_focus_areas=combined_focus,
         interview_focus={"explicit": explicit_focus, "inferred": inferred_focus},
         extraction_quality=extraction_quality,
@@ -140,6 +198,7 @@ async def build_job_intelligence(
     company_profile = CompanyIntelligenceProfile(
         company=resolved_company,
         industry=company_extraction.industry,
+        domain=company_extraction.domain,
         products_mentioned=company_extraction.products_mentioned,
         technologies_mentioned=company_extraction.technologies_mentioned,
         engineering_hints=company_extraction.engineering_hints,

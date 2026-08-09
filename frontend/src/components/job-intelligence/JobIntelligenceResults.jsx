@@ -20,6 +20,12 @@ const PROFICIENCY_LABELS = {
   not_specified: '',
 }
 
+const EXPERIENCE_TYPE_LABELS = {
+  internship_or_project: 'Internship / project experience accepted',
+  professional: 'Professional experience required',
+  not_specified: '',
+}
+
 function seniorityBadgeClass(level) {
   if (level === 'senior' || level === 'staff') return 'ji-seniority-badge--senior'
   if (level === 'mid') return 'ji-seniority-badge--mid'
@@ -40,10 +46,15 @@ function EnrichedSkillGroup({ title, skills, dotClass }) {
       <h4><span className={`ji-skill-dot ${dotClass}`} /> {title} <span className="ji-skill-count">{skills.length}</span></h4>
       <div className="ji-skill-chips">
         {skills.map((s) => (
-          <span key={s.canonical} className="ji-skill-chip">
+          <span key={s.canonical} className="ji-skill-chip" title={s.evidence || undefined}>
             {s.canonical.replace(/_/g, ' ')}
             {PROFICIENCY_LABELS[s.proficiency_signal] && (
               <span className="ji-skill-chip__proficiency">{PROFICIENCY_LABELS[s.proficiency_signal]}</span>
+            )}
+            {s.requirement_type === 'implicit' && (
+              <span className={`ji-skill-chip__confidence ji-skill-chip__confidence--${s.confidence}`}>
+                inferred · {s.confidence}
+              </span>
             )}
             <span className="ji-skill-chip__category">{s.category}</span>
           </span>
@@ -73,13 +84,17 @@ function JobIntelligenceResults({ data }) {
   const identity = job.role_identity || {}
   const qualifications = job.qualification_requirements || {}
   const interviewFocus = job.interview_focus || {}
+  const experience = qualifications.experience || null
+  const keywordTiers = job.resume_keyword_tiers || {}
+  const resumeRelevantKeywords =
+    keywordTiers.resume_relevant?.length > 0 ? keywordTiers.resume_relevant : job.resume_keywords || []
 
   const hasIdentityDetail =
     identity.designation || identity.grade || identity.function ||
     identity.department || identity.location || identity.reports_to || identity.employment_type
 
   const hasQualifications =
-    qualifications.education?.length > 0 || qualifications.eligibility?.length > 0 || qualifications.experience
+    qualifications.education?.length > 0 || qualifications.eligibility?.length > 0 || !!experience
 
   return (
     <div className="ji-results">
@@ -172,10 +187,21 @@ function JobIntelligenceResults({ data }) {
               </ul>
             </div>
           )}
-          {qualifications.experience && (
+          {experience && (
             <div className="ji-results__row">
               <h4>Experience</h4>
-              <p>{qualifications.experience}</p>
+              <p>{experience.raw || 'Stated in the job description'}</p>
+              <div className="ji-tag-list">
+                {EXPERIENCE_TYPE_LABELS[experience.experience_type] && (
+                  <span className="ji-tag">{EXPERIENCE_TYPE_LABELS[experience.experience_type]}</span>
+                )}
+                {experience.domain && (
+                  <span className="ji-tag ji-tag--muted">{experience.domain.replace(/_/g, ' ')}</span>
+                )}
+                {experience.minimum_years != null && (
+                  <span className="ji-tag ji-tag--muted">{experience.minimum_years}+ years stated</span>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -205,6 +231,10 @@ function JobIntelligenceResults({ data }) {
       {/* Required / implicit / nice-to-have skills */}
       <div className="ji-results__card">
         <h2>What this role requires</h2>
+        <p className="ji-results__card-lead">
+          Includes both named technologies and explicitly stated processes/practices (e.g. git workflows,
+          design patterns) — not just product names
+        </p>
         <div className="ji-skill-groups">
           <EnrichedSkillGroup title="Required" skills={job.enriched_required_skills} dotClass="ji-skill-dot--required" />
           <EnrichedSkillGroup title="Implicit" skills={job.enriched_implicit_skills} dotClass="ji-skill-dot--implicit" />
@@ -223,13 +253,21 @@ function JobIntelligenceResults({ data }) {
       )}
 
       {/* Resume keywords */}
-      {job.resume_keywords?.length > 0 && (
+      {resumeRelevantKeywords.length > 0 && (
         <div className="ji-results__card">
           <h2>Resume keywords</h2>
           <p className="ji-results__card-lead">Literal terms worth surfacing on a resume for this role</p>
           <div className="ji-tag-list">
-            {job.resume_keywords.map((k) => <span key={k} className="ji-tag ji-tag--muted">{k}</span>)}
+            {resumeRelevantKeywords.map((k) => <span key={k} className="ji-tag ji-tag--muted">{k}</span>)}
           </div>
+          {keywordTiers.raw?.length > 0 && (
+            <details className="ji-results__keyword-detail">
+              <summary>Show exact JD phrasing</summary>
+              <div className="ji-tag-list">
+                {keywordTiers.raw.map((k) => <span key={k} className="ji-tag">{k}</span>)}
+              </div>
+            </details>
+          )}
         </div>
       )}
 

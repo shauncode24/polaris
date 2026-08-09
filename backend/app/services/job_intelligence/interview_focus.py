@@ -4,10 +4,17 @@ candidate. Deterministic mapping from required skills + architecture
 topics + seniority, per the design doc's documented two-tier pattern
 (cheap deterministic pass now; an optional LLM refinement pass is left
 as a future extension, same reasoning as seniority.py).
+
+Cap bumped from 10 -> 14 (review finding #7): required_skills now
+captures process/practice requirements (git workflows, design
+patterns, SDLC, DB queries) as well as named products, so a genuinely
+detailed JD produces more real explicit focus areas than before — the
+old cap of 10 would have silently truncated some of exactly the newly
+captured items this fix was meant to surface.
 """
 from app.schemas.job_intelligence import EnrichedSkill, SeniorityLevel
 
-MAX_INTERVIEW_FOCUS_AREAS = 10
+MAX_INTERVIEW_FOCUS_AREAS = 14
 
 
 def derive_interview_focus_areas(
@@ -45,7 +52,7 @@ def derive_interview_focus_areas(
             combined.append(item)
 
     capped_combined = combined[:MAX_INTERVIEW_FOCUS_AREAS]
-    
+
     # Filter explicit and inferred down to only what is present in the capped combined list
     capped_set = {x.lower().strip() for x in capped_combined}
     final_explicit = [x for x in deduped_explicit if x.lower().strip() in capped_set]

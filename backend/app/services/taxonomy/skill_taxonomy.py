@@ -37,6 +37,41 @@ CATEGORY_MAP: dict[str, str] = {
 }
 DEFAULT_CATEGORY = "General Technical"
 
+# NEW (review finding #4) — a JD requirement stated as a process or
+# practice ("git workflows", "design patterns", "SDLC", "database
+# queries and scripts") is a real requirement, but it isn't a product
+# and shouldn't be lumped into "General Technical" alongside genuinely
+# unclassified technologies either — it's its own recognizable bucket.
+# This is a keyword heuristic, not a claim of perfect classification:
+# it only fires when nothing in CATEGORY_MAP already matched.
+PROCESS_CATEGORY = "Process & Practice"
+
+_PROCESS_KEYWORDS = [
+    "git", "workflow", "pattern", "sdlc", "lifecycle", "methodology",
+    "agile", "scrum", "kanban", "ci/cd", "ci_cd", "continuous integration",
+    "continuous delivery", "testing", "unit test", "query", "queries",
+    "script", "version control", "code review", "documentation",
+    "data structures", "algorithms", "debugging", "refactoring",
+]
+
+
+def categorize_skill(canonical: str, raw: str = "") -> str:
+    """The single entry point normalization.py should use to categorize
+    a resolved (or fallback-canonicalized) skill string. Checks the real
+    CATEGORY_MAP first — a known product always wins — then falls back
+    to the process/practice heuristic before giving up to
+    DEFAULT_CATEGORY. Kept separate from CATEGORY_MAP.get(..., DEFAULT)
+    so existing callers of CATEGORY_MAP directly (skill_gap's
+    category_breakdown.py) are entirely unaffected by this addition.
+    """
+    if canonical in CATEGORY_MAP:
+        return CATEGORY_MAP[canonical]
+    haystack = f"{canonical} {raw}".lower()
+    if any(keyword in haystack for keyword in _PROCESS_KEYWORDS):
+        return PROCESS_CATEGORY
+    return DEFAULT_CATEGORY
+
+
 CURRICULUM_PHASES: dict[str, tuple[str, int]] = {
     "docker": ("Foundation", 1), "git": ("Foundation", 1), "linux": ("Foundation", 1),
 

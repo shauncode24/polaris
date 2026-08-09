@@ -24,6 +24,12 @@ class ExtractedCompanySignals(BaseModel):
     Phase 1").
     """
     industry: str | None = None
+    # NEW (review finding #11) — the company's real business domain(s)
+    # as stated/clearly implied in the text (e.g. "Retail Financial
+    # Services", "Lending", "Wealth Management"), distinct from
+    # "industry" (one short phrase) and from "products_mentioned" (named
+    # products). Empty list if the text gives nothing beyond industry.
+    domain: list[str] = []
     products_mentioned: list[str] = []
     technologies_mentioned: list[str] = []
     engineering_hints: list[str] = []
@@ -37,6 +43,7 @@ class CompanyIntelligenceProfile(BaseModel):
     id: str | None = None
     company: str | None = None
     industry: str | None = None
+    domain: list[str] = []
     products_mentioned: list[str] = []
     technologies_mentioned: list[str] = []
     engineering_hints: list[str] = []

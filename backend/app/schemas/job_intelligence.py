@@ -31,6 +31,22 @@ class EligibilityRequirement(BaseModel):
     detail: str = ""
 
 
+class ExperienceRequirement(BaseModel):
+    """Review finding #1 — `experience` used to be `str | None`, which
+    collapsed to null whenever a JD didn't state a bare "N years"
+    figure. That silently dropped requirements phrased as "hands-on
+    experience through internships/projects" — a real, structured
+    experience bar that just isn't a year count. `minimum_years` staying
+    null does NOT mean there is no experience requirement; that's why
+    this is its own object instead of falling back to `str | None`.
+    """
+    raw: str | None = None
+    experience_type: str = "not_specified"  # "internship_or_project" | "professional" | "not_specified"
+    domain: str | None = None               # e.g. "full_stack_development"
+    minimum_years: float | None = None
+    proficiency_signal: str = "not_specified"
+
+
 class QualificationRequirements(BaseModel):
     """Audit point #4 — hard eligibility bars, structurally distinct
     from "skills". A candidate can have every required skill and still
@@ -39,24 +55,37 @@ class QualificationRequirements(BaseModel):
     """
     education: list[str] = []
     eligibility: list[EligibilityRequirement] = []
-    experience: str | None = None
+    experience: ExperienceRequirement | None = None
 
 
 class ExtractedSkillRequirement(BaseModel):
     """Audit point #7 — a skill plus the JD's own proficiency language
     for it ("good knowledge of" vs "exposure to" vs "familiarity with").
-    Only required_skills and nice_to_have carry this — implicit_skills
-    are the model's own inference, not a literal quoted phrase, so they
-    have no proficiency language to extract in the first place.
+    Used for required_skills and nice_to_have, which both carry literal
+    quoted JD proficiency language.
     """
     skill: str
     proficiency_signal: str = "not_specified"  # "good_knowledge" | "hands_on" | "exposure" | "familiarity" | "not_specified"
 
 
+class ExtractedImplicitSkill(BaseModel):
+    """Review finding #5 — implicit_skills used to be plain strings,
+    which let a model's own inference (e.g. "REST API Design") reach the
+    UI looking exactly as authoritative as a literally-stated
+    requirement. Every implicit skill now carries the real
+    responsibility/phrase it was inferred from ("evidence") and a
+    confidence level, so downstream consumers (and the UI) can visually
+    distinguish "the JD said this" from "the model inferred this."
+    """
+    skill: str
+    evidence: str = ""
+    confidence: str = "medium"  # "low" | "medium" | "high"
+
+
 class ExtractedJobRequirements(BaseModel):
     """Role-side half of the combined extraction call."""
     required_skills: list[ExtractedSkillRequirement] = []
-    implicit_skills: list[str] = []
+    implicit_skills: list[ExtractedImplicitSkill] = []
     architecture_topics: list[str] = []
     capabilities: list[str] = []
     nice_to_have: list[ExtractedSkillRequirement] = []
@@ -82,6 +111,13 @@ class EnrichedSkill(BaseModel):
     curriculum_phase: str
     requirement_type: str  # "required" | "implicit" | "nice_to_have"
     proficiency_signal: str = "not_specified"
+    # Only meaningful for requirement_type == "implicit" (see
+    # ExtractedImplicitSkill above). Left at their defaults for
+    # required/nice_to_have entries, where the skill was a literal JD
+    # quote rather than a model inference — "confidence" defaulting to
+    # "high" there reflects that it's a direct citation, not a guess.
+    evidence: str = ""
+    confidence: str = "high"
 
 
 class SeniorityLevel(BaseModel):
@@ -107,16 +143,26 @@ class InterviewFocusAreas(BaseModel):
     inferred: list[str] = []
 
 
+class ResumeKeywordTiers(BaseModel):
+    """Review finding #8 — a single flat, deduplicated keyword list
+    conflates three genuinely different things: the JD's own literal
+    phrasing ("raw"), Polaris' internal normalized/canonical form
+    ("canonical"), and the subset that's actually worth putting ON a
+    resume ("resume_relevant" — skill/architecture terms, never
+    role-identity or company boilerplate). `resume_keywords` on
+    JobIntelligenceProfile is left completely unchanged (still a flat
+    list) so any existing caller keeps working untouched; this is an
+    additive, richer companion view for the UI.
+    """
+    raw: list[str] = []
+    canonical: list[str] = []
+    resume_relevant: list[str] = []
+
+
 class JobIntelligenceProfile(BaseModel):
     """The Job Intelligence analogue of IdentityFacts — a user-independent
     representation of what a role requires. Never reads anything about a
     specific candidate.
-
-    "capabilities" is now a REAL, independently-extracted field (action-
-    oriented — "what will you actually do") — it previously duplicated
-    architecture_topics verbatim and was removed; this reintroduces it
-    with its own extraction question so the two fields carry genuinely
-    different information (audit point #2).
     """
     id: str | None = None
     role: str | None = None
@@ -131,11 +177,11 @@ class JobIntelligenceProfile(BaseModel):
     architecture_topics: list[str] = []
     qualification_requirements: QualificationRequirements = QualificationRequirements()
     seniority_signal: SeniorityLevel = SeniorityLevel()
+    # UNCHANGED shape (flat list) — kept for backward compatibility with
+    # any existing caller. See resume_keyword_tiers for the richer view.
     resume_keywords: list[str] = []
-    # Kept flat for backward compatibility — career_planner/context_builder.py
-    # and interview/context_builder.py already read this field directly.
+    resume_keyword_tiers: ResumeKeywordTiers = ResumeKeywordTiers()
     interview_focus_areas: list[str] = []
-    # NEW — the same information, split by provenance (audit #15).
     interview_focus: InterviewFocusAreas = InterviewFocusAreas()
     extraction_quality: ExtractionQuality = ExtractionQuality()
     source_text_hash: str = ""

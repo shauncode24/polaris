@@ -93,6 +93,19 @@
   text-transform: none;
 }
 
+/* NEW — confidence badge for implicit (inferred) skills, distinguishing
+   a direct JD citation from a model inference (review finding #5). */
+.ji-skill-chip__confidence {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  text-transform: none;
+}
+.ji-skill-chip__confidence--high { background: var(--success-soft); color: var(--success); }
+.ji-skill-chip__confidence--medium { background: var(--warning-soft); color: #a2760f; }
+.ji-skill-chip__confidence--low { background: var(--danger-soft); color: var(--danger); }
+
 .ji-tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .ji-tag {
   padding: 6px 12px;
@@ -103,6 +116,12 @@
   color: var(--text);
 }
 .ji-tag--muted { color: var(--text-soft); font-family: monospace; font-size: 12px; }
+
+/* NEW — collapsible "show exact JD phrasing" under resume keywords
+   (review finding #8, tiered resume_keyword_tiers view). */
+.ji-results__keyword-detail { margin-top: 4px; font-size: 12.5px; color: var(--text-soft); }
+.ji-results__keyword-detail summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.ji-results__keyword-detail .ji-tag-list { margin-top: 8px; }
 
 .ji-results__raw-toggle {
   align-self: flex-start;
@@ -132,7 +151,7 @@
   .ji-results__header-badges { align-items: flex-start; }
 }
 
-/* --- NEW: role identity, structured qualifications/interview-focus, proficiency chip --- */
+/* --- role identity, structured qualifications/interview-focus, proficiency chip --- */
 
 .ji-identity-grid {
   display: grid;
