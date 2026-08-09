@@ -134,6 +134,18 @@ class JobDescription(Base):
     raw_text: Mapped[str] = mapped_column(Text)
     extracted_requirements: Mapped[dict | None] = mapped_column(JSONB)
     analysis_result: Mapped[dict | None] = mapped_column(JSONB)
+    # Job Intelligence refactor: nullable FKs to the new, user-independent
+    # Job Intelligence / Company Intelligence profiles this JD's analysis
+    # was built from. extracted_requirements/analysis_result are still
+    # dual-written for backward compatibility during the transition
+    # (career_planner/context_builder.py and resume/tailoring_llm.py still
+    # read extracted_requirements unchanged).
+    job_intelligence_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_intelligence_profiles.id")
+    )
+    company_intelligence_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("company_intelligence_profiles.id")
+    )
     created_at: Mapped[datetime] = created_at_col()
 
 
