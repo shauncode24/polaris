@@ -1,6 +1,6 @@
 /* frontend/src/components/job-intelligence/CompanyIntelligenceCard.css */
 .ci-card {
-  padding: 22px 24px;
+  padding: 20px 22px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -9,13 +9,13 @@
   flex-direction: column;
   gap: 14px;
 }
-.ci-card h2 { font-size: 17px; }
+.ci-card h2 { font-size: 16px; }
 .ci-card__lead { color: var(--text-soft); font-size: 12.5px; margin-top: -8px; }
 .ci-card__empty { color: var(--text-soft); font-size: 13.5px; }
 
 .ci-card__row { display: flex; flex-direction: column; gap: 6px; }
 .ci-card__row h4 {
-  font-size: 11.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-soft);
@@ -32,6 +32,14 @@
   color: var(--text);
 }
 
-.ci-card__list { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text); }
+.ci-card__list { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); }
+.ci-card__more-btn { background: none; border: none; color: var(--accent); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
 
-.ci-card__signals { display: flex; flex-direction: column; gap: 14px; }
+.ci-card__people-culture { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; border-top: 1px solid var(--border); }
+.ci-card__people-culture > h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-soft); }
+.ci-card__people-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; }
+.ci-card__people-grid h5 { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+
+@media (max-width: 640px) {
+  .ci-card__people-grid { grid-template-columns: 1fr; }
+}

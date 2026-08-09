@@ -2,15 +2,106 @@
 .ji-results {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
   max-width: var(--page-max-width);
   margin: 0 auto;
   width: 100%;
   padding-bottom: 8px;
 }
 
-.ji-results__card {
-  padding: 22px 24px;
+/* ── Header ─────────────────────────────────────────────────── */
+.ji-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+}
+.ji-header__main h1 { font-size: 24px; }
+.ji-header__company { color: var(--text); font-size: 14px; margin-top: 2px; font-weight: 600; }
+.ji-header__secondary { color: var(--text-soft); font-size: 12.5px; margin-top: 4px; }
+.ji-header__badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.ji-seniority-badge {
+  display: inline-flex; align-items: center;
+  font-size: 12.5px; font-weight: 700;
+  padding: 5px 14px; border-radius: var(--radius-pill);
+  cursor: help;
+}
+.ji-seniority-badge--senior { background: var(--accent-soft); color: var(--accent-strong); }
+.ji-seniority-badge--mid { background: var(--info-soft); color: var(--info); }
+.ji-seniority-badge--junior { background: var(--success-soft); color: var(--success); }
+.ji-seniority-badge--neutral { background: var(--surface-soft); color: var(--text-soft); }
+
+.ji-quality-badge {
+  display: inline-flex; align-items: center;
+  font-size: 11.5px; font-weight: 600;
+  padding: 4px 11px; border-radius: var(--radius-pill);
+  cursor: help;
+}
+.ji-quality-badge--high { background: var(--success-soft); color: var(--success); }
+.ji-quality-badge--medium { background: var(--warning-soft); color: #a2760f; }
+.ji-quality-badge--low { background: var(--danger-soft); color: var(--danger); }
+
+/* ── Sticky section nav ─────────────────────────────────────── */
+.ji-section-nav {
+  position: sticky;
+  top: 64px;
+  z-index: 8;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  width: fit-content;
+}
+.ji-section-nav__link {
+  padding: 6px 13px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ji-section-nav__link:hover { background: var(--surface-soft); color: var(--ink); }
+
+/* ── Job at a glance strip ──────────────────────────────────── */
+.ji-glance {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px 20px;
+  padding: 16px 18px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.ji-glance__row { display: flex; flex-direction: column; gap: 2px; }
+.ji-glance__label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-soft); }
+.ji-glance__value { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+
+.ji-note { font-size: 12.5px; color: var(--text-soft); margin-top: -12px; line-height: 1.5; }
+
+/* ── Compact blocks (no card chrome) ────────────────────────── */
+.ji-block { display: flex; flex-direction: column; gap: 8px; }
+.ji-block__title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-soft); font-weight: 700; }
+.ji-block__text { font-size: 14.5px; color: var(--text); line-height: 1.6; }
+
+.ji-numbered-list { display: flex; flex-direction: column; gap: 10px; }
+.ji-numbered-list li { display: flex; align-items: baseline; gap: 12px; font-size: 14px; color: var(--text); line-height: 1.55; }
+.ji-numbered-list__index { font-size: 11px; font-weight: 700; color: var(--text-soft); flex-shrink: 0; width: 18px; }
+
+/* ── Cards (used only where grouping genuinely helps) ───────── */
+.ji-card {
+  padding: 20px 22px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -19,93 +110,39 @@
   flex-direction: column;
   gap: 12px;
 }
-.ji-results__card h2 { font-size: 17px; }
-.ji-results__card-lead { color: var(--text-soft); font-size: 12.5px; margin-top: -6px; }
+.ji-card h2 { font-size: 16px; }
+.ji-card__lead { color: var(--text-soft); font-size: 12.5px; margin-top: -6px; }
+.ji-card--primary { border-color: var(--accent); }
 
-.ji-results__header { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-.ji-results__header-main h1 { font-size: 22px; }
-.ji-results__company { color: var(--text-soft); font-size: 14px; margin-top: 2px; }
-.ji-results__header-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.ji-results__row { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.ji-results__row h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-soft); }
 
-.ji-seniority-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12.5px;
-  font-weight: 700;
-  padding: 5px 14px;
-  border-radius: var(--radius-pill);
-}
-.ji-seniority-badge--senior { background: var(--accent-soft); color: var(--accent-strong); }
-.ji-seniority-badge--mid { background: var(--info-soft); color: var(--info); }
-.ji-seniority-badge--junior { background: var(--success-soft); color: var(--success); }
-.ji-seniority-badge--neutral { background: var(--surface-soft); color: var(--text-soft); }
+/* ── Skill groups (requirements centerpiece) ────────────────── */
+.ji-skillgroup { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: var(--radius-md); border-left: 3px solid var(--border); background: var(--surface-soft); }
+.ji-skillgroup--required { border-left-color: var(--danger); }
+.ji-skillgroup--implicit { border-left-color: var(--warning); }
+.ji-skillgroup--nice { border-left-color: var(--info); }
 
-.ji-quality-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
-}
-.ji-quality-badge--high { background: var(--success-soft); color: var(--success); }
-.ji-quality-badge--medium { background: var(--warning-soft); color: #a2760f; }
-.ji-quality-badge--low { background: var(--danger-soft); color: var(--danger); }
-
-.ji-results__evidence-list { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text); }
-.ji-results__evidence-list li { list-style: disc; margin-left: 18px; }
-
-.ji-skill-groups { display: flex; flex-direction: column; gap: 18px; }
-.ji-skill-group h4 {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-soft);
-  margin-bottom: 10px;
-}
-.ji-skill-dot { width: 8px; height: 8px; border-radius: 50%; }
-.ji-skill-dot--required { background: var(--danger); }
-.ji-skill-dot--implicit { background: var(--warning); }
-.ji-skill-dot--nice { background: var(--info); }
-.ji-skill-count { font-size: 11px; background: var(--surface-soft); border-radius: var(--radius-pill); padding: 1px 8px; margin-left: 2px; }
+.ji-skillgroup__title { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-soft); }
+.ji-skill-count { font-size: 11px; background: var(--surface); border-radius: var(--radius-pill); padding: 1px 8px; margin-left: 4px; }
 
 .ji-skill-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .ji-skill-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 13px;
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  font-size: 12.5px;
-  color: var(--ink);
-  font-weight: 600;
-  text-transform: capitalize;
+  border-radius: var(--radius-md);
 }
-.ji-skill-chip__category {
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--text-soft);
-  text-transform: none;
-}
+.ji-skill-chip__name { font-size: 13.5px; font-weight: 700; color: var(--ink); text-transform: capitalize; }
+.ji-skill-chip__meta { font-size: 11px; color: var(--text-soft); }
+.ji-skill-chip__inferred--high { color: var(--success); }
+.ji-skill-chip__inferred--medium { color: #a2760f; }
+.ji-skill-chip__inferred--low { color: var(--danger); }
 
-/* NEW — confidence badge for implicit (inferred) skills, distinguishing
-   a direct JD citation from a model inference (review finding #5). */
-.ji-skill-chip__confidence {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-  text-transform: none;
-}
-.ji-skill-chip__confidence--high { background: var(--success-soft); color: var(--success); }
-.ji-skill-chip__confidence--medium { background: var(--warning-soft); color: #a2760f; }
-.ji-skill-chip__confidence--low { background: var(--danger-soft); color: var(--danger); }
-
+/* ── Generic tag list ────────────────────────────────────────── */
 .ji-tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .ji-tag {
   padding: 6px 12px;
@@ -115,72 +152,44 @@
   font-size: 12.5px;
   color: var(--text);
 }
-.ji-tag--muted { color: var(--text-soft); font-family: monospace; font-size: 12px; }
+.ji-tag--muted { color: var(--text-soft); }
 
-/* NEW — collapsible "show exact JD phrasing" under resume keywords
-   (review finding #8, tiered resume_keyword_tiers view). */
-.ji-results__keyword-detail { margin-top: 4px; font-size: 12.5px; color: var(--text-soft); }
-.ji-results__keyword-detail summary { cursor: pointer; font-weight: 600; color: var(--accent); }
-.ji-results__keyword-detail .ji-tag-list { margin-top: 8px; }
+/* ── Experience block ───────────────────────────────────────── */
+.ji-experience { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.ji-experience__primary {
+  font-size: 13.5px; font-weight: 700; color: var(--accent-strong);
+  background: var(--accent-soft); padding: 3px 10px; border-radius: var(--radius-pill);
+}
+.ji-experience__domain { font-size: 12.5px; color: var(--text-soft); text-transform: capitalize; }
+.ji-experience__type { font-size: 13px; color: var(--text); }
 
+/* ── Collapsible header (resume signals) ────────────────────── */
+.ji-collapsible-header {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: none; border: none; cursor: pointer; padding: 0; text-align: left;
+}
+.ji-collapsible-header__meta { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-soft); font-weight: 600; }
+.ji-chevron { display: inline-block; transition: transform 0.15s ease; color: var(--text-soft); }
+.ji-chevron--open { transform: rotate(90deg); }
+
+/* ── Details / disclosure ───────────────────────────────────── */
+.ji-details { font-size: 12.5px; color: var(--text-soft); margin-top: 4px; }
+.ji-details summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.ji-details__body { margin-top: 8px; }
+
+/* ── Raw JSON ────────────────────────────────────────────────── */
 .ji-results__raw-toggle {
   align-self: flex-start;
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
+  background: none; border: none; color: var(--accent);
+  font-size: 13px; font-weight: 600; cursor: pointer; padding: 0;
 }
 .ji-results__raw-json {
-  max-height: 420px;
-  overflow: auto;
-  font-size: 12px;
-  line-height: 1.5;
-  background: var(--surface-soft);
-  padding: 14px;
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
+  max-height: 420px; overflow: auto; font-size: 12px; line-height: 1.5;
+  background: var(--surface-soft); padding: 14px; border-radius: var(--radius-sm);
+  color: var(--text); white-space: pre-wrap; word-break: break-word;
 }
 
 @media (max-width: 640px) {
-  .ji-results__header { flex-direction: column; align-items: flex-start; }
-  .ji-results__header-badges { align-items: flex-start; }
-}
-
-/* --- role identity, structured qualifications/interview-focus, proficiency chip --- */
-
-.ji-identity-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px 20px;
-}
-.ji-identity-row { display: flex; flex-direction: column; gap: 2px; }
-.ji-identity-row__label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-soft);
-}
-.ji-identity-row__value { font-size: 13.5px; color: var(--ink); font-weight: 600; }
-
-.ji-results__row { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-.ji-results__row h4 {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text-soft);
-}
-
-.ji-skill-chip__proficiency {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-  text-transform: none;
+  .ji-header { flex-direction: column; align-items: flex-start; }
+  .ji-section-nav { position: static; width: 100%; overflow-x: auto; flex-wrap: nowrap; }
 }

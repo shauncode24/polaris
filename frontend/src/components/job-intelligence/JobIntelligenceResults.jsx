@@ -21,9 +21,30 @@ const PROFICIENCY_LABELS = {
 }
 
 const EXPERIENCE_TYPE_LABELS = {
-  internship_or_project: 'Internship / project experience accepted',
+  internship_or_project: 'Internships / projects accepted',
   professional: 'Professional experience required',
   not_specified: '',
+}
+
+// Lightweight client-side bucketing for "Interview preparation signals" so
+// it reads as an interpretation rather than a re-listing of requirements
+// (spec §21). Backend gives us a flat inferred[] list with no category
+// per-item, so this is a heuristic grouping only — nothing authoritative
+// is derived here, it's purely a presentation aid.
+const FOUNDATION_KEYWORDS = ['git', 'sdlc', 'database', 'data structure', 'algorithm', 'dsa', 'testing', 'debug', 'query', 'version control']
+const DESIGN_KEYWORDS = ['design pattern', 'scalab', 'performance', 'architecture', 'system design', 'modular', 'trade-off', 'leadership', 'non-functional', 'reliab']
+
+function bucketInterviewFocus(items) {
+  const foundations = []
+  const design = []
+  const stack = []
+  for (const item of items) {
+    const lowered = item.toLowerCase()
+    if (FOUNDATION_KEYWORDS.some((k) => lowered.includes(k))) foundations.push(item)
+    else if (DESIGN_KEYWORDS.some((k) => lowered.includes(k))) design.push(item)
+    else stack.push(item)
+  }
+  return { foundations, design, stack }
 }
 
 function seniorityBadgeClass(level) {
@@ -39,43 +60,77 @@ function qualityBadgeClass(label) {
   return 'ji-quality-badge--low'
 }
 
-function EnrichedSkillGroup({ title, skills, dotClass }) {
-  if (!skills || skills.length === 0) return null
+const NAV_SECTIONS = [
+  { id: 'ji-sec-overview', label: 'Overview' },
+  { id: 'ji-sec-requirements', label: 'Requirements' },
+  { id: 'ji-sec-qualifications', label: 'Qualifications' },
+  { id: 'ji-sec-architecture', label: 'Architecture' },
+  { id: 'ji-sec-company', label: 'Company' },
+  { id: 'ji-sec-resume', label: 'Resume' },
+  { id: 'ji-sec-interview', label: 'Interview' },
+]
+
+function SectionNav() {
+  function scrollTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   return (
-    <div className="ji-skill-group">
-      <h4><span className={`ji-skill-dot ${dotClass}`} /> {title} <span className="ji-skill-count">{skills.length}</span></h4>
-      <div className="ji-skill-chips">
-        {skills.map((s) => (
-          <span key={s.canonical} className="ji-skill-chip" title={s.evidence || undefined}>
-            {s.canonical.replace(/_/g, ' ')}
-            {PROFICIENCY_LABELS[s.proficiency_signal] && (
-              <span className="ji-skill-chip__proficiency">{PROFICIENCY_LABELS[s.proficiency_signal]}</span>
-            )}
-            {s.requirement_type === 'implicit' && (
-              <span className={`ji-skill-chip__confidence ji-skill-chip__confidence--${s.confidence}`}>
-                inferred · {s.confidence}
-              </span>
-            )}
-            <span className="ji-skill-chip__category">{s.category}</span>
-          </span>
-        ))}
-      </div>
+    <nav className="ji-section-nav" aria-label="Jump to section">
+      {NAV_SECTIONS.map((s) => (
+        <button key={s.id} type="button" className="ji-section-nav__link" onClick={() => scrollTo(s.id)}>
+          {s.label}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+function GlanceRow({ label, value }) {
+  if (!value) return null
+  return (
+    <div className="ji-glance__row">
+      <span className="ji-glance__label">{label}</span>
+      <span className="ji-glance__value">{value}</span>
     </div>
   )
 }
 
-function RoleIdentityRow({ label, value }) {
-  if (!value) return null
+function SkillChip({ skill }) {
+  const proficiencyLabel = PROFICIENCY_LABELS[skill.proficiency_signal]
+  const isInferred = skill.requirement_type === 'implicit'
   return (
-    <div className="ji-identity-row">
-      <span className="ji-identity-row__label">{label}</span>
-      <span className="ji-identity-row__value">{value}</span>
+    <div className="ji-skill-chip" title={skill.evidence || undefined}>
+      <span className="ji-skill-chip__name">{skill.canonical.replace(/_/g, ' ')}</span>
+      <span className="ji-skill-chip__meta">
+        {proficiencyLabel && <>{proficiencyLabel} · </>}
+        {skill.category}
+        {isInferred && (
+          <span className={`ji-skill-chip__inferred ji-skill-chip__inferred--${skill.confidence}`}>
+            {' '}· inferred
+          </span>
+        )}
+      </span>
+    </div>
+  )
+}
+
+function SkillGroup({ title, tone, skills }) {
+  if (!skills || skills.length === 0) return null
+  return (
+    <div className={`ji-skillgroup ji-skillgroup--${tone}`}>
+      <h4 className="ji-skillgroup__title">
+        {title} <span className="ji-skill-count">{skills.length}</span>
+      </h4>
+      <div className="ji-skill-chips">
+        {skills.map((s) => <SkillChip key={s.canonical} skill={s} />)}
+      </div>
     </div>
   )
 }
 
 function JobIntelligenceResults({ data }) {
   const [showRaw, setShowRaw] = useState(false)
+  const [resumeOpen, setResumeOpen] = useState(false)
   const job = data.job_intelligence
   const company = data.company_intelligence
 
@@ -89,86 +144,94 @@ function JobIntelligenceResults({ data }) {
   const resumeRelevantKeywords =
     keywordTiers.resume_relevant?.length > 0 ? keywordTiers.resume_relevant : job.resume_keywords || []
 
-  const hasIdentityDetail =
-    identity.designation || identity.grade || identity.function ||
-    identity.department || identity.location || identity.reports_to || identity.employment_type
-
   const hasQualifications =
     qualifications.education?.length > 0 || qualifications.eligibility?.length > 0 || !!experience
 
+  const secondaryLine = [identity.location, identity.function, identity.designation].filter(Boolean).join(' · ')
+
+  const { foundations, design, stack } = bucketInterviewFocus(interviewFocus.inferred || [])
+
   return (
     <div className="ji-results">
-      {/* Header */}
-      <div className="ji-results__card ji-results__header">
-        <div className="ji-results__header-main">
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div id="ji-sec-overview" className="ji-header">
+        <div className="ji-header__main">
           <h1>{job.role || 'Untitled role'}</h1>
-          {job.company && <p className="ji-results__company">{job.company}</p>}
+          {job.company && <p className="ji-header__company">{job.company}</p>}
+          {secondaryLine && <p className="ji-header__secondary">{secondaryLine}</p>}
         </div>
-        <div className="ji-results__header-badges">
-          <span className={`ji-seniority-badge ${seniorityBadgeClass(seniority.level)}`}>
+        <div className="ji-header__badges">
+          <span
+            className={`ji-seniority-badge ${seniorityBadgeClass(seniority.level)}`}
+            title={seniority.evidence?.length ? seniority.evidence.join(' • ') : 'Inferred from the role title/designation.'}
+          >
             {SENIORITY_LABELS[seniority.level] || 'Not specified'}
           </span>
-          <span className={`ji-quality-badge ${qualityBadgeClass(quality.label)}`}>
-            {quality.label || 'Low'} confidence extraction
+          <span
+            className={`ji-quality-badge ${qualityBadgeClass(quality.label)}`}
+            title={quality.reasons?.length ? quality.reasons.join(' • ') : 'Based on completeness of information extracted from the source JD.'}
+          >
+            {quality.label || 'Low'}-confidence extraction
           </span>
         </div>
       </div>
 
-      {/* Role identity */}
-      {hasIdentityDetail && (
-        <div className="ji-results__card">
-          <h2>Role identity</h2>
-          <div className="ji-identity-grid">
-            <RoleIdentityRow label="Designation" value={identity.designation} />
-            <RoleIdentityRow label="Grade" value={identity.grade} />
-            <RoleIdentityRow label="Function" value={identity.function} />
-            <RoleIdentityRow label="Department" value={identity.department} />
-            <RoleIdentityRow label="Location" value={identity.location} />
-            <RoleIdentityRow label="Reports to" value={identity.reports_to} />
-            <RoleIdentityRow label="Employment type" value={identity.employment_type} />
-          </div>
-          {identity.designation && identity.grade && (
-            <p className="ji-results__card-lead">
-              Designation and grade are shown separately from seniority — a "{identity.grade}" grade
-              doesn't necessarily mean a senior engineering level.
-            </p>
-          )}
-        </div>
+      <SectionNav />
+
+      {/* ── Job at a glance ────────────────────────────────────── */}
+      <div className="ji-glance">
+        <GlanceRow label="Role" value={job.role} />
+        <GlanceRow label="Location" value={identity.location} />
+        <GlanceRow label="Function" value={identity.function} />
+        <GlanceRow label="Department" value={identity.department} />
+        <GlanceRow label="Designation" value={identity.designation} />
+        <GlanceRow label="Grade" value={identity.grade} />
+        <GlanceRow label="Reports to" value={identity.reports_to} />
+        <GlanceRow label="Employment type" value={identity.employment_type} />
+      </div>
+      {identity.designation && identity.grade && (
+        <p className="ji-note">
+          Designation and grade are shown separately from seniority — a "{identity.grade}" grade doesn't
+          necessarily mean a senior engineering level.
+        </p>
       )}
 
-      {/* Job purpose */}
+      {/* ── Role purpose ───────────────────────────────────────── */}
       {job.job_purpose && (
-        <div className="ji-results__card">
-          <h2>Why this role exists</h2>
-          <p>{job.job_purpose}</p>
+        <div className="ji-block">
+          <h3 className="ji-block__title">Role purpose</h3>
+          <p className="ji-block__text">{job.job_purpose}</p>
         </div>
       )}
 
-      {/* Responsibilities */}
+      {/* ── Responsibilities ───────────────────────────────────── */}
       {job.responsibilities?.length > 0 && (
-        <div className="ji-results__card">
-          <h2>What you'll actually do</h2>
-          <ul className="ji-results__evidence-list">
-            {job.responsibilities.map((r, i) => <li key={i}>{r}</li>)}
-          </ul>
+        <div className="ji-block">
+          <h3 className="ji-block__title">What you'll do</h3>
+          <ol className="ji-numbered-list">
+            {job.responsibilities.map((r, i) => (
+              <li key={i}><span className="ji-numbered-list__index">{String(i + 1).padStart(2, '0')}</span>{r}</li>
+            ))}
+          </ol>
         </div>
       )}
 
-      {/* Capabilities */}
-      {job.capabilities?.length > 0 && (
-        <div className="ji-results__card">
-          <h2>Capabilities expected</h2>
-          <p className="ji-results__card-lead">Action-oriented — distinct from the architecture concepts below</p>
-          <div className="ji-tag-list">
-            {job.capabilities.map((c, i) => <span key={i} className="ji-tag">{c}</span>)}
-          </div>
-        </div>
-      )}
+      {/* ── Requirements (centerpiece) ─────────────────────────── */}
+      <div id="ji-sec-requirements" className="ji-card ji-card--primary">
+        <h2>What this role requires</h2>
+        <p className="ji-card__lead">
+          Includes named technologies as well as explicitly stated processes and practices — not just product names.
+        </p>
+        <SkillGroup title="Required" tone="required" skills={job.enriched_required_skills} />
+        <SkillGroup title="Implicit" tone="implicit" skills={job.enriched_implicit_skills} />
+        <SkillGroup title="Nice to have" tone="nice" skills={job.enriched_nice_to_have} />
+      </div>
 
-      {/* Qualifications & eligibility */}
+      {/* ── Qualifications ─────────────────────────────────────── */}
       {hasQualifications && (
-        <div className="ji-results__card">
+        <div id="ji-sec-qualifications" className="ji-card">
           <h2>Qualifications & eligibility</h2>
+
           {qualifications.education?.length > 0 && (
             <div className="ji-results__row">
               <h4>Education</h4>
@@ -177,29 +240,39 @@ function JobIntelligenceResults({ data }) {
               </div>
             </div>
           )}
+
           {qualifications.eligibility?.length > 0 && (
             <div className="ji-results__row">
-              <h4>Eligibility requirements</h4>
-              <ul className="ji-results__evidence-list">
+              <h4>Eligibility</h4>
+              <div className="ji-tag-list">
                 {qualifications.eligibility.map((e, i) => (
-                  <li key={i}>{e.requirement}{e.detail ? ` — ${e.detail}` : ''}</li>
+                  <span key={i} className="ji-tag">{e.requirement}{e.detail ? ` — ${e.detail}` : ''}</span>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
+
           {experience && (
             <div className="ji-results__row">
               <h4>Experience</h4>
-              <p>{experience.raw || 'Stated in the job description'}</p>
-              <div className="ji-tag-list">
-                {EXPERIENCE_TYPE_LABELS[experience.experience_type] && (
-                  <span className="ji-tag">{EXPERIENCE_TYPE_LABELS[experience.experience_type]}</span>
+              <div className="ji-experience">
+                {PROFICIENCY_LABELS[experience.proficiency_signal] && (
+                  <span className="ji-experience__primary">{PROFICIENCY_LABELS[experience.proficiency_signal]}</span>
                 )}
                 {experience.domain && (
-                  <span className="ji-tag ji-tag--muted">{experience.domain.replace(/_/g, ' ')}</span>
+                  <span className="ji-experience__domain">{experience.domain.replace(/_/g, ' ')}</span>
+                )}
+                {EXPERIENCE_TYPE_LABELS[experience.experience_type] && (
+                  <p className="ji-experience__type">{EXPERIENCE_TYPE_LABELS[experience.experience_type]}</p>
                 )}
                 {experience.minimum_years != null && (
-                  <span className="ji-tag ji-tag--muted">{experience.minimum_years}+ years stated</span>
+                  <p className="ji-experience__type">{experience.minimum_years}+ years stated</p>
+                )}
+                {experience.raw && (
+                  <details className="ji-details">
+                    <summary>Show source phrasing</summary>
+                    <p className="ji-details__body">{experience.raw}</p>
+                  </details>
                 )}
               </div>
             </div>
@@ -207,44 +280,9 @@ function JobIntelligenceResults({ data }) {
         </div>
       )}
 
-      {/* Seniority evidence */}
-      {seniority.evidence?.length > 0 && (
-        <div className="ji-results__card">
-          <h2>Seniority signal</h2>
-          <p className="ji-results__card-lead">{seniority.confidence} confidence — based on:</p>
-          <ul className="ji-results__evidence-list">
-            {seniority.evidence.map((e, i) => <li key={i}>{e}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {/* Extraction quality reasons */}
-      {quality.reasons?.length > 0 && (
-        <div className="ji-results__card">
-          <h2>Extraction confidence</h2>
-          <ul className="ji-results__evidence-list">
-            {quality.reasons.map((r, i) => <li key={i}>{r}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {/* Required / implicit / nice-to-have skills */}
-      <div className="ji-results__card">
-        <h2>What this role requires</h2>
-        <p className="ji-results__card-lead">
-          Includes both named technologies and explicitly stated processes/practices (e.g. git workflows,
-          design patterns) — not just product names
-        </p>
-        <div className="ji-skill-groups">
-          <EnrichedSkillGroup title="Required" skills={job.enriched_required_skills} dotClass="ji-skill-dot--required" />
-          <EnrichedSkillGroup title="Implicit" skills={job.enriched_implicit_skills} dotClass="ji-skill-dot--implicit" />
-          <EnrichedSkillGroup title="Nice to have" skills={job.enriched_nice_to_have} dotClass="ji-skill-dot--nice" />
-        </div>
-      </div>
-
-      {/* Architecture topics */}
+      {/* ── Architecture ───────────────────────────────────────── */}
       {job.architecture_topics?.length > 0 && (
-        <div className="ji-results__card">
+        <div id="ji-sec-architecture" className="ji-card">
           <h2>Architecture & system-design topics</h2>
           <div className="ji-tag-list">
             {job.architecture_topics.map((t) => <span key={t} className="ji-tag">{t}</span>)}
@@ -252,53 +290,88 @@ function JobIntelligenceResults({ data }) {
         </div>
       )}
 
-      {/* Resume keywords */}
+      {/* ── Company Intelligence ───────────────────────────────── */}
+      <div id="ji-sec-company">
+        <CompanyIntelligenceCard company={company} />
+      </div>
+
+      {/* ── Resume signals (collapsible) ───────────────────────── */}
       {resumeRelevantKeywords.length > 0 && (
-        <div className="ji-results__card">
-          <h2>Resume keywords</h2>
-          <p className="ji-results__card-lead">Literal terms worth surfacing on a resume for this role</p>
-          <div className="ji-tag-list">
-            {resumeRelevantKeywords.map((k) => <span key={k} className="ji-tag ji-tag--muted">{k}</span>)}
-          </div>
-          {keywordTiers.raw?.length > 0 && (
-            <details className="ji-results__keyword-detail">
-              <summary>Show exact JD phrasing</summary>
+        <div id="ji-sec-resume" className="ji-card">
+          <button
+            type="button"
+            className="ji-collapsible-header"
+            onClick={() => setResumeOpen((v) => !v)}
+            aria-expanded={resumeOpen}
+          >
+            <h2>Resume signals</h2>
+            <span className="ji-collapsible-header__meta">
+              {resumeRelevantKeywords.length} relevant term{resumeRelevantKeywords.length === 1 ? '' : 's'}
+              <span className={`ji-chevron ${resumeOpen ? 'ji-chevron--open' : ''}`}>▸</span>
+            </span>
+          </button>
+          {resumeOpen && (
+            <>
               <div className="ji-tag-list">
-                {keywordTiers.raw.map((k) => <span key={k} className="ji-tag">{k}</span>)}
+                {resumeRelevantKeywords.map((k) => <span key={k} className="ji-tag ji-tag--muted">{k}</span>)}
               </div>
-            </details>
+              {keywordTiers.raw?.length > 0 && (
+                <details className="ji-details">
+                  <summary>Show exact JD phrasing</summary>
+                  <div className="ji-tag-list ji-details__body">
+                    {keywordTiers.raw.map((k) => <span key={k} className="ji-tag">{k}</span>)}
+                  </div>
+                </details>
+              )}
+            </>
           )}
         </div>
       )}
 
-      {/* Interview focus areas */}
-      {(interviewFocus.explicit?.length > 0 || interviewFocus.inferred?.length > 0) && (
-        <div className="ji-results__card">
-          <h2>Interview focus areas</h2>
+      {/* ── Interview preparation signals ──────────────────────── */}
+      {(foundations.length > 0 || design.length > 0 || stack.length > 0) && (
+        <div id="ji-sec-interview" className="ji-card">
+          <h2>Interview preparation signals</h2>
+          <p className="ji-card__lead">
+            Inferred from role requirements — not explicitly stated by the JD.
+          </p>
+          {stack.length > 0 && (
+            <div className="ji-results__row">
+              <h4>Application stack</h4>
+              <div className="ji-tag-list">
+                {stack.map((a) => <span key={a} className="ji-tag ji-tag--muted">{a}</span>)}
+              </div>
+            </div>
+          )}
+          {foundations.length > 0 && (
+            <div className="ji-results__row">
+              <h4>Technical foundations</h4>
+              <div className="ji-tag-list">
+                {foundations.map((a) => <span key={a} className="ji-tag ji-tag--muted">{a}</span>)}
+              </div>
+            </div>
+          )}
+          {design.length > 0 && (
+            <div className="ji-results__row">
+              <h4>Design & scale</h4>
+              <div className="ji-tag-list">
+                {design.map((a) => <span key={a} className="ji-tag ji-tag--muted">{a}</span>)}
+              </div>
+            </div>
+          )}
           {interviewFocus.explicit?.length > 0 && (
             <div className="ji-results__row">
-              <h4>Explicitly stated / directly required</h4>
+              <h4>Explicitly stated by the JD</h4>
               <div className="ji-tag-list">
                 {interviewFocus.explicit.map((a) => <span key={a} className="ji-tag">{a}</span>)}
               </div>
             </div>
           )}
-          {interviewFocus.inferred?.length > 0 && (
-            <div className="ji-results__row">
-              <h4>Inferred — not explicitly stated in the JD</h4>
-              <div className="ji-tag-list">
-                {interviewFocus.inferred.map((a) => <span key={a} className="ji-tag ji-tag--muted">{a}</span>)}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Company Intelligence — own card, own component */}
-      <CompanyIntelligenceCard company={company} />
-
-      {/* Raw JSON */}
-      <div className="ji-results__card">
+      {/* ── Raw JSON (debug) ────────────────────────────────────── */}
+      <div className="ji-card">
         <button type="button" className="ji-results__raw-toggle" onClick={() => setShowRaw((v) => !v)}>
           {showRaw ? 'Hide raw JSON response' : 'Show raw JSON response'}
         </button>

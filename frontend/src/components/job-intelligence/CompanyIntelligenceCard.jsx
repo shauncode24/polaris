@@ -1,13 +1,25 @@
 // frontend/src/components/job-intelligence/CompanyIntelligenceCard.jsx
+import { useState } from 'react'
 import './CompanyIntelligenceCard.css'
 
-const SIGNAL_LABELS = {
-  culture: 'Culture',
-  values: 'Values',
-  work_environment: 'Work environment',
-  learning_development: 'Learning & development',
-  diversity_inclusion: 'Diversity & inclusion',
-  recognition: 'Recognition',
+function RecognitionList({ items }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!items || items.length === 0) return null
+  const visible = expanded ? items : items.slice(0, 2)
+  const remaining = items.length - visible.length
+
+  return (
+    <ul className="ci-card__list">
+      {visible.map((h, i) => <li key={i}>{h}</li>)}
+      {remaining > 0 && (
+        <li>
+          <button type="button" className="ci-card__more-btn" onClick={() => setExpanded(true)}>
+            +{remaining} more
+          </button>
+        </li>
+      )}
+    </ul>
+  )
 }
 
 function CompanyIntelligenceCard({ company }) {
@@ -18,7 +30,6 @@ function CompanyIntelligenceCard({ company }) {
     (company.industry ||
       company.domain?.length ||
       company.products_mentioned?.length ||
-      company.technologies_mentioned?.length ||
       company.engineering_hints?.length ||
       hasSignalCategories)
 
@@ -46,7 +57,7 @@ function CompanyIntelligenceCard({ company }) {
       )}
       {company.domain?.length > 0 && (
         <div className="ci-card__row">
-          <h4>Business domain</h4>
+          <h4>Business domains</h4>
           <div className="ci-card__tags">
             {company.domain.map((d) => <span key={d} className="ci-card__tag">{d}</span>)}
           </div>
@@ -60,41 +71,62 @@ function CompanyIntelligenceCard({ company }) {
           </div>
         </div>
       )}
-      {company.technologies_mentioned?.length > 0 && (
+
+      {(company.engineering_hints?.length > 0 || signals.culture?.length > 0) && (
         <div className="ci-card__row">
-          <h4>Company tech stack signal</h4>
-          <p className="ci-card__lead">
-            The company's own stated stack — distinct from what this specific role requires (see "What this
-            role requires" above)
-          </p>
-          <div className="ci-card__tags">
-            {company.technologies_mentioned.map((t) => <span key={t} className="ci-card__tag">{t}</span>)}
-          </div>
-        </div>
-      )}
-      {company.engineering_hints?.length > 0 && (
-        <div className="ci-card__row">
-          <h4>How this team operates</h4>
+          <h4>How they operate</h4>
           <ul className="ci-card__list">
-            {company.engineering_hints.map((h, i) => <li key={i}>{h}</li>)}
+            {(company.engineering_hints || []).map((h, i) => <li key={`eh-${i}`}>{h}</li>)}
+            {(signals.culture || []).map((h, i) => <li key={`c-${i}`}>{h}</li>)}
           </ul>
         </div>
       )}
 
-      {hasSignalCategories && (
-        <div className="ci-card__signals">
-          {Object.entries(SIGNAL_LABELS).map(([key, label]) => {
-            const items = signals[key]
-            if (!items || items.length === 0) return null
-            return (
-              <div className="ci-card__row" key={key}>
-                <h4>{label}</h4>
+      {signals.values?.length > 0 && (
+        <div className="ci-card__row">
+          <h4>Values</h4>
+          <div className="ci-card__tags">
+            {signals.values.map((v, i) => <span key={i} className="ci-card__tag">{v}</span>)}
+          </div>
+        </div>
+      )}
+
+      {signals.work_environment?.length > 0 && (
+        <div className="ci-card__row">
+          <h4>Work environment</h4>
+          <div className="ci-card__tags">
+            {signals.work_environment.map((v, i) => <span key={i} className="ci-card__tag">{v}</span>)}
+          </div>
+        </div>
+      )}
+
+      {(signals.learning_development?.length > 0 || signals.diversity_inclusion?.length > 0 || signals.recognition?.length > 0) && (
+        <div className="ci-card__people-culture">
+          <h4>People & culture</h4>
+          <div className="ci-card__people-grid">
+            {signals.learning_development?.length > 0 && (
+              <div>
+                <h5>Learning & development</h5>
                 <ul className="ci-card__list">
-                  {items.map((h, i) => <li key={i}>{h}</li>)}
+                  {signals.learning_development.map((h, i) => <li key={i}>{h}</li>)}
                 </ul>
               </div>
-            )
-          })}
+            )}
+            {signals.diversity_inclusion?.length > 0 && (
+              <div>
+                <h5>Diversity & inclusion</h5>
+                <ul className="ci-card__list">
+                  {signals.diversity_inclusion.map((h, i) => <li key={i}>{h}</li>)}
+                </ul>
+              </div>
+            )}
+            {signals.recognition?.length > 0 && (
+              <div>
+                <h5>Recognition</h5>
+                <RecognitionList items={signals.recognition} />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
