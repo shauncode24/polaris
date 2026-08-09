@@ -2,30 +2,37 @@
 from pydantic import BaseModel
 
 
+class CompanySignals(BaseModel):
+    """Structured company-culture categories (audit point #14) — replaces
+    the old flat "culture_hints" bucket so a consumer doesn't have to
+    guess what kind of hint each string is. Every category defaults to
+    empty; a category with nothing genuinely stated in the JD stays
+    empty rather than being padded.
+    """
+    culture: list[str] = []
+    values: list[str] = []
+    work_environment: list[str] = []
+    learning_development: list[str] = []
+    diversity_inclusion: list[str] = []
+    recognition: list[str] = []
+
+
 class ExtractedCompanySignals(BaseModel):
-    """Company-side half of the single combined extraction call (design
-    doc revision, "One Input, One LLM Call"). Deliberately shallow —
-    Company Intelligence in Phase 1 only contains what's literally
-    extractable from the job description text itself; it never infers
-    company info that isn't there (revision, "Company Intelligence
-    During Phase 1").
+    """Company-side half of the single combined extraction call. Only
+    what is literally extractable from the job description text itself
+    — never inferred (design doc revision, "Company Intelligence During
+    Phase 1").
     """
     industry: str | None = None
     products_mentioned: list[str] = []
     technologies_mentioned: list[str] = []
     engineering_hints: list[str] = []
-    culture_hints: list[str] = []
+    company_signals: CompanySignals = CompanySignals()
 
 
 class CompanyIntelligenceProfile(BaseModel):
     """Persisted Company Intelligence — 'how does this company hire and
-    operate', independent of any specific role or candidate. Kept as a
-    fully separate module from Job Intelligence even though both are
-    produced from the same job description text right now (revision,
-    "Company Intelligence Should Remain Independent") — one company can
-    post many roles, and this profile is meant to later be enriched from
-    other sources (recruiter notes, interview experiences) without ever
-    touching Job Intelligence's pipeline.
+    operate', independent of any specific role or candidate.
     """
     id: str | None = None
     company: str | None = None
@@ -33,6 +40,6 @@ class CompanyIntelligenceProfile(BaseModel):
     products_mentioned: list[str] = []
     technologies_mentioned: list[str] = []
     engineering_hints: list[str] = []
-    culture_hints: list[str] = []
+    company_signals: CompanySignals = CompanySignals()
     source_text_hash: str = ""
     created_at: str | None = None

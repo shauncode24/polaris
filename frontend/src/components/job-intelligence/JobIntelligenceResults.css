@@ -131,3 +131,37 @@
   .ji-results__header { flex-direction: column; align-items: flex-start; }
   .ji-results__header-badges { align-items: flex-start; }
 }
+
+/* --- NEW: role identity, structured qualifications/interview-focus, proficiency chip --- */
+
+.ji-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 20px;
+}
+.ji-identity-row { display: flex; flex-direction: column; gap: 2px; }
+.ji-identity-row__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-soft);
+}
+.ji-identity-row__value { font-size: 13.5px; color: var(--ink); font-weight: 600; }
+
+.ji-results__row { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.ji-results__row h4 {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-soft);
+}
+
+.ji-skill-chip__proficiency {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  text-transform: none;
+}

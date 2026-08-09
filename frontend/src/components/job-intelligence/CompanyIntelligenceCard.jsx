@@ -1,14 +1,25 @@
 // frontend/src/components/job-intelligence/CompanyIntelligenceCard.jsx
 import './CompanyIntelligenceCard.css'
 
+const SIGNAL_LABELS = {
+  culture: 'Culture',
+  values: 'Values',
+  work_environment: 'Work environment',
+  learning_development: 'Learning & development',
+  diversity_inclusion: 'Diversity & inclusion',
+  recognition: 'Recognition',
+}
+
 function CompanyIntelligenceCard({ company }) {
+  const signals = company?.company_signals || {}
+  const hasSignalCategories = Object.values(signals).some((arr) => arr?.length > 0)
   const hasSignal =
     company &&
     (company.industry ||
       company.products_mentioned?.length ||
       company.technologies_mentioned?.length ||
       company.engineering_hints?.length ||
-      company.culture_hints?.length)
+      hasSignalCategories)
 
   if (!hasSignal) {
     return (
@@ -56,12 +67,21 @@ function CompanyIntelligenceCard({ company }) {
           </ul>
         </div>
       )}
-      {company.culture_hints?.length > 0 && (
-        <div className="ci-card__row">
-          <h4>Stated culture</h4>
-          <ul className="ci-card__list">
-            {company.culture_hints.map((h, i) => <li key={i}>{h}</li>)}
-          </ul>
+
+      {hasSignalCategories && (
+        <div className="ci-card__signals">
+          {Object.entries(SIGNAL_LABELS).map(([key, label]) => {
+            const items = signals[key]
+            if (!items || items.length === 0) return null
+            return (
+              <div className="ci-card__row" key={key}>
+                <h4>{label}</h4>
+                <ul className="ci-card__list">
+                  {items.map((h, i) => <li key={i}>{h}</li>)}
+                </ul>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

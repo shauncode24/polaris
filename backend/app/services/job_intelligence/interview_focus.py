@@ -14,20 +14,41 @@ def derive_interview_focus_areas(
     enriched_required: list[EnrichedSkill],
     architecture_topics: list[str],
     seniority: SeniorityLevel,
-) -> list[str]:
-    areas: list[str] = [s.canonical.replace("_", " ").title() for s in enriched_required]
-    areas.extend(architecture_topics)
+) -> tuple[list[str], list[str], list[str]]:
+    # Explicit focus: from required skills and architecture topics
+    explicit: list[str] = [s.canonical.replace("_", " ").title() for s in enriched_required]
+    explicit.extend(architecture_topics)
 
+    # Inferred focus: seniority-driven additions
+    inferred: list[str] = []
     if seniority.level in ("senior", "staff"):
-        areas.append("System design & trade-off reasoning")
+        inferred.append("System design & trade-off reasoning")
     if seniority.level == "staff":
-        areas.append("Cross-team technical leadership")
+        inferred.append("Cross-team technical leadership")
 
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for area in areas:
-        key = area.lower().strip()
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(area)
-    return deduped[:MAX_INTERVIEW_FOCUS_AREAS]
+    # De-duplicate explicit
+    seen_explicit = set()
+    deduped_explicit = []
+    for item in explicit:
+        key = item.lower().strip()
+        if key and key not in seen_explicit:
+            seen_explicit.add(key)
+            deduped_explicit.append(item)
+
+    # Combined is explicit + inferred, capped to MAX_INTERVIEW_FOCUS_AREAS
+    combined = list(deduped_explicit)
+    seen_combined = set(seen_explicit)
+    for item in inferred:
+        key = item.lower().strip()
+        if key and key not in seen_combined:
+            seen_combined.add(key)
+            combined.append(item)
+
+    capped_combined = combined[:MAX_INTERVIEW_FOCUS_AREAS]
+    
+    # Filter explicit and inferred down to only what is present in the capped combined list
+    capped_set = {x.lower().strip() for x in capped_combined}
+    final_explicit = [x for x in deduped_explicit if x.lower().strip() in capped_set]
+    final_inferred = [x for x in inferred if x.lower().strip() in capped_set]
+
+    return final_explicit, final_inferred, capped_combined
