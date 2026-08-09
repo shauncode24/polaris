@@ -14,11 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.job_intelligence import CompanyIntelligenceProfileRow, JobIntelligenceProfileRow
 from app.schemas.company_intelligence import CompanyIntelligenceProfile
 from app.schemas.job_intelligence import ExtractionQuality, JobIntelligenceProfile
-from app.services.job_intelligence.extraction import extract_job_and_company
+from app.services.job_intelligence.extraction import JobIntelligenceExtractionError, extract_job_and_company
 from app.services.job_intelligence.interview_focus import derive_interview_focus_areas
 from app.services.job_intelligence.keywords import derive_resume_keywords
 from app.services.job_intelligence.normalization import enrich_skills
-from app.services.job_intelligence.seniority import detect_seniority
+from app.services.job_intelligence.seniority import detect_seniority_with_fallback
+
+__all__ = ["build_job_intelligence", "get_job_intelligence", "JobIntelligenceExtractionError"]
 
 
 def _source_text_hash(raw_text: str) -> str:
@@ -49,9 +51,18 @@ def _compute_extraction_quality(raw_text: str, total_requirements: int) -> Extra
 async def build_job_intelligence(
     db: AsyncSession, user_id, raw_text: str, company: str | None = None, role: str | None = None,
 ) -> tuple[JobIntelligenceProfile, CompanyIntelligenceProfile]:
+    """Raises JobIntelligenceExtractionError if the combined extraction
+    call fails or returns something unvalidatable — callers (api/jobs.py,
+    api/job_intelligence.py) must catch this and translate it into a 502.
+    There is deliberately no deterministic fallback here: unlike
+    prioritization or narrative generation, a failed extraction means
+    there is no role to build a profile FROM at all, so degrading
+    silently would mean persisting/returning a fabricated-empty profile
+    as if it were real.
+    """
     text_hash = _source_text_hash(raw_text)
 
-    extracted = await extract_job_and_company(raw_text)
+    extracted = await extract_job_and_company(raw_text)  # JobIntelligenceExtractionError propagates to the caller
     job_extraction = extracted.job
     company_extraction = extracted.company
 
@@ -62,7 +73,13 @@ async def build_job_intelligence(
     resolved_role = role or job_extraction.role
     resolved_company = company or job_extraction.company
 
-    seniority = detect_seniority(raw_text, resolved_role)
+    # Seniority: deterministic-first, with an optional LLM-assist
+    # refinement ONLY when the deterministic pass found nothing at all —
+    # see seniority.py's detect_seniority_with_fallback. This step never
+    # raises; a failed/ambiguous refinement silently keeps whatever the
+    # deterministic pass returned.
+    seniority = await detect_seniority_with_fallback(raw_text, resolved_role)
+
     resume_keywords = derive_resume_keywords(
         enriched_required, enriched_implicit,
         job_extraction.required_skills, job_extraction.implicit_skills,
@@ -75,6 +92,10 @@ async def build_job_intelligence(
     total_requirements = len(enriched_required) + len(enriched_implicit) + len(job_extraction.architecture_topics)
     extraction_quality = _compute_extraction_quality(raw_text, total_requirements)
 
+    # NOTE (fix): no longer sets a "capabilities" field — it used to be
+    # set to a verbatim copy of architecture_topics with no independent
+    # extraction and no consumer; see schemas/job_intelligence.py's
+    # docstring on JobIntelligenceProfile for the full rationale.
     job_profile = JobIntelligenceProfile(
         role=resolved_role,
         company=resolved_company,
@@ -82,7 +103,6 @@ async def build_job_intelligence(
         enriched_implicit_skills=enriched_implicit,
         enriched_nice_to_have=enriched_nice,
         architecture_topics=job_extraction.architecture_topics,
-        capabilities=job_extraction.architecture_topics,
         seniority_signal=seniority,
         resume_keywords=resume_keywords,
         interview_focus_areas=interview_focus_areas,

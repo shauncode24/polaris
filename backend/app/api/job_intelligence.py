@@ -13,7 +13,11 @@ from app.models.job_intelligence import JobIntelligenceProfileRow
 from app.schemas.job_intelligence import JobIntelligenceSummary
 from app.schemas.target_profile import TargetProfile
 from app.services.company_intelligence.reader import get_company_intelligence_by_source_hash
-from app.services.job_intelligence.builder import build_job_intelligence, get_job_intelligence
+from app.services.job_intelligence.builder import (
+    JobIntelligenceExtractionError,
+    build_job_intelligence,
+    get_job_intelligence,
+)
 from app.services.resume.pdf_parser import extract_text_from_pdf
 from app.services.target_profile.builder import build_target_profile
 
@@ -36,9 +40,12 @@ async def analyze_job_intelligence(
     Intelligence) from the single combined extraction call — this is
     the Job & Company Intelligence module's own entry point, entirely
     separate from /jobs/analyze (Comparison Engine)."""
-    job_profile, company_profile = await build_job_intelligence(
-        db, current_user.id, payload.raw_text, payload.company, payload.role,
-    )
+    try:
+        job_profile, company_profile = await build_job_intelligence(
+            db, current_user.id, payload.raw_text, payload.company, payload.role,
+        )
+    except JobIntelligenceExtractionError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     return build_target_profile(job_profile, company_profile)
 
 
@@ -54,7 +61,10 @@ async def analyze_job_intelligence_pdf(
     raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
-    job_profile, company_profile = await build_job_intelligence(db, current_user.id, raw_text, company, role)
+    try:
+        job_profile, company_profile = await build_job_intelligence(db, current_user.id, raw_text, company, role)
+    except JobIntelligenceExtractionError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     return build_target_profile(job_profile, company_profile)
 
 

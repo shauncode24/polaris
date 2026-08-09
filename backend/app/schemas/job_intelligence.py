@@ -51,7 +51,20 @@ class ExtractionQuality(BaseModel):
 class JobIntelligenceProfile(BaseModel):
     """The Job Intelligence analogue of IdentityFacts — a user-independent
     representation of what a role requires. Never reads anything about a
-    specific candidate (design doc §2.1)."""
+    specific candidate (design doc §2.1).
+
+    NOTE: this used to also carry a "capabilities" field, populated as a
+    verbatim copy of "architecture_topics" in builder.py — no independent
+    extraction ever produced it, and no consumer (prompt, API response
+    field, or frontend component) read it separately from
+    architecture_topics. Removed rather than backfilled with real
+    extraction, since nothing in the design doc actually calls for a
+    concept distinct from architecture_topics here. If a genuine
+    "capabilities" concept is wanted later (e.g. functional capabilities
+    a hire is expected to own, as opposed to architecture-level system
+    design topics), it should be added back as its own extracted field
+    in prompts/job_intelligence.py, not a copy of an existing one.
+    """
     id: str | None = None
     role: str | None = None
     company: str | None = None
@@ -59,7 +72,6 @@ class JobIntelligenceProfile(BaseModel):
     enriched_implicit_skills: list[EnrichedSkill] = []
     enriched_nice_to_have: list[EnrichedSkill] = []
     architecture_topics: list[str] = []
-    capabilities: list[str] = []
     seniority_signal: SeniorityLevel = SeniorityLevel()
     resume_keywords: list[str] = []
     interview_focus_areas: list[str] = []

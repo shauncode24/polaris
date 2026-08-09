@@ -1,5 +1,4 @@
 # backend/app/api/jobs.py
-from _pytest import freeze_support
 from datetime import datetime, timezone
 from io import BytesIO
 from uuid import UUID
@@ -15,7 +14,7 @@ from app.models.job_intelligence import GapAnalysisResultRow
 from app.services.projects.linking import normalize_name
 from app.schemas.interpretation import CategoryScore, OverallMatch, SkillGapAnalysisResponse
 from app.schemas.skill_gap import JDPasteRequest
-from app.services.job_intelligence.builder import build_job_intelligence
+from app.services.job_intelligence.builder import JobIntelligenceExtractionError, build_job_intelligence
 from app.services.target_profile.builder import build_target_profile
 from app.services.skill_gap.comparison import analyze_skill_gap
 from app.services.skill_gap.category_breakdown import (
@@ -52,6 +51,36 @@ async def _fetch_profile_context(db, user_id, max_projects: int = 6) -> list[dic
     return projects[:max_projects]
 
 
+async def _get_latest_gap_result_row(db, job_intelligence_id) -> GapAnalysisResultRow | None:
+    """The GapAnalysisResultRow this JD's SkillGapAnalysisResponse should
+    actually be built from — its append-only, source-tagged lineage
+    against both the JobIntelligenceProfile and CompanyIntelligenceProfile
+    it was compared against, same pattern as LeetcodeEngineeringSnapshot
+    / EngineeringIdentity elsewhere in this codebase. Most recent wins,
+    since a re-analysis of the exact same job_intelligence_id (rare, but
+    possible via re-running the comparison) should supersede an older one.
+    """
+    if job_intelligence_id is None:
+        return None
+    result = await db.execute(
+        select(GapAnalysisResultRow)
+        .where(GapAnalysisResultRow.job_intelligence_id == job_intelligence_id)
+        .order_by(GapAnalysisResultRow.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+def _response_from_gap_result_row(row: GapAnalysisResultRow) -> SkillGapAnalysisResponse:
+    return SkillGapAnalysisResponse(
+        report=row.report_json,
+        category_breakdown=[CategoryScore(**c) for c in row.category_breakdown_json.get("items", [])],
+        overall_match=OverallMatch(**row.overall_match_json),
+        analysis=row.narrative_json,
+        analysis_degraded=row.analysis_degraded,
+    )
+
+
 async def _run_job_analysis(
     raw_text: str,
     company: str | None,
@@ -66,6 +95,9 @@ async def _run_job_analysis(
     """
     print(f"[TRACING] Received JD analysis request, length={len(raw_text)}", flush=True)
 
+    # JobIntelligenceExtractionError propagates to the route handlers
+    # below, which translate it into an HTTP 502 — there is no
+    # deterministic fallback for a failed extraction (see builder.py).
     job_intelligence, company_intelligence = await build_job_intelligence(db, user.id, raw_text, company, role)
     target_profile = build_target_profile(job_intelligence, company_intelligence)
 
@@ -148,8 +180,11 @@ async def _run_job_analysis(
     )
 
     # Dual-write: keep JobDescription.analysis_result populated (Phase 2/3
-    # rollout safety — GET /jobs/{id} reads this unchanged) AND persist a
-    # proper GapAnalysisResult row for lineage against both source profiles.
+    # rollout safety — legacy pre-refactor rows with no job_intelligence_id
+    # still need SOME read path) AND persist a proper GapAnalysisResult
+    # row for lineage against both source profiles. GET /jobs and
+    # GET /jobs/{id} now read GapAnalysisResultRow as the primary source
+    # of truth (see below) and only fall back to this blob for legacy rows.
     job_description.analysis_result = response.model_dump(mode="json")
     await db.commit()
 
@@ -183,7 +218,10 @@ async def analyze_job_description(
     current_user: User = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    return await _run_job_analysis(payload.raw_text, payload.company, payload.role, current_user, db)
+    try:
+        return await _run_job_analysis(payload.raw_text, payload.company, payload.role, current_user, db)
+    except JobIntelligenceExtractionError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.post("/analyze-pdf", response_model=SkillGapAnalysisResponse)
@@ -198,7 +236,10 @@ async def analyze_job_description_pdf(
     raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
-    return await _run_job_analysis(raw_text, company, role, current_user, db)
+    try:
+        return await _run_job_analysis(raw_text, company, role, current_user, db)
+    except JobIntelligenceExtractionError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 class JobAnalysisSummary(BaseModel):
@@ -222,7 +263,15 @@ async def list_job_analyses(current_user: User = Depends(get_current_user), db=D
 
     summaries = []
     for jd in rows:
-        overall = (jd.analysis_result or {}).get("overall_match", {})
+        # Prefer the real GapAnalysisResultRow lineage; only fall back to
+        # the legacy analysis_result blob for pre-refactor rows that have
+        # no job_intelligence_id at all.
+        gap_row = await _get_latest_gap_result_row(db, jd.job_intelligence_id)
+        if gap_row is not None:
+            overall = gap_row.overall_match_json or {}
+        else:
+            overall = (jd.analysis_result or {}).get("overall_match", {})
+
         summaries.append(
             JobAnalysisSummary(
                 id=str(jd.id),
@@ -246,6 +295,18 @@ async def get_job_analysis(
         )
     )
     jd = result.scalar_one_or_none()
-    if jd is None or jd.analysis_result is None:
+    if jd is None:
+        raise HTTPException(status_code=404, detail="Job analysis not found")
+
+    # Primary read path: the real, lineage-carrying GapAnalysisResultRow,
+    # tied to both source profiles rather than a flattened JSONB blob.
+    gap_row = await _get_latest_gap_result_row(db, jd.job_intelligence_id)
+    if gap_row is not None:
+        return _response_from_gap_result_row(gap_row)
+
+    # Legacy fallback — pre-refactor JobDescription rows with no
+    # job_intelligence_id (and therefore no GapAnalysisResultRow) still
+    # read from the dual-written blob.
+    if jd.analysis_result is None:
         raise HTTPException(status_code=404, detail="Job analysis not found")
     return SkillGapAnalysisResponse.model_validate(jd.analysis_result)
