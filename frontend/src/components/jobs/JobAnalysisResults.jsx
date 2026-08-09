@@ -75,7 +75,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </p>
       )}
 
-      {/* Overall match + stats */}
       <div className="job-results__top-grid">
         <div className="job-results__match-card">
           <span className="job-results__match-label">Overall match</span>
@@ -106,7 +105,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       </div>
 
-      {/* Executive summary */}
       {analysis.executive_summary && (
         <div className="job-results__card">
           <h2>Executive summary</h2>
@@ -120,7 +118,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Category breakdown */}
       {categories?.length > 0 && (
         <div className="job-results__card">
           <h2>Category breakdown</h2>
@@ -143,7 +140,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Skill gaps */}
       <div className="job-results__card">
         <h2>Skill gaps</h2>
         <div className="gap-columns">
@@ -174,7 +170,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       </div>
 
-      {/* Strengths & Risks */}
       <div className="job-results__grid-2">
         {analysis.strengths?.length > 0 && (
           <div className="job-results__card">
@@ -194,7 +189,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         )}
       </div>
 
-      {/* Hiring perspective */}
       {analysis.hiring_perspective && (
         <div className="job-results__card">
           <h2>Hiring perspective</h2>
@@ -202,7 +196,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Learning plan */}
       {analysis.learning_plan?.length > 0 && (
         <div className="job-results__card">
           <h2>Learning plan</h2>
@@ -231,7 +224,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Resume advice */}
       {analysis.resume_advice?.length > 0 && (
         <div className="job-results__card">
           <h2>Resume advice</h2>
@@ -247,7 +239,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Interview focus */}
       {analysis.interview_focus?.length > 0 && (
         <div className="job-results__card">
           <h2>Interview focus</h2>
@@ -259,7 +250,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Career strategy */}
       {analysis.career_strategy && (
         <div className="job-results__card">
           <h2>Career strategy</h2>
@@ -267,7 +257,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Next steps */}
       {analysis.next_steps?.length > 0 && (
         <div className="job-results__card">
           <h2>Next steps</h2>
@@ -277,7 +266,6 @@ function JobAnalysisResults({ data, jobId, roleLabel }) {
         </div>
       )}
 
-      {/* Raw JSON */}
       <div className="job-results__card">
         <button type="button" className="job-results__raw-toggle" onClick={() => setShowRaw((v) => !v)}>
           {showRaw ? 'Hide raw JSON response' : 'Show raw JSON response'}

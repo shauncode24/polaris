@@ -50,6 +50,7 @@ function useNavGroups() {
       label: 'Analyze',
       items: [
         { key: 'skill-gap', label: 'Skill Gap Analyzer', icon: IconDocument, to: '/jobs' },
+        { key: 'job-intel', label: 'Job & Company Intel', icon: IconBuilding, to: '/job-intelligence' },
         { key: 'resume-reviewer', label: 'Resume Reviewer', icon: IconRefresh },
         { key: 'project-intel', label: 'Project Intelligence', icon: IconFolder },
         { key: 'company-intel', label: 'Company Intelligence', icon: IconBuilding },

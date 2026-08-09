@@ -1,0 +1,43 @@
+/* frontend/src/components/job-intelligence/JobIntelligenceHistoryList.css */
+.jih-empty { font-size: 13px; color: var(--text-soft); padding: 4px 2px; }
+
+.jih-list { display: flex; flex-direction: column; gap: 6px; }
+
+.jih-item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.jih-item:hover { border-color: var(--accent); }
+.jih-item--active { border-color: var(--accent); background: var(--accent-soft); }
+
+.jih-item__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.jih-item__role {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.jih-item__company { font-size: 12px; color: var(--text); }
+.jih-item__date { font-size: 11px; color: var(--text-soft); margin-top: 2px; }
+
+.jih-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+}

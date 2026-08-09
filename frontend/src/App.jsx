@@ -17,6 +17,7 @@ import ProjectsPage from './pages/ProjectsPage'
 import GitHubPage from './pages/GitHubPage'
 import LeetCodePage from './pages/LeetCodePage'
 import IdentityPage from './pages/IdentityPage'
+import JobIntelligencePage from './pages/JobIntelligencePage'
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
               <Route path="/github" element={<ProtectedRoute><GitHubPage /></ProtectedRoute>} />
               <Route path="/leetcode" element={<ProtectedRoute><LeetCodePage /></ProtectedRoute>} />
               <Route path="/identity" element={<ProtectedRoute><IdentityPage /></ProtectedRoute>} />
+              <Route path="/job-intelligence" element={<ProtectedRoute><JobIntelligencePage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
         </ProfileDataProvider>

@@ -1,0 +1,50 @@
+/* frontend/src/pages/JobIntelligencePage.css */
+.ji-page-layout { display: flex; min-height: 100svh; background: var(--bg); }
+
+.ji-page-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.ji-page-content {
+  padding: 28px 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: var(--page-max-width);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.ji-page-intro h1 { font-size: 26px; }
+.ji-page-intro p { color: var(--text); font-size: 14.5px; margin-top: 4px; }
+
+.ji-page-columns {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.ji-page-new-btn {
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ji-page-new-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.ji-page-error {
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+
+.ji-page-loading-results { font-size: 13px; color: var(--text-soft); }
+
+@media (max-width: 900px) {
+  .ji-page-columns { flex-direction: column; }
+}

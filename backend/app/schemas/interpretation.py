@@ -1,3 +1,4 @@
+# backend/app/schemas/interpretation.py — back to original, no Job/Company Intelligence fields
 from pydantic import BaseModel
 
 from app.schemas.skill_gap import SkillGapReport
@@ -31,7 +32,7 @@ class LearningPlanItem(BaseModel):
 
 class NarrativeAnalysis(BaseModel):
     executive_summary: str
-    role_focus: list[str] = []  # "What this company is really looking for"
+    role_focus: list[str] = []
     strengths: list[str] = []
     risks: list[str] = []
     hiring_perspective: str = ""
@@ -43,10 +44,13 @@ class NarrativeAnalysis(BaseModel):
 
 
 class SkillGapAnalysisResponse(BaseModel):
-    """What the API actually returns now. `report` is the deterministic
-    machine output (unchanged, still safe for any future non-LLM consumer
-    like Career Planner); `analysis` is what actually renders as prose in
-    the UI.
+    """The Comparison Engine's output — user-vs-role comparison only.
+    Deliberately owns nothing from Job Intelligence or Company
+    Intelligence beyond what analyze_skill_gap/narrative.py already
+    compute (role_focus/interview_focus are personalized narrative
+    fields, grounded internally in job_intelligence.interview_focus_areas
+    but never re-exposing the raw role/company facts here — those live
+    exclusively in the separate Job Intelligence module/page).
     """
     report: SkillGapReport
     category_breakdown: list[CategoryScore] = []

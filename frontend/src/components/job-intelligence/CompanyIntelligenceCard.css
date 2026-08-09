@@ -1,0 +1,35 @@
+/* frontend/src/components/job-intelligence/CompanyIntelligenceCard.css */
+.ci-card {
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ci-card h2 { font-size: 17px; }
+.ci-card__lead { color: var(--text-soft); font-size: 12.5px; margin-top: -8px; }
+.ci-card__empty { color: var(--text-soft); font-size: 13.5px; }
+
+.ci-card__row { display: flex; flex-direction: column; gap: 6px; }
+.ci-card__row h4 {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-soft);
+}
+.ci-card__row p { font-size: 13.5px; color: var(--text); }
+
+.ci-card__tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.ci-card__tag {
+  padding: 6px 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.ci-card__list { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text); }

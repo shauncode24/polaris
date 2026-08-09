@@ -89,3 +89,15 @@ class JobIntelligenceProfile(BaseModel):
             for s in group:
                 out.setdefault(s.canonical, rtype)
         return out
+
+
+class JobIntelligenceSummary(BaseModel):
+    """Lightweight history-list projection — the Job Intelligence
+    module's own summary shape, never shared with jobs.SkillGapAnalysisResponse
+    or JobAnalysisSummary."""
+    id: str
+    role: str | None = None
+    company: str | None = None
+    seniority_level: str = "unspecified"
+    extraction_quality_label: str = "Low"
+    created_at: str | None = None
