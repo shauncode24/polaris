@@ -1,4 +1,4 @@
-# backend/app/schemas/interpretation.py — back to original, no Job/Company Intelligence fields
+# backend/app/schemas/interpretation.py
 from pydantic import BaseModel
 
 from app.schemas.skill_gap import SkillGapReport
@@ -19,36 +19,26 @@ class OverallMatch(BaseModel):
     matched_requirements: str
     required_matched: str
     nice_to_have_matched: str
-    projected_percentage: float
-    opportunity_narrative: str
-
-
-class LearningPlanItem(BaseModel):
-    skill: str
-    weeks: int
-    rationale: str = ""
-    phase: str = ""
 
 
 class NarrativeAnalysis(BaseModel):
+    """Diagnostic narrative only — no career planning, resume advice,
+    hiring-manager roleplay, or interview prep. Those belong to other
+    modules (Career Planner, Interview). This model answers strictly:
+    how well does this profile match this role, where are the strengths,
+    and where are the gaps?
+    """
     executive_summary: str
     role_focus: list[str] = []
     strengths: list[str] = []
     risks: list[str] = []
-    hiring_perspective: str = ""
-    learning_plan: list[LearningPlanItem] = []
-    resume_advice: list[str] = []
-    interview_focus: list[str] = []
-    career_strategy: str = ""
-    next_steps: list[str] = []
 
 
 class SkillGapAnalysisResponse(BaseModel):
     """The Comparison Engine's output — user-vs-role comparison only.
     Deliberately owns nothing from Job Intelligence or Company
     Intelligence beyond what analyze_skill_gap/narrative.py already
-    compute (role_focus/interview_focus are personalized narrative
-    fields, grounded internally in job_intelligence.interview_focus_areas
+    compute (role_focus is grounded in job_intelligence.interview_focus_areas
     but never re-exposing the raw role/company facts here — those live
     exclusively in the separate Job Intelligence module/page).
     """

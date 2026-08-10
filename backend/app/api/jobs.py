@@ -12,15 +12,20 @@ from app.core.database import get_db
 from app.models.facts import JobDescription, Project, Resume
 from app.models.job_intelligence import GapAnalysisResultRow
 from app.services.projects.linking import normalize_name
-from app.schemas.interpretation import CategoryScore, OverallMatch, SkillGapAnalysisResponse
+from app.schemas.interpretation import CategoryScore, NarrativeAnalysis, OverallMatch, SkillGapAnalysisResponse
 from app.schemas.skill_gap import JDPasteRequest
-from app.services.job_intelligence.builder import JobIntelligenceExtractionError, build_job_intelligence
+from app.schemas.skill_gap_page import SkillGapForJobResponse
+from app.services.job_intelligence.builder import (
+    JobIntelligenceExtractionError,
+    build_job_intelligence,
+    get_job_intelligence,
+)
+from app.services.company_intelligence.reader import get_company_intelligence_by_source_hash
 from app.services.target_profile.builder import build_target_profile
 from app.services.skill_gap.comparison import analyze_skill_gap
 from app.services.skill_gap.category_breakdown import (
     compute_category_breakdown,
     compute_overall_match,
-    compute_peer_benchmarks,
 )
 from app.services.skill_gap.narrative import (
     InterpretationError,
@@ -147,8 +152,6 @@ async def _run_job_analysis(
     overall_match = compute_overall_match(
         target_profile.job_intelligence.canonical_skills_map, report.have, report.partial, report.missing,
     )
-    profile_context = await _fetch_profile_context(db, user.id)
-
     context = build_narrative_context(
         role=resolved_role,
         company=resolved_company,
@@ -156,10 +159,8 @@ async def _run_job_analysis(
         partial=report.partial,
         missing=report.missing,
         priority_order=report.priority_order,
-        estimated_weeks_by_skill={m.skill: m.estimated_weeks for m in report.missing},
         category_breakdown=category_breakdown,
         overall_match=overall_match,
-        profile_context=profile_context,
         job_interview_focus_areas=target_profile.job_intelligence.interview_focus_areas,
     )
 
@@ -210,6 +211,120 @@ async def _run_job_analysis(
     await trigger_identity_refresh(db, user.id, "job description analysis")
 
     return response
+
+
+async def _get_or_build_gap_result_for_job_intelligence(
+    db,
+    user: User,
+    job_intelligence,
+    company_intelligence,
+    regenerate: bool,
+) -> GapAnalysisResultRow:
+    """The core of the new "select an existing parsed job" flow. Never
+    re-extracts the JD (that's Job Intelligence's job, already done) —
+    only ever runs the Comparison Engine + narrative over a profile that
+    already exists. Reads back the latest GapAnalysisResultRow for this
+    job_intelligence_id unless the caller explicitly asks to regenerate,
+    same caching pattern used by /resume/coherence, /resume/tailor, and
+    /projects/portfolio-narrative elsewhere in this codebase.
+    """
+    job_intelligence_uuid = UUID(job_intelligence.id)
+
+    if not regenerate:
+        cached = await _get_latest_gap_result_row(db, job_intelligence_uuid)
+        if cached is not None:
+            return cached
+
+    target_profile = build_target_profile(job_intelligence, company_intelligence)
+
+    report = await analyze_skill_gap(db, user.id, target_profile.job_intelligence)
+    print(
+        f"[TRACING] Gap analysis (existing job_intelligence_id={job_intelligence_uuid}) complete: "
+        f"{len(report.have)} have, {len(report.partial)} partial, {len(report.missing)} missing.",
+        flush=True,
+    )
+
+    category_breakdown = compute_category_breakdown(report.have, report.partial, report.missing)
+    overall_match = compute_overall_match(
+        target_profile.job_intelligence.canonical_skills_map, report.have, report.partial, report.missing,
+    )
+    context = build_narrative_context(
+        role=job_intelligence.role,
+        company=job_intelligence.company,
+        have=report.have,
+        partial=report.partial,
+        missing=report.missing,
+        priority_order=report.priority_order,
+        category_breakdown=category_breakdown,
+        overall_match=overall_match,
+        job_interview_focus_areas=target_profile.job_intelligence.interview_focus_areas,
+    )
+
+    degraded = False
+    try:
+        analysis = await generate_narrative_analysis(context)
+    except InterpretationError as e:
+        print(f"[TRACING] Narrative generation degraded, using fallback: {e}", flush=True)
+        analysis = fallback_narrative(context)
+        degraded = True
+
+    gap_result_row = GapAnalysisResultRow(
+        user_id=user.id,
+        job_intelligence_id=job_intelligence_uuid,
+        company_intelligence_id=(
+            UUID(company_intelligence.id) if company_intelligence and company_intelligence.id else None
+        ),
+        report_json=report.model_dump(mode="json"),
+        category_breakdown_json={"items": category_breakdown},
+        overall_match_json=overall_match,
+        narrative_json=analysis.model_dump(mode="json"),
+        analysis_degraded=degraded,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(gap_result_row)
+    await db.commit()
+    await db.refresh(gap_result_row)
+
+    await trigger_identity_refresh(db, user.id, "job description analysis")
+
+    return gap_result_row
+
+
+@router.get("/by-intelligence/{job_intelligence_id}", response_model=SkillGapForJobResponse)
+async def get_skill_gap_for_job_intelligence(
+    job_intelligence_id: UUID,
+    regenerate: bool = False,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Skill Gap's actual entry point going forward: the user selects an
+    already-parsed Job Intelligence profile (from GET /job-intelligence)
+    and this runs — or reads back a cached — comparison against their
+    Engineering Identity. No JD text, no manual configuration; the only
+    input is which existing profile to compare against.
+    """
+    job_intelligence = await get_job_intelligence(db, job_intelligence_id)
+    if job_intelligence is None:
+        raise HTTPException(status_code=404, detail="Job intelligence profile not found")
+
+    company_intelligence = await get_company_intelligence_by_source_hash(
+        db, current_user.id, job_intelligence.source_text_hash,
+    )
+
+    gap_row = await _get_or_build_gap_result_for_job_intelligence(
+        db, current_user, job_intelligence, company_intelligence, regenerate,
+    )
+
+    return SkillGapForJobResponse(
+        job_intelligence=job_intelligence,
+        company_intelligence=company_intelligence,
+        report=gap_row.report_json,
+        category_breakdown=[CategoryScore(**c) for c in gap_row.category_breakdown_json.get("items", [])],
+        overall_match=OverallMatch(**gap_row.overall_match_json),
+        analysis=NarrativeAnalysis(**gap_row.narrative_json),
+        analysis_degraded=gap_row.analysis_degraded,
+        generated_at=gap_row.created_at.isoformat(),
+    )
 
 
 @router.post("/analyze", response_model=SkillGapAnalysisResponse)

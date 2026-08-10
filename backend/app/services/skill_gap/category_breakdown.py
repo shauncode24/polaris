@@ -12,8 +12,12 @@ SkillGapAnalysisResponse or called from api/jobs.py, and nothing in the
 design-doc comments visible in this codebase specifies it as a required
 Skill Gap Analyzer output. Per the plan's own default, dead deterministic
 code is removed rather than left reachable-but-unused.
+
+projected_percentage and opportunity_narrative removed (Skill Gap scoping
+refactor): those implied career-planning promises ("close these gaps and
+you'll reach X%") that belong in the Career Planner module, not here.
 """
-from app.services.taxonomy.skill_taxonomy import CATEGORY_MAP, DEFAULT_CATEGORY, get_curriculum_rank
+from app.services.taxonomy.skill_taxonomy import CATEGORY_MAP, DEFAULT_CATEGORY, get_curriculum_rank  # noqa: F401 (get_curriculum_rank kept for taxonomy import consistency)
 
 TYPE_WEIGHTS = {"required": 1.0, "implicit": 0.7, "nice_to_have": 0.3}
 
@@ -117,30 +121,10 @@ def compute_overall_match(canonical_skills: dict[str, str], have, partial, missi
     nice_total = len(nice_to_have_list)
     nice_matched = sum(1 for s in nice_to_have_list if s in matched_set)
 
-    missing_by_rank = sorted(list(missing_set), key=get_curriculum_rank)
-    top_3_missing = missing_by_rank[:3]
-
-    projected_sum = weighted_sum
-    for skill in top_3_missing:
-        projected_sum += 0.9 * TYPE_WEIGHTS.get(canonical_skills.get(skill), 0.5)
-
-    projected_percentage = round((projected_sum / weight_total) * 100, 1) if weight_total > 0 else 0.0
-
-    if len(missing_by_rank) == 0:
-        opportunity_narrative = "Your profile is fully aligned with all requirements."
-    else:
-        top_skills_str = ", ".join(s.title() for s in top_3_missing)
-        opportunity_narrative = (
-            f"Closing the top missing skill(s) ({top_skills_str}) would increase your estimated "
-            f"alignment from {int(percentage)}% to {int(projected_percentage)}%."
-        )
-
     return {
         "percentage": percentage,
         "label": label,
         "matched_requirements": f"{matched_count} / {total_count}",
         "required_matched": f"{required_matched} / {required_total}",
         "nice_to_have_matched": f"{nice_matched} / {nice_total}",
-        "projected_percentage": projected_percentage,
-        "opportunity_narrative": opportunity_narrative,
     }
