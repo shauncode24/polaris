@@ -1,15 +1,6 @@
 from pydantic import BaseModel
 
 
-class ExtractedJDRequirements(BaseModel):
-    required_skills: list[str] = []
-    implicit_skills: list[str] = []
-    architecture_topics: list[str] = []
-    nice_to_have: list[str] = []
-    company: str | None = None
-    role: str | None = None
-
-
 class JDPasteRequest(BaseModel):
     raw_text: str
     company: str | None = None
@@ -21,6 +12,14 @@ class HaveSkill(BaseModel):
     confidence: float
     evidence: list[str]
     explanation: str = ""
+    # NEW — only set when a real claim-risk/timeline-plausibility
+    # discount was actually applied (see
+    # services/identity/confidence_reconciliation.py). Mirrors the exact
+    # shape IdentityFacts.top_skills already exposes for the same reason
+    # — transparency about why a confidence number reads lower than the
+    # raw evidence weight alone would suggest.
+    raw_confidence: float | None = None
+    confidence_flags: list[str] = []
 
 
 class PartialSkill(BaseModel):
@@ -28,6 +27,8 @@ class PartialSkill(BaseModel):
     confidence: float
     reason: str
     explanation: str = ""
+    raw_confidence: float | None = None
+    confidence_flags: list[str] = []
 
 
 class MissingSkill(BaseModel):

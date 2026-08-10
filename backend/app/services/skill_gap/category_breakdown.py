@@ -1,10 +1,17 @@
 # backend/app/services/skill_gap/category_breakdown.py
-"""compute_category_breakdown / compute_overall_match / compute_peer_benchmarks
-— moved from jobs/skill_categories.py per design doc §5.5. These are
-genuinely comparison logic (they consume have/partial/missing against a
-role's canonical skills), so they belong to the Comparison Engine — but
-now import the shared taxonomy (CATEGORY_MAP, curriculum rank) instead
-of owning it.
+"""compute_category_breakdown / compute_overall_match — moved from
+jobs/skill_categories.py per design doc §5.5. These are genuinely
+comparison logic (they consume have/partial/missing against a role's
+canonical skills), so they belong to the Comparison Engine — but now
+import the shared taxonomy (CATEGORY_MAP, curriculum rank) instead of
+owning it.
+
+compute_peer_benchmarks() was removed (Skill Gap Analyzer implementation
+plan, Step 5): it was fully implemented but never wired into
+SkillGapAnalysisResponse or called from api/jobs.py, and nothing in the
+design-doc comments visible in this codebase specifies it as a required
+Skill Gap Analyzer output. Per the plan's own default, dead deterministic
+code is removed rather than left reachable-but-unused.
 """
 from app.services.taxonomy.skill_taxonomy import CATEGORY_MAP, DEFAULT_CATEGORY, get_curriculum_rank
 
@@ -137,29 +144,3 @@ def compute_overall_match(canonical_skills: dict[str, str], have, partial, missi
         "projected_percentage": projected_percentage,
         "opportunity_narrative": opportunity_narrative,
     }
-
-
-def compute_peer_benchmarks(have, partial, missing) -> list[dict]:
-    categories_to_check = {
-        "Backend Development": "Backend Programming",
-        "Infrastructure & DevOps": "Infrastructure",
-        "Database & Data": "Databases",
-        "AI/ML Engineering": "AI Engineering",
-    }
-
-    matched_skills = set(h.skill for h in have) | set(p.skill for p in partial)
-
-    standings = []
-    for db_cat, ui_name in categories_to_check.items():
-        matched_in_cat = sum(1 for s in matched_skills if CATEGORY_MAP.get(s) == db_cat)
-
-        if matched_in_cat >= 2:
-            standing = "Above Average"
-        elif matched_in_cat == 1:
-            standing = "Average"
-        else:
-            standing = "Below Average"
-
-        standings.append({"area": ui_name, "standing": standing})
-
-    return standings
