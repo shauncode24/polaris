@@ -20,6 +20,7 @@ import IdentityInsights from '../components/identity/IdentityInsights'
 import IdentityEvolution from '../components/identity/IdentityEvolution'
 import IdentityHistoryPanel from '../components/identity/IdentityHistoryPanel'
 import WeeklyBriefCard from '../components/identity/WeeklyBriefCard'
+import PortfolioNarrativePanel from '../components/identity/PortfolioNarrativePanel'
 import './IdentityPage.css'
 
 export default function IdentityPage() {
@@ -162,6 +163,8 @@ export default function IdentityPage() {
               <CollapsibleSection title="Role Fit" defaultOpen={true}>
                 <RoleFitBars roleFit={facts?.role_fit} architectureMaturity={facts?.architecture_maturity} />
               </CollapsibleSection>
+
+              <PortfolioNarrativePanel portfolioNarrative={facts?.portfolio_narrative} />
 
               <SignalsGapsPanel
                 strongestSignals={narrative?.strongest_signals}

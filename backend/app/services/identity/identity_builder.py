@@ -35,7 +35,7 @@ from app.models.inference import (
     EngineeringIdentity,
 )
 from app.models.structure import Skill
-from app.schemas.engineering_identity import IdentityFacts
+from app.schemas.engineering_identity import IdentityFacts, PortfolioNarrativeFacts
 from app.services.evidence import build_evidence_details, get_all_skill_confidences
 from app.services.github.github_knowledge import build_github_knowledge_object
 from app.services.identity.confidence_reconciliation import reconcile_skill_confidence
@@ -44,6 +44,7 @@ from app.services.identity.role_fit import get_role_fit
 from app.services.identity.role_fit_scoping import build_scoped_skill_evidence
 from app.services.leetcode.engineering_snapshot import compute_engineering_snapshot
 from app.services.leetcode.leetcode_knowledge import build_leetcode_knowledge_object
+from app.services.projects.portfolio_narrative import get_latest_portfolio_narrative
 from app.services.resume.analysis.coverage import analyze_cross_source_coverage
 from app.services.resume.confidence import compute_corroboration_count
 from app.services.resume.analysis.role_fit import ROLE_ARCHETYPES  # kept only as a valid-role reference
@@ -202,14 +203,45 @@ def _build_technology_breadth(github_knowledge: dict) -> dict:
     }
 
 
-def _compute_evidence_hash(evidence: list[dict]) -> str:
-    """Stable hash of the all_sources skill evidence used for role_fit.
-    Two refreshes with the exact same (skill, confidence) pairs hash
-    identically — see _get_cached_role_fit for how this skips a
-    redundant LLM call.
+def _compute_evidence_hash(
+    evidence: list[dict],
+    claim_risk_details: list[dict],
+    timeline_plausibility_notes: list[dict],
+) -> str:
+    """Stable hash of the all_sources skill evidence PLUS the reconciliation
+    signals (claim_risk_details, timeline_plausibility_notes) used for
+    role_fit cache invalidation.
+
+    Previously only hashed the raw (skill, confidence) pairs — meaning a new
+    Claim Audit finding that changed top_skills' discounted confidence didn't
+    invalidate the cached role_fit, so the cached rationale could go on citing
+    a skill at full strength even after a claim-risk discount was applied.
+
+    Now the hash covers all three inputs so the cache is correctly busted
+    whenever ANY of the inputs that affect the reconciled picture change:
+    - a new synced repo shifts a skill's decayed confidence
+    - a new claim audit adds/removes an unsupported claim
+    - a new resume upload adds/removes a timeline plausibility note
     """
-    normalized = sorted((e["skill"], round(e.get("confidence", 0.0), 3)) for e in evidence)
-    raw = json.dumps(normalized, sort_keys=True)
+    normalized_evidence = sorted((e["skill"], round(e.get("confidence", 0.0), 3)) for e in evidence)
+    # For claim_risk, hash the (project, risk_level, unsupported_claims) tuples
+    # — those are the exact inputs confidence_reconciliation uses to decide
+    # which skills to discount and by how much.
+    normalized_risks = sorted(
+        (
+            d.get("project", ""),
+            d.get("risk_level", ""),
+            tuple(sorted(d.get("unsupported_claims", []))),
+        )
+        for d in claim_risk_details
+    )
+    # For timeline notes, hash (skill,) tuples — the note itself doesn't
+    # affect the multiplier, only whether the skill is present in the set.
+    normalized_timeline = sorted(n.get("skill", "") for n in timeline_plausibility_notes)
+    raw = json.dumps(
+        {"evidence": normalized_evidence, "risks": normalized_risks, "timeline": normalized_timeline},
+        sort_keys=True,
+    )
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -239,10 +271,25 @@ async def _get_cached_role_fit(db: AsyncSession, user_id, evidence_hash: str) ->
 async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
     top_skills = await _get_top_skills(db, user_id)
 
+    # claim_risk_details and timeline_plausibility_notes are now computed
+    # BEFORE the evidence hash so that they can be included in it — see
+    # _compute_evidence_hash for why this matters for cache correctness.
+    latest_resume = await _get_latest_resume(db, user_id)
+    coverage_gaps: dict = {}
+    timeline_plausibility_notes: list[dict] = []
+    if latest_resume is not None:
+        coverage_gaps = await analyze_cross_source_coverage(db, user_id, latest_resume.id)
+        timeline_plausibility_notes = coverage_gaps.get("timeline_plausibility_notes", [])
+
+    claim_risk_details = await _get_claim_risk_details(db, user_id)
+
     # FIX (cross-user evidence leak): user_id now required by
     # build_scoped_skill_evidence.
     all_sources_evidence = await build_scoped_skill_evidence(db, user_id, source_types=None)
-    evidence_hash = _compute_evidence_hash(all_sources_evidence)
+    # FIX (role_fit cache invalidation): hash now covers claim_risk_details
+    # and timeline_plausibility_notes as well as the raw skill evidence, so
+    # a new Claim Audit finding or timeline note correctly busts the cache.
+    evidence_hash = _compute_evidence_hash(all_sources_evidence, claim_risk_details, timeline_plausibility_notes)
 
     cached_role_fit = await _get_cached_role_fit(db, user_id, evidence_hash)
     if cached_role_fit is not None:
@@ -287,16 +334,8 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
         }
         company_readiness = engineering_snapshot.get("company_readiness", [])[:MAX_COMPANY_READINESS_ENTRIES]
 
-    latest_resume = await _get_latest_resume(db, user_id)
-    coverage_gaps: dict = {}
-    timeline_plausibility_notes: list[dict] = []
-    if latest_resume is not None:
-        coverage_gaps = await analyze_cross_source_coverage(db, user_id, latest_resume.id)
-        timeline_plausibility_notes = coverage_gaps.get("timeline_plausibility_notes", [])
-
     active_goals = await _get_active_goals(db, user_id)
     recent_job_matches = await _get_recent_job_matches(db, user_id)
-    claim_risk_details = await _get_claim_risk_details(db, user_id)
 
     # RECENCY + COMPLETENESS FIX (audit findings #1/#2): computed
     # entirely independently of everything above — reads real
@@ -308,6 +347,25 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
     # RECONCILIATION FIX (Critical): apply the claim-risk / timeline-
     # plausibility discount to top_skills NOW, after both signals exist.
     top_skills = reconcile_skill_confidence(top_skills, claim_risk_details, timeline_plausibility_notes)
+
+    # PROJECTS COMPLETENESS FIX: pull the latest portfolio-wide narrative
+    # from the Projects module so Identity's synthesis can reason over
+    # testing pattern, collaboration pattern, specialisation, and biggest
+    # weakness — signals that were computed but never reached the synthesis
+    # LLM before this fix. None if no narrative has been generated yet.
+    portfolio_narrative_report = await get_latest_portfolio_narrative(db, user_id)
+    portfolio_narrative = (
+        PortfolioNarrativeFacts(
+            narrative=portfolio_narrative_report.narrative,
+            testing_pattern=portfolio_narrative_report.testing_pattern,
+            collaboration_pattern=portfolio_narrative_report.collaboration_pattern,
+            specialization=portfolio_narrative_report.specialization,
+            biggest_weakness=portfolio_narrative_report.biggest_weakness,
+            analysis_degraded=portfolio_narrative_report.analysis_degraded,
+        )
+        if portfolio_narrative_report is not None and portfolio_narrative_report.eligible
+        else None
+    )
 
     return IdentityFacts(
         top_skills=top_skills,
@@ -331,4 +389,5 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
         claim_risk_details=claim_risk_details,
         source_freshness=source_freshness,
         evidence_coverage=evidence_coverage,
+        portfolio_narrative=portfolio_narrative,
     )

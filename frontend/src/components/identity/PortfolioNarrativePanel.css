@@ -1,0 +1,90 @@
+/* frontend/src/components/identity/PortfolioNarrativePanel.css */
+
+.pnp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Full prose narrative sits above the dimension cards */
+.pnp__narrative {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text);
+  margin: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 2-column grid on medium+ screens; stacks on narrow */
+.pnp__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+/* ── Dimension card ─────────────────────────────────────── */
+.pnp__card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 15px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.pnp__card:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.pnp__card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pnp__card-icon {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+.pnp__card-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+}
+
+.pnp__card-value {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Tone overrides — mirrors IdentityInsights tone system */
+.pnp__card--strong .pnp__card-icon,
+.pnp__card--strong .pnp__card-label {
+  color: var(--success);
+}
+
+.pnp__card--warn .pnp__card-icon,
+.pnp__card--warn .pnp__card-label {
+  color: var(--warning);
+}
+
+/* Degraded notice */
+.pnp__degraded-note {
+  font-size: 12px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin: 0;
+}

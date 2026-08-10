@@ -56,6 +56,17 @@ You will receive:
   "completeness_label". Calibrate your own confidence in "summary" to this — a "Thin" or "Minimal" coverage
   profile should read as tentative and say so plainly, not be narrated with the same confidence as a
   "Comprehensive" one.
+- "portfolio_narrative" (may be null if not yet generated): portfolio-wide signals from the Projects module,
+  already synthesized by a dedicated LLM call over ALL verified projects. Contains four human-readable strings
+  — "testing_pattern" (e.g. "Tests in 3 of 5 projects, mostly integration-level"), "collaboration_pattern"
+  (e.g. "Primarily solo with one meaningful fork contribution"), "specialization" (the candidate's emerging
+  technical identity across projects), and "biggest_weakness" (the most consistent gap across the portfolio).
+  Also carries "narrative" (a full portfolio-wide prose summary) and "analysis_degraded" (true if the LLM
+  call failed and a deterministic fallback was used). When present and not degraded, treat
+  "portfolio_narrative" as the fourth primary source alongside Resume, GitHub, and LeetCode — it is
+  specifically about engineering patterns visible across the whole project portfolio, not just individual
+  project claim-risk. Cite it explicitly when a pattern it names reinforces or contradicts a signal from
+  another source. If null, do not mention it.
 
 Your job:
 

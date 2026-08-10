@@ -172,13 +172,13 @@ def _fallback_freshness_note(facts: IdentityFacts) -> str:
 
 
 def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
-    top_names = [s["skill"].title() for s in facts.top_skills[:4]]
+    top_names = [s.skill.title() for s in facts.top_skills[:4]]
     best_role = facts.role_fit[0] if facts.role_fit else None
 
     summary_parts = []
     if best_role:
         summary_parts.append(
-            f"Your strongest evidenced fit is {best_role['role']} (rated {best_role['rating']}/5)."
+            f"Your strongest evidenced fit is {best_role.role} (rated {best_role.rating}/5)."
         )
     if top_names:
         summary_parts.append(f"Your most-evidenced skills are {', '.join(top_names)}.")
@@ -193,8 +193,8 @@ def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
 
     strongest_signals = [
         _fact_claim(
-            f"{s['skill'].title()} — confidence {s['confidence']}, corroborated by {s.get('corroboration_count', 0)} independent source(s).",
-            f"top_skills: {s['skill']} (confidence {s['confidence']}, corroboration_count={s.get('corroboration_count', 0)})",
+            f"{s.skill.title()} — confidence {s.confidence}, corroborated by {s.corroboration_count} independent source(s).",
+            f"top_skills: {s.skill} (confidence {s.confidence}, corroboration_count={s.corroboration_count})",
         )
         for s in facts.top_skills[:4]
     ]
@@ -220,9 +220,14 @@ def _fallback_narrative(facts: IdentityFacts) -> IdentityLLMOutput:
             f"{facts.evidence_coverage['missing_sources']} evidence source(s) have never been connected.",
             "evidence_coverage.missing_sources",
         ))
+    if facts.portfolio_narrative and not facts.portfolio_narrative.analysis_degraded:
+        gaps.append(_fact_claim(
+            f"Portfolio weakness: {facts.portfolio_narrative.biggest_weakness}",
+            "portfolio_narrative.biggest_weakness",
+        ))
 
     return IdentityLLMOutput(
-        headline=best_role["role"] if best_role else "Engineering profile",
+        headline=best_role.role if best_role else "Engineering profile",
         summary=" ".join(summary_parts) or "Not enough evidence yet to summarize your profile.",
         strongest_signals=strongest_signals,
         biggest_gaps=gaps,

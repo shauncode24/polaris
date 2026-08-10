@@ -2,10 +2,42 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
+from app.schemas.role_fit import RoleFitResult  # noqa: F401 — re-exported as part of IdentityFacts typing
+
+
+class TopSkillEntry(BaseModel):
+    """One entry in IdentityFacts.top_skills — typed to match exactly what
+    confidence_reconciliation.reconcile_skill_confidence() returns: the
+    original `confidence` (post-discount), the pre-discount `raw_confidence`,
+    a list of `confidence_flags` explaining any discount, and the backing
+    `sources` / `corroboration_count` from SkillEvidence.
+    """
+    skill: str
+    confidence: float
+    raw_confidence: float = 0.0  # populated by reconcile_skill_confidence; 0.0 = no discount applied
+    confidence_flags: list[str] = []
+    sources: list[str] = []
+    corroboration_count: int = 0
+
+
+class PortfolioNarrativeFacts(BaseModel):
+    """Subset of PortfolioNarrativeReport fields that are surfaced inside
+    IdentityFacts so Identity's synthesis can reason over the portfolio-wide
+    signal from the Projects module. Intentionally the human-readable
+    narrative strings only — the raw counts live on PortfolioNarrativeReport
+    and don't need to be duplicated here.
+    """
+    narrative: str = ""
+    testing_pattern: str = ""
+    collaboration_pattern: str = ""
+    specialization: str = ""
+    biggest_weakness: str = ""
+    analysis_degraded: bool = False
+
 
 class IdentityFacts(BaseModel):
-    top_skills: list[dict] = []
-    role_fit: list[dict] = []
+    top_skills: list[TopSkillEntry] = []
+    role_fit: list[RoleFitResult] = []
     # Hash of the all_sources scoped skill evidence that produced
     # role_fit. Read back on the next refresh to decide whether the
     # evidence actually changed, or whether the previous role_fit
@@ -40,6 +72,11 @@ class IdentityFacts(BaseModel):
     # "this profile has no GitHub evidence because none exists yet"
     # from "this profile is a considered, complete picture."
     evidence_coverage: dict = {}
+    # NEW (Projects completeness fix) — portfolio-wide narrative signals from
+    # PortfolioNarrativeReview (testing pattern, collaboration pattern,
+    # specialization, biggest weakness). None when no narrative has been
+    # generated yet (user hasn't synced enough projects).
+    portfolio_narrative: PortfolioNarrativeFacts | None = None
 
 
 class NarrativeClaim(BaseModel):

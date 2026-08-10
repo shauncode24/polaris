@@ -30,7 +30,7 @@ class InsufficientHistoryError(Exception):
 
 
 def _skill_map(facts: IdentityFacts) -> dict[str, float]:
-    return {s["skill"]: s["confidence"] for s in facts.top_skills}
+    return {s.skill: s.confidence for s in facts.top_skills}
 
 
 async def _get_latest_two_identities(
