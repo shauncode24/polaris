@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import JobDescription
-from app.schemas.project_intelligence import GoalAwareRanking, PortfolioComparisonResponse
-from app.schemas.projects import ComparisonMetric, ProjectComparison
+from app.schemas.projects.project_intelligence import GoalAwareRanking, PortfolioComparisonResponse
+from app.schemas.projects.projects import ComparisonMetric, ProjectComparison
 from app.services.projects.overview import build_projects_overview
 from app.services.projects.scoring import AI_SKILLS, BACKEND_SKILLS
 from app.services.resume.claim_risk import apply_claim_risk_penalty

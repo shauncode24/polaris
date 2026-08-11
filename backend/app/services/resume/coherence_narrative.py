@@ -21,8 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, Project
 from app.models.inference import ResumeCoherenceReview, ProjectClaimAuditReview
-from app.prompts.resume_coherence import COHERENCE_SYSTEM_PROMPT
-from app.schemas.resume_coherence import CoherenceFacts, CoherenceLLMOutput, CoherenceReport
+from app.prompts.resume.resume_coherence import COHERENCE_SYSTEM_PROMPT
+from app.schemas.resume.resume_coherence import CoherenceFacts, CoherenceLLMOutput, CoherenceReport
 from app.services.evidence import get_all_skill_confidences
 from app.services.resume.analysis.bullet_strength import compute_bullet_strength
 from app.services.resume.analysis.coherence import compute_narrative_facts

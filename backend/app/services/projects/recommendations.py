@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.github_analysis import GithubProjectAnalysis
-from app.schemas.projects import RecommendationItem
+from app.schemas.projects.projects import RecommendationItem
 from app.services.projects.overview import build_projects_overview
 
 RAG_CAPABILITY_HINTS = {"rag", "vector search", "ai integration"}

@@ -39,7 +39,7 @@ from app.models.inference import (
     EngineeringIdentity,
 )
 from app.models.structure import Skill
-from app.schemas.engineering_identity import IdentityFacts, PortfolioNarrativeFacts
+from app.schemas.identity.engineering_identity import IdentityFacts, PortfolioNarrativeFacts
 from app.services.evidence import build_evidence_details, get_all_skill_confidences
 from app.services.github.github_knowledge import build_github_knowledge_object
 # from app.services.identity.confidence_reconciliation import reconcile_skill_confidence

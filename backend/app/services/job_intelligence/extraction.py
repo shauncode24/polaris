@@ -2,8 +2,8 @@
 import json
 
 from app.core.llm import chat_completion, MODEL
-from app.prompts.job_intelligence import JOB_AND_COMPANY_EXTRACTION_SYSTEM_PROMPT
-from app.schemas.job_intelligence import ExtractedJobAndCompany
+from app.prompts.job_intelligence.extraction import JOB_AND_COMPANY_EXTRACTION_SYSTEM_PROMPT
+from app.schemas.job_intelligence.job_intelligence import ExtractedJobAndCompany
 
 
 class JobIntelligenceExtractionError(Exception):

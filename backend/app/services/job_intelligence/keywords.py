@@ -42,7 +42,7 @@ def derive_resume_keywords(
     return sorted(keywords.values())
 
 
-from app.schemas.job_intelligence import ResumeKeywordTiers
+from app.schemas.job_intelligence.job_intelligence import ResumeKeywordTiers
 
 def derive_resume_keyword_tiers(
     enriched_required, enriched_implicit, enriched_nice,

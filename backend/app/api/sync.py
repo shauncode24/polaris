@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
-from app.schemas.leetcode_sync import LeetCodeManualSubmission
-from app.schemas.sync import GithubSyncRequest, LeetcodeSyncRequest
+from app.schemas.leetcode.leetcode_sync import LeetCodeManualSubmission
+from app.schemas.shared.sync import GithubSyncRequest, LeetcodeSyncRequest
 from app.services.github.github_client import GithubSyncError
 from app.services.github.github_sync import sync_github
 from app.services.leetcode.leetcode_client import LeetCodeSyncError

@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, Project, Resume
 from app.models.inference import ResumeReview
-from app.prompts.resume_review import (
+from app.prompts.resume.resume_review import (
     RESUME_NARRATIVE_SYSTEM_PROMPT,
     RESUME_REWRITES_SYSTEM_PROMPT,
 )
-from app.schemas.resume_review import (
+from app.schemas.resume.resume_review import (
     ATSFlag,
     BulletIssue,
     BulletReview,

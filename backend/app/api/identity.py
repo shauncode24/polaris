@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
-from app.schemas.engineering_identity import EngineeringIdentityReport, InvalidateIdentityRequest
-from app.schemas.weekly_brief import WeeklyBriefReport
+from app.schemas.identity.engineering_identity import EngineeringIdentityReport, InvalidateIdentityRequest
+from app.schemas.identity.weekly_brief import WeeklyBriefReport
 from app.services.identity.identity_synthesizer import (
     generate_engineering_identity,
     get_engineering_identity_history,

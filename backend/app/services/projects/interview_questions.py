@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.inference import ProjectInterviewQuestionsReview
-from app.prompts.project_interview_questions import PROJECT_INTERVIEW_QUESTIONS_SYSTEM_PROMPT
-from app.schemas.project_intelligence import (
+from app.prompts.projects.project_interview_questions import PROJECT_INTERVIEW_QUESTIONS_SYSTEM_PROMPT
+from app.schemas.projects.project_intelligence import (
     InterviewQuestionItem,
     InterviewQuestionsLLMOutput,
     InterviewQuestionsReport,

@@ -28,8 +28,8 @@ from app.core.llm import chat_completion, MODEL
 from app.models.facts import Project
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import PortfolioNarrativeReview, ProjectClaimAuditReview
-from app.prompts.portfolio_narrative import PORTFOLIO_NARRATIVE_SYSTEM_PROMPT
-from app.schemas.project_intelligence import PortfolioNarrativeLLMOutput, PortfolioNarrativeReport
+from app.prompts.projects.portfolio_narrative import PORTFOLIO_NARRATIVE_SYSTEM_PROMPT
+from app.schemas.projects.project_intelligence import PortfolioNarrativeLLMOutput, PortfolioNarrativeReport
 from app.services.projects.linking import normalize_name
 
 logger = logging.getLogger(__name__)

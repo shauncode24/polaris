@@ -9,7 +9,7 @@ services/identity/role_fit.py's module docstring (Engineering Identity
 fix #2). There is no deterministic compute_role_fit function in this
 codebase anymore; do not add one back here.
 """
-from app.services.jobs.skill_categories import CATEGORY_MAP
+from app.services.taxonomy.skill_taxonomy import CATEGORY_MAP
 
 ROLE_ARCHETYPES = {
     "Backend Engineer": {"Backend Development", "Database & Data"},

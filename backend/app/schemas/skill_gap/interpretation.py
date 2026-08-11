@@ -1,7 +1,7 @@
 # backend/app/schemas/interpretation.py
 from pydantic import BaseModel
 
-from app.schemas.skill_gap import SkillGapReport
+from app.schemas.skill_gap.skill_gap import SkillGapReport
 
 
 class CategoryScore(BaseModel):

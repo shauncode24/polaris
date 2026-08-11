@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.inference import LeetcodePortfolioReview
-from app.prompts.leetcode_review import LEETCODE_REVIEW_SYSTEM_PROMPT
-from app.schemas.leetcode_review import LeetcodePortfolioReviewLLMOutput, LeetcodePortfolioReviewReport
+from app.prompts.leetcode.leetcode_review import LEETCODE_REVIEW_SYSTEM_PROMPT
+from app.schemas.leetcode.leetcode_review import LeetcodePortfolioReviewLLMOutput, LeetcodePortfolioReviewReport
 from app.services.leetcode.leetcode_knowledge import build_leetcode_knowledge_object
 from app.services.leetcode.leetcode_taxonomy import CANONICAL_TOPICS
 from app.services.leetcode.company_readiness import COMPANY_TOPIC_WEIGHTS

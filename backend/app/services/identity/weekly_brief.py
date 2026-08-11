@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.inference import EngineeringIdentity, WeeklyBrief
-from app.prompts.weekly_brief import WEEKLY_BRIEF_SYSTEM_PROMPT
-from app.schemas.engineering_identity import IdentityFacts
-from app.schemas.weekly_brief import SkillDelta, WeeklyBriefFacts, WeeklyBriefLLMOutput, WeeklyBriefReport
+from app.prompts.identity.weekly_brief import WEEKLY_BRIEF_SYSTEM_PROMPT
+from app.schemas.identity.engineering_identity import IdentityFacts
+from app.schemas.identity.weekly_brief import SkillDelta, WeeklyBriefFacts, WeeklyBriefLLMOutput, WeeklyBriefReport
 
 MIN_DAYS_BETWEEN_SNAPSHOTS = 6
 SIGNIFICANT_CONFIDENCE_DELTA = 0.05

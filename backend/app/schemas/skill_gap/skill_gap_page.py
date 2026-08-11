@@ -9,10 +9,10 @@ recompute a requirement-type mapping itself.
 """
 from pydantic import BaseModel
 
-from app.schemas.company_intelligence import CompanyIntelligenceProfile
-from app.schemas.interpretation import CategoryScore, NarrativeAnalysis, OverallMatch
-from app.schemas.job_intelligence import JobIntelligenceProfile
-from app.schemas.skill_gap import SkillGapReport
+from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
+from app.schemas.skill_gap.interpretation import CategoryScore, NarrativeAnalysis, OverallMatch
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
+from app.schemas.skill_gap.skill_gap import SkillGapReport
 
 
 class SkillGapForJobResponse(BaseModel):

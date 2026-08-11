@@ -10,8 +10,8 @@ synthesise what is already computed here.
 import json
 
 from app.core.llm import chat_completion, MODEL
-from app.prompts.skill_gap_narrative import INTERPRETATION_SYSTEM_PROMPT
-from app.schemas.interpretation import NarrativeAnalysis
+from app.prompts.skill_gap.narrative import INTERPRETATION_SYSTEM_PROMPT
+from app.schemas.skill_gap.interpretation import NarrativeAnalysis
 
 
 class InterpretationError(Exception):

@@ -9,7 +9,7 @@ from app.core.database import get_db, AsyncSessionLocal
 from app.models.goals import Goal
 from app.models.inference import CareerPlan
 from app.models.facts import JobDescription
-from app.schemas.career_plan import (
+from app.schemas.career_planner.career_plan import (
     CareerPlanResponse, GoalCreateRequest, GoalUpdateRequest, GoalResponse, TopicSignal, TargetJobSummary,
 )
 from app.services.career_planner.context_builder import build_career_plan_context

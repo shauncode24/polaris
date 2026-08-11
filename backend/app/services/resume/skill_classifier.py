@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.structure import SkillAlias
-from app.schemas.skill_classification import SkillClassificationBatch
+from app.schemas.shared.skill_classification import SkillClassificationBatch
 
 # Tier 1: hand-seeded, instant, free. Covers the common cases you already
 # know about. Anything not here falls through to tiers 2 and 3 below.
@@ -88,7 +88,7 @@ CANONICAL_SKILLS: dict[str, str] = {
     "vector search": "vector_search",
 }
 
-from app.prompts.classification import CLASSIFICATION_SYSTEM_PROMPT
+from app.prompts.shared.classification import CLASSIFICATION_SYSTEM_PROMPT
 
 
 async def _classify_via_llm(raw_strings: list[str]) -> dict[str, tuple[str | None, bool]]:

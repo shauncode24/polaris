@@ -1,8 +1,8 @@
 import json
 from app.core.llm import chat_completion, MODEL
-from app.schemas.extraction import ExtractionResult
+from app.schemas.resume.extraction import ExtractionResult
 
-from app.prompts.extraction import SYSTEM_PROMPT
+from app.prompts.resume.extraction import SYSTEM_PROMPT
 
 
 async def extract_resume_data(raw_text: str) -> ExtractionResult:

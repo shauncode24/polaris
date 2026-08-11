@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inference import ProfileSnapshot
-from app.schemas.resume_evolution import EvolutionReport, SkillDelta
+from app.schemas.resume.resume_evolution import EvolutionReport, SkillDelta
 
 SIGNIFICANT_DELTA = 0.05
 

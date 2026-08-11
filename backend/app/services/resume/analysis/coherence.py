@@ -5,7 +5,7 @@ of whether each individual bullet is well-written. This is the fact
 base handed to the LLM narrative layer — the LLM never decides the
 category distribution itself, only interprets it.
 """
-from app.services.jobs.skill_categories import CATEGORY_MAP, DEFAULT_CATEGORY
+from app.services.taxonomy.skill_taxonomy import CATEGORY_MAP, DEFAULT_CATEGORY
 from app.services.resume.analysis.role_fit import ROLE_ARCHETYPES
 
 # Free-text phrasing -> archetype. A target role typed by the user

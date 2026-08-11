@@ -26,8 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.inference import GithubPortfolioReview
-from app.prompts.github_review import GITHUB_REVIEW_SYSTEM_PROMPT
-from app.schemas.github_review import GithubPortfolioReviewLLMOutput, GithubPortfolioReviewReport
+from app.prompts.github.github_review import GITHUB_REVIEW_SYSTEM_PROMPT
+from app.schemas.github.github_review import GithubPortfolioReviewLLMOutput, GithubPortfolioReviewReport
 from app.services.github.github_knowledge import build_github_knowledge_object
 from app.services.identity.role_fit import get_role_fit
 from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, GITHUB_SOURCE_TYPES

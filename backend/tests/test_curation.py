@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.schemas.projects import ProjectCard
+from app.schemas.projects.projects import ProjectCard
 from app.services.projects.curation import compute_curation
 
 

@@ -9,7 +9,7 @@ from app.services.projects.linking import normalize_name  # <-- NEW IMPORT
 from app.models.facts import GithubSnapshot, Project
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.structure import Capability, ProjectCapability, ProjectSkill, Skill
-from app.schemas.projects import ProjectCard, ProjectsOverviewResponse, ProjectsStats
+from app.schemas.projects.projects import ProjectCard, ProjectsOverviewResponse, ProjectsStats
 
 ABANDONMENT_STALE_DAYS = 60
 ABANDONMENT_QUALITY_FLOOR = 45

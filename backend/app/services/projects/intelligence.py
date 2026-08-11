@@ -10,8 +10,8 @@ from app.core.llm import chat_completion, MODEL
 from app.models.facts import Project
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import ProjectIntelligenceReview
-from app.prompts.project_intelligence import PROJECT_INTELLIGENCE_SYSTEM_PROMPT
-from app.schemas.project_intelligence import ProjectIntelligenceLLMOutput, ProjectIntelligenceReport
+from app.prompts.projects.project_intelligence import PROJECT_INTELLIGENCE_SYSTEM_PROMPT
+from app.schemas.projects.project_intelligence import ProjectIntelligenceLLMOutput, ProjectIntelligenceReport
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.projects.repo_linking import match_project_to_repo
 

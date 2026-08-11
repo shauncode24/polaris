@@ -23,8 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job_intelligence import CompanyIntelligenceProfileRow, JobIntelligenceProfileRow
-from app.schemas.company_intelligence import CompanyIntelligenceProfile
-from app.schemas.job_intelligence import ExtractionQuality, JobIntelligenceProfile, SeniorityLevel
+from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
+from app.schemas.job_intelligence.job_intelligence import ExtractionQuality, JobIntelligenceProfile, SeniorityLevel
 from app.services.job_intelligence.extraction import JobIntelligenceExtractionError, extract_job_and_company
 from app.services.job_intelligence.interview_focus import derive_interview_focus_areas
 from app.services.job_intelligence.keywords import derive_resume_keyword_tiers, derive_resume_keywords

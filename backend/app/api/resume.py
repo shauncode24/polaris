@@ -19,9 +19,9 @@ from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, 
 
 
 from uuid import UUID
-from app.schemas.resume_coherence import CoherenceReport
-from app.schemas.resume_tailoring import TailoringReport
-from app.schemas.resume_evolution import EvolutionReport
+from app.schemas.resume.resume_coherence import CoherenceReport
+from app.schemas.resume.resume_tailoring import TailoringReport
+from app.schemas.resume.resume_evolution import EvolutionReport
 from app.services.resume.coherence_narrative import generate_coherence_report, get_cached_coherence_report
 from app.services.resume.tailoring_llm import generate_tailoring_report, get_cached_tailoring_report
 from app.services.resume.evolution import build_evolution_report

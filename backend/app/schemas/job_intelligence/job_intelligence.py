@@ -1,7 +1,7 @@
 # backend/app/schemas/job_intelligence.py
 from pydantic import BaseModel
 
-from app.schemas.company_intelligence import ExtractedCompanySignals
+from app.schemas.job_intelligence.company_intelligence import ExtractedCompanySignals
 
 
 class RoleIdentity(BaseModel):

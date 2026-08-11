@@ -10,8 +10,8 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
 from app.models.job_intelligence import JobIntelligenceProfileRow
-from app.schemas.job_intelligence import JobIntelligenceSummary
-from app.schemas.target_profile import TargetProfile
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceSummary
+from app.schemas.job_intelligence.target_profile import TargetProfile
 from app.services.company_intelligence.reader import get_company_intelligence_by_source_hash
 from app.services.job_intelligence.builder import (
     JobIntelligenceExtractionError,

@@ -1,7 +1,7 @@
 # backend/app/services/target_profile/builder.py
-from app.schemas.company_intelligence import CompanyIntelligenceProfile
-from app.schemas.job_intelligence import JobIntelligenceProfile
-from app.schemas.target_profile import TargetProfile
+from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
+from app.schemas.job_intelligence.target_profile import TargetProfile
 
 
 def build_target_profile(

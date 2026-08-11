@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.schemas.role_fit import RoleFitResult
+from app.schemas.identity.role_fit import RoleFitResult
 
 
 class FlagshipProject(BaseModel):

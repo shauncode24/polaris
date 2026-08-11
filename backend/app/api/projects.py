@@ -8,8 +8,8 @@ from app.core.database import get_db
 from app.models.facts import GithubSnapshot, Project, User
 from app.models.structure import ProjectCapability
 from app.models.github_analysis import GithubProjectAnalysis
-from app.schemas.projects import ProjectsInsightsResponse, ProjectsOverviewResponse, LinkProjectRequest
-from app.schemas.project_intelligence import (
+from app.schemas.projects.projects import ProjectsInsightsResponse, ProjectsOverviewResponse, LinkProjectRequest
+from app.schemas.projects.project_intelligence import (
     ClaimAuditReport,
     InterviewQuestionsReport,
     PortfolioComparisonResponse,

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.github_analysis import PortfolioAnalysis
 from app.models.inference import ProjectClaimAuditReview
 from app.models.facts import Project
-from app.schemas.projects import MilestoneItem
+from app.schemas.projects.projects import MilestoneItem
 
 MAX_SNAPSHOTS = 6
 

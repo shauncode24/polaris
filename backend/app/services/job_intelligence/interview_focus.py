@@ -21,7 +21,7 @@ captures process/practice requirements (git workflows, design
 patterns, SDLC, DB queries) as well as named products, so a genuinely
 detailed JD produces more real inferred focus areas than before.
 """
-from app.schemas.job_intelligence import EnrichedSkill, SeniorityLevel
+from app.schemas.job_intelligence.job_intelligence import EnrichedSkill, SeniorityLevel
 
 MAX_INTERVIEW_FOCUS_AREAS = 14
 

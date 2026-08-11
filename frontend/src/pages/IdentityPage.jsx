@@ -17,6 +17,10 @@ import RoleFitBars from '../components/identity/RoleFitBars'
 import SignalsGapsPanel from '../components/identity/SignalsGapsPanel'
 import RecommendedFocusCard from '../components/identity/RecommendedFocusCard'
 import IdentityInsights from '../components/identity/IdentityInsights'
+import GithubDeepDivePanel from '../components/identity/GithubDeepDivePanel'
+import LeetcodeInsightsPanel from '../components/identity/LeetcodeInsightsPanel'
+import GoalsMatchesPanel from '../components/identity/GoalsMatchesPanel'
+import TechDepthGrid from '../components/identity/TechDepthGrid'
 import IdentityEvolution from '../components/identity/IdentityEvolution'
 import IdentityHistoryPanel from '../components/identity/IdentityHistoryPanel'
 import WeeklyBriefCard from '../components/identity/WeeklyBriefCard'
@@ -175,6 +179,23 @@ export default function IdentityPage() {
 
               {/* Level 3 — supporting detail, collapsed by default */}
               <IdentityInsights facts={facts} contradictions={narrative?.contradictions} />
+
+              <GithubDeepDivePanel progress={facts?.github_progress} architectureMaturity={facts?.architecture_maturity} />
+
+              <CollapsibleSection title="Technology Depth" defaultOpen={false}>
+                <TechDepthGrid highlights={facts?.technology_depth_highlights} />
+              </CollapsibleSection>
+
+              <LeetcodeInsightsPanel
+                quadrant={facts?.engineering_quadrant}
+                companyReadiness={facts?.company_readiness}
+                topicMastery={facts?.leetcode_topic_mastery}
+              />
+
+              <GoalsMatchesPanel
+                goals={facts?.active_goals}
+                jobMatches={facts?.recent_job_matches}
+              />
 
               <WeeklyBriefCard
                 brief={brief}

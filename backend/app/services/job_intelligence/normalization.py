@@ -23,7 +23,7 @@ import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.job_intelligence import EnrichedSkill, ExtractedImplicitSkill, ExtractedSkillRequirement
+from app.schemas.job_intelligence.job_intelligence import EnrichedSkill, ExtractedImplicitSkill, ExtractedSkillRequirement
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.taxonomy.skill_taxonomy import categorize_skill, get_curriculum_phase
 

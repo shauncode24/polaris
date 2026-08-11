@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
-from app.schemas.role_fit import RoleFitResult  # noqa: F401 — re-exported as part of IdentityFacts typing
+from app.schemas.identity.role_fit import RoleFitResult  # noqa: F401 — re-exported as part of IdentityFacts typing
 
 
 class TopSkillEntry(BaseModel):

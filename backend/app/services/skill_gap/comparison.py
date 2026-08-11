@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.facts import JobDescription
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
-from app.schemas.job_intelligence import JobIntelligenceProfile
-from app.schemas.skill_gap import HaveSkill, MissingSkill, PartialSkill, SkillGapReport
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
+from app.schemas.skill_gap.skill_gap import HaveSkill, MissingSkill, PartialSkill, SkillGapReport
 from app.services.evidence import build_evidence_details
 from app.services.resume.confidence import compute_decayed_skill_confidence
 from app.services.resume.review import classify_match

@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.inference import ProjectClaimAuditReview
-from app.prompts.project_claim_audit import CLAIM_AUDIT_SYSTEM_PROMPT
-from app.schemas.project_intelligence import ClaimAuditFacts, ClaimAuditNarrative, ClaimAuditReport
+from app.prompts.projects.project_claim_audit import CLAIM_AUDIT_SYSTEM_PROMPT
+from app.schemas.projects.project_intelligence import ClaimAuditFacts, ClaimAuditNarrative, ClaimAuditReport
 
 
 def _fallback_narrative(facts: ClaimAuditFacts) -> ClaimAuditNarrative:

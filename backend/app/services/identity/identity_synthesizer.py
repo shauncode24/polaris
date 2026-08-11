@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
 from app.models.inference import EngineeringIdentity
-from app.prompts.identity_synthesis import IDENTITY_SYNTHESIS_SYSTEM_PROMPT
-from app.schemas.engineering_identity import (
+from app.prompts.identity.identity_synthesis import IDENTITY_SYNTHESIS_SYSTEM_PROMPT
+from app.schemas.identity.engineering_identity import (
     EngineeringIdentityReport,
     IdentityFacts,
     IdentityLLMOutput,

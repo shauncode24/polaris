@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.models.inference import InterviewResponse
-from app.schemas.interview_response import (
+from app.schemas.interview.interview_response import (
     InterviewAskRequest,
     InterviewResponseOutput,
     InterviewSessionSummary,

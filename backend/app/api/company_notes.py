@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import CompanyNote, User
-from app.schemas.company_notes import CompanyNoteCreateRequest, CompanyNoteResponse
+from app.schemas.shared.company_notes import CompanyNoteCreateRequest, CompanyNoteResponse
 
 router = APIRouter(prefix="/company-notes", tags=["company-notes"])
 

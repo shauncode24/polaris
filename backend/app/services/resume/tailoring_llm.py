@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.llm import chat_completion, MODEL
 from app.models.facts import Experience, JobDescription, Project
 from app.models.inference import ResumeTailoringReview, ProjectClaimAuditReview
-from app.prompts.resume_tailoring import TAILORING_SYSTEM_PROMPT
-from app.schemas.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
+from app.prompts.resume.resume_tailoring import TAILORING_SYSTEM_PROMPT
+from app.schemas.resume.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
 from app.services.evidence import get_all_skill_confidences
 from app.services.resume.coherence_narrative import build_bullets_with_strength
 from app.services.resume.skill_classifier import resolve_skills

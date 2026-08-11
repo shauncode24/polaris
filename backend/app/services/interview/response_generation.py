@@ -24,11 +24,11 @@ from app.core.llm import chat_completion, MODEL
 
 logger = logging.getLogger(__name__)
 
-from app.prompts.interview_response import (
+from app.prompts.interview.interview_response import (
     BLUEPRINT_CLASSIFICATION_PROMPT,
     INTERVIEW_RESPONSE_SYSTEM_PROMPT,
 )
-from app.schemas.interview_response import BlueprintClassification, InterviewLLMOutput
+from app.schemas.interview.interview_response import BlueprintClassification, InterviewLLMOutput
 from app.services.interview.blueprints import BLUEPRINTS
 
 MAX_ATTEMPTS = 3

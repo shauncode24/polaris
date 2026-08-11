@@ -12,9 +12,9 @@ from app.core.database import get_db
 from app.models.facts import JobDescription, Project, Resume
 from app.models.job_intelligence import GapAnalysisResultRow
 from app.services.projects.linking import normalize_name
-from app.schemas.interpretation import CategoryScore, NarrativeAnalysis, OverallMatch, SkillGapAnalysisResponse
-from app.schemas.skill_gap import JDPasteRequest
-from app.schemas.skill_gap_page import SkillGapForJobResponse
+from app.schemas.skill_gap.interpretation import CategoryScore, NarrativeAnalysis, OverallMatch, SkillGapAnalysisResponse
+from app.schemas.skill_gap.skill_gap import JDPasteRequest
+from app.schemas.skill_gap.skill_gap_page import SkillGapForJobResponse
 from app.services.job_intelligence.builder import (
     JobIntelligenceExtractionError,
     build_job_intelligence,

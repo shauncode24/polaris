@@ -27,7 +27,7 @@ supposedly the same question:
 import json
 
 from app.core.llm import chat_completion, MODEL
-from app.schemas.role_fit import RoleFitLLMOutput, RoleFitResult
+from app.schemas.identity.role_fit import RoleFitLLMOutput, RoleFitResult
 
 VALID_ROLES = [
     "Backend Engineer", "Frontend Engineer", "Full Stack Engineer",

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job_intelligence import CompanyIntelligenceProfileRow
-from app.schemas.company_intelligence import CompanyIntelligenceProfile
+from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
 
 
 async def get_company_intelligence(db: AsyncSession, company_intelligence_id: UUID) -> CompanyIntelligenceProfile | None:

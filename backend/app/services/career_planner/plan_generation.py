@@ -1,8 +1,8 @@
 import json
 
 from app.core.llm import chat_completion, MODEL
-from app.prompts.career_planner import CAREER_PLANNER_SYSTEM_PROMPT
-from app.schemas.career_plan import CareerPlanLLMOutput, DailyPlanItem
+from app.prompts.career_planner.career_planner import CAREER_PLANNER_SYSTEM_PROMPT
+from app.schemas.career_planner.career_plan import CareerPlanLLMOutput, DailyPlanItem
 
 CHUNK_SIZE = 3
 RECENT_DAYS_DETAIL_WINDOW = 4

@@ -19,8 +19,8 @@ import json
 import re
 
 from app.core.llm import chat_completion, MODEL
-from app.prompts.seniority_llm import SENIORITY_LLM_SYSTEM_PROMPT
-from app.schemas.job_intelligence import SeniorityLevel
+from app.prompts.job_intelligence.seniority_llm import SENIORITY_LLM_SYSTEM_PROMPT
+from app.schemas.job_intelligence.job_intelligence import SeniorityLevel
 
 MAX_PLAUSIBLE_EXPERIENCE_YEARS = 20
 

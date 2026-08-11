@@ -2,8 +2,8 @@
 import json
 
 from app.core.llm import chat_completion, MODEL
-from app.prompts.skill_gap_prioritization import PRIORITIZATION_SYSTEM_PROMPT
-from app.schemas.prioritization import PrioritizationResult
+from app.prompts.skill_gap.prioritization import PRIORITIZATION_SYSTEM_PROMPT
+from app.schemas.skill_gap.prioritization import PrioritizationResult
 
 
 class PrioritizationError(Exception):

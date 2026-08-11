@@ -1,28 +1,39 @@
-import './PracticeDiversity.css'
+import './PracticeRecommendations.css'
 
-function PracticeDiversity({ diversity }) {
-  if (!diversity) return null
-
-  const { new_topics_touched, is_grinding, message, total_new_solves } = diversity
+function PracticeRecommendations({ recommendations }) {
+  if (!recommendations || recommendations.length === 0) {
+    return (
+      <section className="lc-card">
+        <h3>Practice recommendations</h3>
+        <p className="lc-empty-text">No recommendations available at this time. Keep solving problems!</p>
+      </section>
+    )
+  }
 
   return (
     <section className="lc-card">
-      <h3>Practice diversity</h3>
+      <h3>Practice recommendations</h3>
+      <p className="lc-card__lead">Customized checklist to optimize your interview readiness.</p>
 
-      {total_new_solves === 0 ? (
-        <p className="lc-empty-text">{message}</p>
-      ) : (
-        <>
-          <p className={`pd-message ${is_grinding ? 'pd-message--warn' : 'pd-message--good'}`}>{message}</p>
-          {new_topics_touched.length > 0 && (
-            <div className="pd-pills">
-              {new_topics_touched.slice(0, 3).map((t) => <span key={t} className="pd-pill">+ {t}</span>)}
+      <div className="pr-list">
+        {recommendations.map((rec, idx) => {
+          const priority = rec.priority || 'Low'
+          const priorityClass = `pr-item__badge--${priority.toLowerCase()}`
+          return (
+            <div key={idx} className="pr-item">
+              <span className={`pr-item__badge ${priorityClass}`}>
+                {priority}
+              </span>
+              <div className="pr-item__body">
+                <span className="pr-item__action">{rec.action}</span>
+                <span className="pr-item__reason">{rec.reason}</span>
+              </div>
             </div>
-          )}
-        </>
-      )}
+          )
+        })}
+      </div>
     </section>
   )
 }
 
-export default PracticeDiversity
+export default PracticeRecommendations

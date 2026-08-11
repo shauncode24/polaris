@@ -1,8 +1,8 @@
 # backend/app/schemas/target_profile.py
 from pydantic import BaseModel
 
-from app.schemas.company_intelligence import CompanyIntelligenceProfile
-from app.schemas.job_intelligence import JobIntelligenceProfile
+from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 
 
 class TargetProfile(BaseModel):
