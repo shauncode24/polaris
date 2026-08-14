@@ -1,27 +1,30 @@
 # backend/app/services/interview/grounding.py
-"""Deterministic, non-LLM post-generation validator for the Interview
-Response Agent — never rewrites the answer, only reports (implementation
-plan §5/§10). Same "LLM proposes, code validates" boundary as
-gap_analysis.py's priority_order filtering and github_reviewer.py's
-flagship_projects filter.
+"""Deterministic, non-LLM grounding checks for the Interview Response
+Agent. Two passes now exist (Phase 1):
 
-Phase 0 extension (plan §H): previously this only checked the model's
-own self-reported "stories_used" field for real names and did a naive
-substring search for numeric claims. Neither scanned the ANSWER PROSE
-itself for a fabricated entity name the model might invent without
-ever declaring it in stories_used. This module now additionally scans
-the full prose for the specific, common hallucination pattern the
-prompt already explicitly forbids by name (generic placeholder project/
-company names like "Project Alpha", "Innovate Solutions") — the same
-hand-seeded pattern-list philosophy leetcode_reviewer.py already uses
-for _flag_ungrounded_company_mentions. This is deliberately NOT
-general-purpose named-entity verification (that needs real NER, out of
-scope for Phase 0) — it catches the concrete failure mode without
-flagging a real, legitimately-named project.
+  validate_plan()   — runs on the structured AnswerPlan, BEFORE any
+                       prose exists. This is the pass that actually
+                       gates something: response_generation.py rejects
+                       a plan that fails this and triggers one re-plan
+                       attempt before falling through to
+                       insufficient_context (implementation plan §H).
+  validate_answer()  — runs on the final prose, AFTER generation. Pure
+                       defense-in-depth at this point (the plan it was
+                       built from already passed validate_plan()), but
+                       kept because prose generation could still,
+                       independently, phrase something claim-flavored
+                       in a way the plan didn't. Scans the FULL prose
+                       text, not just the self-reported "stories_used"
+                       field (Phase 0 fix).
+
+Both share the same detection helpers (_real_story_names,
+_evidence_text_blob, _flagged_project_names,
+_scan_prose_for_placeholder_entities) so "what counts as real" can
+never quietly drift between the two passes.
 """
 import re
 
-from app.schemas.interview.interview_response import GroundingReport, InterviewLLMOutput
+from app.schemas.interview.interview_response import AnswerPlan, GroundingReport, InterviewLLMOutput
 from app.services.resume.analysis.shared_signals import METRIC_PATTERN
 
 
@@ -83,19 +86,14 @@ def _flagged_project_names(context: dict) -> set[str]:
 
 
 # Hand-seeded literal placeholder names — exactly the ones the prompt
-# itself already lists as forbidden (see interview_response.py's "DO
-# NOT use generic or placeholder names" instruction). Extend by hand if
-# a new common placeholder pattern shows up in real output.
+# itself already lists as forbidden. Extend by hand if a new common
+# placeholder pattern shows up in real output.
 _PLACEHOLDER_LITERALS: frozenset[str] = frozenset({
     "project alpha", "innovate solutions", "stellartech", "project phoenix",
     "nova solutions", "acme corp", "acme inc", "tech innovations",
     "global solutions", "xyz corporation",
 })
 
-# Generic "<Capitalized Word(s)> Solutions/Technologies/..." pattern —
-# the most common shape of an invented company name. Cross-checked
-# against real_names before flagging so a genuinely real company that
-# happens to end in one of these words is never flagged.
 _GENERIC_COMPANY_SUFFIX_RE = re.compile(
     r"\b([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)?)\s(Solutions|Technologies|Systems|Innovations|Enterprises|Corp|Corporation)\b"
 )
@@ -103,11 +101,11 @@ _GENERIC_COMPANY_SUFFIX_RE = re.compile(
 _PLACEHOLDER_PROJECT_RE = re.compile(r"\bProject\s+(Alpha|Beta|Phoenix|X|One|Nova)\b", re.IGNORECASE)
 
 
-def _scan_prose_for_placeholder_entities(answer: str, real_names: set[str]) -> list[str]:
-    if not answer:
+def _scan_prose_for_placeholder_entities(text: str, real_names: set[str]) -> list[str]:
+    if not text:
         return []
 
-    lowered = answer.lower()
+    lowered = text.lower()
     real_names_lower = {n.lower() for n in real_names}
     flagged: list[str] = []
 
@@ -115,12 +113,12 @@ def _scan_prose_for_placeholder_entities(answer: str, real_names: set[str]) -> l
         if literal in lowered and literal not in real_names_lower:
             flagged.append(literal.title())
 
-    for match in _GENERIC_COMPANY_SUFFIX_RE.finditer(answer):
+    for match in _GENERIC_COMPANY_SUFFIX_RE.finditer(text):
         candidate = match.group(0)
         if candidate.lower() not in real_names_lower:
             flagged.append(candidate)
 
-    for match in _PLACEHOLDER_PROJECT_RE.finditer(answer):
+    for match in _PLACEHOLDER_PROJECT_RE.finditer(text):
         candidate = match.group(0)
         if candidate.lower() not in real_names_lower:
             flagged.append(candidate)
@@ -134,9 +132,65 @@ def _scan_prose_for_placeholder_entities(answer: str, real_names: set[str]) -> l
     return deduped
 
 
+def _dedupe(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for c in items:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+def validate_plan(plan: AnswerPlan, context: dict) -> GroundingReport:
+    """The pass that actually gates something (implementation plan §H).
+    A plan fails here whenever it cites a story or evidence source that
+    isn't literally present in the real profile, or its section text
+    contains a known fabricated-entity pattern. response_generation.py
+    treats a non-empty unverifiable_claims/possible_fabricated_entities
+    as a hard failure and triggers exactly one re-plan attempt before
+    giving up and returning insufficient_context — never serving prose
+    built from a plan that failed this check.
+    """
+    real_names = _real_story_names(context)
+    evidence_blob = _evidence_text_blob(context)
+    unverifiable: list[str] = []
+
+    for story in plan.stories_used:
+        if story not in real_names:
+            unverifiable.append(f"story reference '{story}' not found in real profile data")
+
+    for cite in plan.cited_evidence:
+        if cite.source not in real_names:
+            unverifiable.append(f"cited source '{cite.source}' not found in real profile data")
+
+    plan_text = " ".join(
+        [s.content for s in plan.sections] + [c.fact for c in plan.cited_evidence]
+    )
+    for match in METRIC_PATTERN.finditer(plan_text):
+        number_str = match.group(0).strip()
+        if number_str and number_str not in evidence_blob:
+            unverifiable.append(number_str)
+
+    flagged = _flagged_project_names(context)
+    uses_flagged_project = any(story in flagged for story in plan.stories_used)
+
+    fabricated = _scan_prose_for_placeholder_entities(plan_text, real_names)
+
+    return GroundingReport(
+        unverifiable_claims=_dedupe(unverifiable),
+        uses_flagged_project=uses_flagged_project,
+        possible_fabricated_entities=fabricated,
+    )
+
+
 def validate_answer(parsed: InterviewLLMOutput, context: dict) -> GroundingReport:
-    """Runs after a successful parse in response_generation.py. Purely
-    additive — never mutates parsed.answer/answer_short.
+    """Post-prose defensive scan — runs after a successful prose parse
+    in response_generation.py. By this point the underlying plan has
+    already cleared validate_plan(), so this is purely advisory
+    (nothing blocks or regenerates on it); it exists to catch a fact
+    prose generation might have distorted in restyling, independent of
+    what the plan itself said. Never mutates parsed.answer/answer_short.
     """
     unverifiable: list[str] = []
 
@@ -154,19 +208,10 @@ def validate_answer(parsed: InterviewLLMOutput, context: dict) -> GroundingRepor
     flagged = _flagged_project_names(context)
     uses_flagged_project = any(story in flagged for story in parsed.stories_used)
 
-    # NEW — full-prose scan (Phase 0, plan §H), independent of what the
-    # model self-reported in stories_used.
     fabricated = _scan_prose_for_placeholder_entities(parsed.answer or "", real_names)
 
-    seen = set()
-    deduped = []
-    for c in unverifiable:
-        if c not in seen:
-            seen.add(c)
-            deduped.append(c)
-
     return GroundingReport(
-        unverifiable_claims=deduped,
+        unverifiable_claims=_dedupe(unverifiable),
         uses_flagged_project=uses_flagged_project,
         possible_fabricated_entities=fabricated,
     )
@@ -183,9 +228,9 @@ def looks_like_durable_correction(correction: str) -> bool:
     """Heuristic (deterministic, no LLM) for whether a correction reads
     like it's fixing a durable fact (role/ownership/scope language) as
     opposed to a purely stylistic nit. Used to decide whether
-    POST /interview/correct populates 'suggested_action' — see
-    implementation plan §13. Intentionally conservative: false negatives
-    just mean no suggestion is shown, which is a safe default.
+    POST /interview/correct populates 'suggested_action'. Intentionally
+    conservative: false negatives just mean no suggestion is shown,
+    which is a safe default.
     """
     lowered = (correction or "").lower()
     return any(word in lowered for word in _OWNERSHIP_WORDS)

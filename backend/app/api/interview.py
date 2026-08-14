@@ -17,6 +17,7 @@ from app.services.interview import grounding
 from app.services.interview.context_builder import build_interview_context
 from app.services.interview.response_generation import (
     InterviewGenerationError,
+    classify_blueprint,
     generate_interview_response,
 )
 from app.api.deps import get_current_user
@@ -66,15 +67,20 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
     session_id = UUID(payload.session_id) if payload.session_id else uuid4()
     parent_response_id = UUID(payload.parent_response_id) if payload.parent_response_id else None
 
+    # Classification happens BEFORE context is built so retrieval's
+    # competency-hint ranking (context_builder.py) can actually use it.
+    blueprint_key = await classify_blueprint(payload.question)
+
     context = await build_interview_context(
         db, user.id, payload.question, payload.target_role, payload.target_company,
         job_intelligence_id=payload.job_intelligence_id,
         session_id=str(session_id),
         correction=payload.correction,
+        blueprint_key=blueprint_key,
     )
 
     try:
-        output = await generate_interview_response(context)
+        output = await generate_interview_response(context, blueprint_key)
     except InterviewGenerationError as e:
         print(f"[TRACING] Interview generation failed: {e}", flush=True)
         raise HTTPException(status_code=502, detail=str(e))
@@ -110,8 +116,10 @@ async def correct_interview_response(
     current_user: User = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    """Re-asks the original question with the correction injected as a
-    hard constraint (implementation plan §13). Never mutates
+    """Re-plans and re-generates the original question with the
+    correction injected as a hard constraint at BOTH the plan stage
+    (so a corrected fact never gets cited/planned in the first place)
+    and the prose stage (as a final wording safety net). Never mutates
     Experience/Project/SkillEvidence/EngineeringIdentity — corrections
     are conversational-scope only. When the correction looks like it
     fixes a durable fact (role/ownership/scope language), the response
@@ -138,14 +146,17 @@ async def correct_interview_response(
     target_company = parent_rj.get("target_company")
     session_id = parent.session_id or uuid4()
 
+    blueprint_key = await classify_blueprint(parent.question)
+
     context = await build_interview_context(
         db, current_user.id, parent.question, target_role, target_company,
         session_id=str(session_id),
         correction=payload.correction,
+        blueprint_key=blueprint_key,
     )
 
     try:
-        output = await generate_interview_response(context)
+        output = await generate_interview_response(context, blueprint_key)
     except InterviewGenerationError as e:
         print(f"[TRACING] Interview correction generation failed: {e}", flush=True)
         raise HTTPException(status_code=502, detail=str(e))
@@ -233,8 +244,7 @@ async def get_interview_session_thread(
     """Full ordered thread for one session — what the frontend needs to
     reconstruct a conversation view when the user selects a past session
     from history, since the summary list only returns one row per
-    session. Not in the original implementation plan's endpoint list,
-    but required for §15's session-grouped history to actually work.
+    session.
     """
     result = await db.execute(
         select(InterviewResponse)

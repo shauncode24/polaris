@@ -25,18 +25,77 @@ class BlueprintClassification(BaseModel):
 
 
 class GroundingReport(BaseModel):
-    """Deterministic, non-LLM post-hoc check — never rewrites the
-    answer, only reports. See services/interview/grounding.py.
+    """Deterministic, non-LLM check — never rewrites the answer, only
+    reports. See services/interview/grounding.py. This SAME shape is
+    reused for two distinct passes now (Phase 1):
+      - validate_plan(): runs on the structured AnswerPlan, BEFORE any
+        prose exists — this is what actually gates a re-plan attempt.
+      - validate_answer(): runs on the final prose, AFTER generation —
+        a last-line defensive scan, purely advisory (nothing blocks on
+        this one, since by this point the plan already passed).
     """
     unverifiable_claims: list[str] = []
     uses_flagged_project: bool = False
-    # NEW (Phase 0, plan §H) — real/likely-fabricated entity names found
-    # by scanning the full answer prose for known placeholder patterns
-    # (e.g. "Project Alpha", "Innovate Solutions"), independent of what
-    # the model self-reported in stories_used. Advisory only in Phase 0
-    # — nothing blocks or regenerates on this yet (that's Phase 1's
-    # pre-prose plan-validation stage).
     possible_fabricated_entities: list[str] = []
+
+
+class PlanEvidenceCitation(BaseModel):
+    """One piece of evidence the plan is relying on — `source` MUST be
+    a real, literal name from the candidate's profile (a project name,
+    a "{role} at {company}" experience label, or a github_repos entry's
+    name); `fact` is the specific detail drawn from that source. This
+    is the mechanism that makes pre-prose grounding possible at all:
+    without a structured citation, there'd be nothing to check a claim
+    against except free text.
+    """
+    source: str
+    fact: str
+
+
+class PlanSection(BaseModel):
+    """One blueprint section, filled with factual notes — NOT yet
+    styled prose. Kept terse and declarative on purpose; all of the
+    persona/voice work (contractions, plain-language-before-jargon,
+    bridge sentences, sentence-length variation) happens later, in the
+    prose-generation stage, over content that has already been
+    validated against the real profile.
+    """
+    label: str
+    content: str
+
+
+class AnswerPlan(BaseModel):
+    """The Phase 1 intermediate stage (implementation plan §F/§G). The
+    model reasons over the ENTIRE real profile here, once, and commits
+    to a set of real, citable facts. Everything downstream (prose
+    generation) is only ever allowed to restyle THIS object — it can
+    no longer introduce a new fact, story, or number, which is what
+    makes pre-prose grounding meaningful: reject/re-plan here is cheap
+    and catches a hallucination before it's dressed up in natural
+    language and harder to spot.
+    """
+    question_type: str = ""
+    blueprint_used: str = ""
+    competencies: list[str] = []
+    stories_used: list[str] = []
+    sections: list[PlanSection] = []
+    cited_evidence: list[PlanEvidenceCitation] = []
+    follow_up_questions: list[str] = []
+    coaching: list[CoachingNote] = []
+    insufficient_context: bool = False
+    context_note: str = ""
+    claims_needing_verification: list[str] = []
+
+
+class ProseOutput(BaseModel):
+    """The narrow, low-risk second-stage output — restyles an already-
+    validated AnswerPlan into spoken-style prose. Never carries new
+    facts, so it never needs its own grounding pass against the profile
+    (the plan already cleared that bar); the post-prose scan in
+    grounding.validate_answer() is a defensive-in-depth safety net only.
+    """
+    answer: str = ""
+    answer_short: str = ""
 
 
 class InterviewLLMOutput(BaseModel):
