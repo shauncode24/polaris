@@ -76,6 +76,20 @@ class InterviewResponse(Base):
     question: Mapped[str] = mapped_column(Text)
     question_type: Mapped[str] = mapped_column(String(100))
     response_json: Mapped[dict] = mapped_column(JSONB)
+    # Session threading (Engineering Identity integration, implementation
+    # plan §5/§14). session_id groups a conversation thread;
+    # parent_response_id is generic thread linkage (a follow-up
+    # question); correction_of points at the specific prior response
+    # this row corrects. A correction always sets both
+    # parent_response_id and correction_of to the same row; a plain
+    # follow-up only ever sets parent_response_id.
+    session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    parent_response_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_responses.id")
+    )
+    correction_of: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_responses.id")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -1,6 +1,7 @@
 // frontend/src/components/interview/ChatMessage.jsx
 import { useState } from 'react'
 import { IconCompass } from '../icons/Icons'
+import CorrectionInput from './CorrectionInput'
 import './ChatMessage.css'
 
 function CoachAvatar() {
@@ -11,13 +12,52 @@ function CoachAvatar() {
   )
 }
 
+function GroundingBadge({ grounding }) {
+  if (!grounding) return null
+  const { unverifiable_claims: claims = [], uses_flagged_project: flagged = false } = grounding
+  if (claims.length === 0 && !flagged) return null
+
+  return (
+    <details className="chat-msg__grounding">
+      <summary>
+        ⚠ {claims.length > 0 ? `${claims.length} claim(s) to double-check` : 'Uses a flagged project'}
+      </summary>
+      <div className="chat-msg__grounding-body">
+        {claims.length > 0 && (
+          <>
+            <p>These weren't found verbatim in your profile data — verify before using them:</p>
+            <ul>
+              {claims.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </>
+        )}
+        {flagged && (
+          <p>This answer references a project with an unresolved Claim Audit finding — see the Projects page.</p>
+        )}
+      </div>
+    </details>
+  )
+}
+
 function ChatMessage({ message }) {
   const [showShort, setShowShort] = useState(false)
+  const [correcting, setCorrecting] = useState(false)
 
   if (message.role === 'user') {
     return (
       <div className="chat-msg chat-msg--user">
         <div className="chat-msg__bubble">{message.text}</div>
+      </div>
+    )
+  }
+
+  if (message.role === 'correction-note') {
+    return (
+      <div className="chat-msg chat-msg--user">
+        <div className="chat-msg__bubble chat-msg__bubble--correction">
+          <span className="chat-msg__correction-tag">Correction</span>
+          {message.text}
+        </div>
       </div>
     )
   }
@@ -30,7 +70,6 @@ function ChatMessage({ message }) {
     )
   }
 
-  // Coach asking a practice question — plain prompt bubble.
   if (message.role === 'coach-prompt') {
     return (
       <div className="chat-msg chat-msg--assistant">
@@ -46,8 +85,12 @@ function ChatMessage({ message }) {
     )
   }
 
-  // Full coached answer + notes, returned from the Interview Response Agent.
   const { data } = message
+
+  function handleCorrectionSubmit(correctionText) {
+    setCorrecting(false)
+    message.onCorrect?.(message, correctionText)
+  }
 
   return (
     <div className="chat-msg chat-msg--assistant">
@@ -56,6 +99,7 @@ function ChatMessage({ message }) {
           <CoachAvatar />
           <span className="chat-msg__coach-name">Polaris coach</span>
           <span className="chat-msg__label">Model answer &amp; coaching</span>
+          {data.correction_of && <span className="chat-msg__correction-badge">Revised</span>}
         </div>
 
         {data.insufficient_context && (
@@ -83,6 +127,14 @@ function ChatMessage({ message }) {
           </div>
         )}
 
+        <GroundingBadge grounding={data.grounding} />
+
+        {data.suggested_action && (
+          <div className="chat-msg__suggested-action">
+            <strong>Worth knowing:</strong> {data.suggested_action}
+          </div>
+        )}
+
         {data.coaching?.length > 0 && (
           <details className="chat-msg__coaching" open>
             <summary>Coaching notes</summary>
@@ -105,6 +157,20 @@ function ChatMessage({ message }) {
               ))}
             </div>
           </div>
+        )}
+
+        {!data.insufficient_context && (
+          correcting ? (
+            <CorrectionInput
+              onSubmit={handleCorrectionSubmit}
+              onCancel={() => setCorrecting(false)}
+              pending={message.correctionPending}
+            />
+          ) : (
+            <button type="button" className="chat-msg__correct-btn" onClick={() => setCorrecting(true)}>
+              That's not quite right
+            </button>
+          )
         )}
       </div>
     </div>

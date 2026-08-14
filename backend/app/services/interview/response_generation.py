@@ -3,19 +3,18 @@
 1. classify_blueprint() — a cheap, small-payload call that picks ONE
    blueprint key from the ~24-entry library based on just the question
    and each blueprint's one-line objective.
-2. generate_interview_response() — the full reasoning call (question
-   classification, competency judgment, story selection, sufficiency
-   judgment, answer generation), but now given only the ONE selected
-   blueprint instead of the entire library. This is the main fix for
-   the context-window overflow that was causing Ollama to silently
-   truncate the prompt and return "{}" — the full blueprint library was
-   by far the largest fixed cost in every call.
+2. generate_interview_response() — the full reasoning call, given only
+   the ONE selected blueprint instead of the entire library, PLUS the
+   Engineering Identity framing layer (role_fit, engineering_quadrant,
+   claim_risk_details, evidence_coverage, ...), recent conversation
+   turns, and an optional correction to honor as a hard constraint.
 
 This module does not decide interview CONTENT itself — it only (a)
-calls the model, (b) retries on genuinely unparseable output, and (c)
-picks which blueprint to hand to step 2, which is a routing decision,
-not a content decision. If generation genuinely fails, we surface that
-failure rather than writing a fallback answer ourselves.
+calls the model, (b) retries on genuinely unparseable output, (c) picks
+which blueprint to hand to step 2, and (d) runs the deterministic,
+non-LLM grounding pass afterward (services/interview/grounding.py).
+None of that is a content decision. If generation genuinely fails, we
+surface that failure rather than writing a fallback answer ourselves.
 """
 import json
 import logging
@@ -29,6 +28,7 @@ from app.prompts.interview.interview_response import (
     INTERVIEW_RESPONSE_SYSTEM_PROMPT,
 )
 from app.schemas.interview.interview_response import BlueprintClassification, InterviewLLMOutput
+from app.services.interview import grounding
 from app.services.interview.blueprints import BLUEPRINTS
 
 MAX_ATTEMPTS = 3
@@ -44,20 +44,19 @@ class InterviewGenerationError(Exception):
 
 
 async def classify_blueprint(question: str) -> str:
-    """Cheap pass: sends only the question + {key: objective} for every
-    blueprint (not the full sections/notes), and returns a single key.
-    Falls back to a generic default on any failure rather than raising —
-    this step is a routing optimization, not something worth failing the
-    whole request over.
-    """
     summaries = {key: entry["objective"] for key, entry in BLUEPRINTS.items()}
     try:
+        messages = [
+            {"role": "system", "content": BLUEPRINT_CLASSIFICATION_PROMPT},
+            {"role": "user", "content": json.dumps({"question": question, "blueprints": summaries})},
+        ]
+        print("=== CLASSIFY BLUEPRINT LLM REQUEST ===")
+        print(f"Model: {MODEL}")
+        print(f"Messages: {json.dumps(messages, indent=2)}")
+        print("=======================================")
         response = await chat_completion(
             model=MODEL,
-            messages=[
-                {"role": "system", "content": BLUEPRINT_CLASSIFICATION_PROMPT},
-                {"role": "user", "content": json.dumps({"question": question, "blueprints": summaries})},
-            ],
+            messages=messages,
             response_format={"type": "json_object"},
             temperature=0,
             max_tokens=2000,
@@ -99,8 +98,6 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
 
     blueprint_key = await classify_blueprint(context["question"])
 
-    # Only the ONE selected blueprint goes to the generation call — this
-    # is the main payload reduction versus sending all ~24 entries.
     scoped_context = {
         **context,
         "blueprint_library": {blueprint_key: BLUEPRINTS[blueprint_key]},
@@ -125,12 +122,17 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
             blueprint_key,
         )
         try:
+            messages = [
+                {"role": "system", "content": INTERVIEW_RESPONSE_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(scoped_context)},
+            ]
+            print(f"=== GENERATE INTERVIEW RESPONSE LLM REQUEST (Attempt {attempt}/{MAX_ATTEMPTS}) ===")
+            print(f"Model: {MODEL}")
+            print(f"Messages: {json.dumps(messages, indent=2)}")
+            print("=========================================================================")
             response = await chat_completion(
                 model=MODEL,
-                messages=[
-                    {"role": "system", "content": INTERVIEW_RESPONSE_SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(scoped_context)},
-                ],
+                messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.4,
                 max_tokens=3000,
@@ -139,6 +141,17 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
             logger.debug("Raw interview response JSON: %s", content)
             parsed = InterviewLLMOutput.model_validate(json.loads(content))
             logger.info("Blueprint used: %s", parsed.blueprint_used)
+
+            # Deterministic, non-LLM grounding pass — never edits the
+            # answer, only annotates it (implementation plan §10).
+            parsed.grounding = grounding.validate_answer(parsed, context)
+            if parsed.grounding.unverifiable_claims:
+                logger.warning(
+                    "Grounding flagged %d unverifiable claim(s): %s",
+                    len(parsed.grounding.unverifiable_claims),
+                    parsed.grounding.unverifiable_claims,
+                )
+
             return parsed
         except Exception as e:
             logger.warning("Attempt %d/%d failed to parse: %s", attempt, MAX_ATTEMPTS, e)

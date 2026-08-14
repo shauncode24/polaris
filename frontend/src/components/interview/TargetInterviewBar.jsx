@@ -2,7 +2,28 @@
 import { useEffect, useState } from 'react'
 import './TargetInterviewBar.css'
 
-function TargetInterviewBar({ targetRole, targetCompany, jobs, onSelectJob, onManualChange }) {
+function IdentityBadges({ identityBadges }) {
+  if (!identityBadges) return null
+  const { topRoleFit, companyReadiness } = identityBadges
+  if (!topRoleFit && !companyReadiness) return null
+
+  return (
+    <div className="target-interview__badges">
+      {topRoleFit && (
+        <span className="target-interview__badge" title={topRoleFit.rationale}>
+          Best fit: {topRoleFit.role} ({topRoleFit.rating}/5)
+        </span>
+      )}
+      {companyReadiness && (
+        <span className="target-interview__badge">
+          {companyReadiness.company} readiness: {companyReadiness.readiness_pct}%
+        </span>
+      )}
+    </div>
+  )
+}
+
+function TargetInterviewBar({ targetRole, targetCompany, jobs, onSelectJob, onManualChange, identityBadges }) {
   const [open, setOpen] = useState(false)
   const [manualRole, setManualRole] = useState(targetRole || '')
   const [manualCompany, setManualCompany] = useState(targetCompany || '')
@@ -26,6 +47,7 @@ function TargetInterviewBar({ targetRole, targetCompany, jobs, onSelectJob, onMa
       <div className="target-interview__main">
         <span className="target-interview__label">Target interview</span>
         <span className="target-interview__value">{label}</span>
+        <IdentityBadges identityBadges={identityBadges} />
       </div>
 
       <div className="target-interview__control">

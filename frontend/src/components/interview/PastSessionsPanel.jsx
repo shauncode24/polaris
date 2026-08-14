@@ -24,7 +24,7 @@ function SessionCard({ session, active, onClick }) {
   )
 }
 
-function PastSessionsPanel({ sessions, loading, activeId, onSelect }) {
+function PastSessionsPanel({ sessions, loading, activeSessionId, onSelect }) {
   return (
     <section className="past-sessions">
       <h3>Past sessions</h3>
@@ -37,7 +37,12 @@ function PastSessionsPanel({ sessions, loading, activeId, onSelect }) {
       ) : (
         <div className="past-sessions__list">
           {sessions.slice(0, 3).map((s) => (
-            <SessionCard key={s.id} session={s} active={s.id === activeId} onClick={() => onSelect(s)} />
+            <SessionCard
+              key={s.session_id || s.id}
+              session={s}
+              active={(s.session_id || s.id) === activeSessionId}
+              onClick={() => onSelect(s)}
+            />
           ))}
         </div>
       )}

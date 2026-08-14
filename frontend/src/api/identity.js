@@ -13,8 +13,13 @@ function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-export function getEngineeringIdentity(token) {
-  return fetch(`${API_BASE_URL}/identity`, { headers: authHeaders(token) }).then(handle)
+export async function getEngineeringIdentity(token) {
+  const response = await fetch(`${API_BASE_URL}/identity`, {
+    headers: authHeaders(token),
+  })
+  if (response.status === 404) return null
+  if (!response.ok) return null
+  return response.json().catch(() => null)
 }
 
 export function refreshEngineeringIdentity(token) {

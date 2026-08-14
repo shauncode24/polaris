@@ -3,24 +3,39 @@ blueprint library and persona config, and hands all of it to the LLM
 untouched. No scoring, no filtering, no pre-selection of stories or
 blueprints: the model decides what's relevant and which blueprint fits,
 not this module.
+
+Engineering Identity integration (implementation plan §3/§5): the
+framing/self-knowledge layer (top_skills summary, role_fit,
+engineering_quadrant, company_readiness, claim_risk_details,
+coverage_gaps, evidence_coverage, source_freshness) is now sourced from
+the single shared identity_context adapter instead of being
+independently re-derived here. The full, unbounded reconciled skill
+list used for context["profile"]["skills"] comes straight from
+reconciled_confidence.get_reconciled_skill_confidences() — the exact
+function Identity and Skill Gap already use, so a skill's confidence
+can never disagree between GET /identity and the Interview Agent again.
+Raw narrative content (projects, experiences, education, github repos,
+leetcode) is still fetched directly, since IdentityFacts deliberately
+doesn't carry that granularity.
 """
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import CompanyNote, Education, Experience, Project, Resume
-from app.models.inference import ProfileSnapshot, SkillEvidence, ProjectClaimAuditReview
-from app.models.structure import Skill
-from app.services.evidence import build_evidence_details
+from app.models.facts import CompanyNote, Education, Experience, Project
+from app.models.inference import InterviewResponse, ProfileSnapshot
 from app.services.interview.blueprints import get_blueprint_library, get_persona
 from app.services.job_intelligence.builder import get_job_intelligence
-from app.services.resume.confidence import compute_decayed_skill_confidence
-
+from app.services.identity.identity_context import build_identity_context_for_interview
+from app.services.identity.reconciled_confidence import get_reconciled_skill_confidences
 
 from app.services.projects.linking import normalize_name
 
 from app.models.github_analysis import GithubProjectAnalysis
+
+MAX_CONVERSATION_TURNS = 6
+
 
 async def _get_all_projects(db: AsyncSession, user_id) -> list[dict]:
     result = await db.execute(
@@ -89,27 +104,18 @@ async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
     return education
 
 
-async def _get_all_skills_with_evidence(db: AsyncSession, user_id) -> list[dict]:
-    skill_result = await db.execute(select(Skill))
-    skills = skill_result.scalars().all()
-
-    out = []
-    for skill in skills:
-        evidence_result = await db.execute(
-            select(SkillEvidence).where(
-                SkillEvidence.skill_id == skill.id,
-                SkillEvidence.user_id == user_id,
-            )
-        )
-        evidence_rows = list(evidence_result.scalars().all())
-        if not evidence_rows:
-            continue
-
-        confidence = compute_decayed_skill_confidence(evidence_rows)
-        details = await build_evidence_details(db, evidence_rows)
-        out.append({"skill": skill.canonical_name, "confidence": confidence, "evidence": details})
-
-    return out
+async def _get_all_skills_reconciled(db: AsyncSession, user_id) -> list[dict]:
+    """Full, unbounded reconciled skill list (every evidenced skill, not
+    just the top 10 IdentityFacts.top_skills carries) — same shape the
+    old _get_all_skills_with_evidence returned ({skill, confidence,
+    evidence}), but confidence is now the claim-risk/timeline-reconciled
+    number, not a raw decayed weight.
+    """
+    reconciled = await get_reconciled_skill_confidences(db, user_id)
+    return [
+        {"skill": data["skill"], "confidence": data["confidence"], "evidence": data.get("sources", [])}
+        for data in reconciled.values()
+    ]
 
 
 async def _get_company_notes(db: AsyncSession, user_id, target_company: str | None) -> list[dict]:
@@ -156,35 +162,7 @@ async def _get_leetcode_evidence(db: AsyncSession, user_id) -> dict | None:
     }
 
 
-async def _get_project_claim_flags(db: AsyncSession, user_id) -> list[dict]:
-    proj_result = await db.execute(select(Project.id, Project.name).where(Project.user_id == user_id))
-    projects_by_id = {pid: name for pid, name in proj_result.all()}
-    if not projects_by_id:
-        return []
-
-    audit_result = await db.execute(
-        select(ProjectClaimAuditReview).where(ProjectClaimAuditReview.project_id.in_(projects_by_id.keys()))
-    )
-    flags = []
-    for row in audit_result.scalars().all():
-        narrative = (row.report_json or {}).get("narrative", {})
-        if narrative.get("risk_level") in ("high", "medium"):
-            flags.append({
-                "project": projects_by_id.get(row.project_id, "Unknown project"),
-                "risk_level": narrative.get("risk_level"),
-                "headline": narrative.get("headline", ""),
-            })
-    return flags
-
-
 async def _get_target_job_intelligence(db: AsyncSession, job_intelligence_id: str | None) -> dict | None:
-    """NEW — optional grounding in a real, deterministic Job Intelligence
-    profile (design doc §6.2). Returns a slim projection, not the whole
-    profile: only the fields the interview prompt can actually act on
-    (seniority calibration, real interview_focus_areas, required
-    technologies) — never the raw enriched-skill/category plumbing that
-    has no narrative use here.
-    """
     if not job_intelligence_id:
         return None
     profile = await get_job_intelligence(db, UUID(job_intelligence_id))
@@ -199,6 +177,38 @@ async def _get_target_job_intelligence(db: AsyncSession, job_intelligence_id: st
     }
 
 
+async def _get_recent_conversation_turns(
+    db: AsyncSession, user_id, session_id: str | None, limit: int = MAX_CONVERSATION_TURNS
+) -> list[dict]:
+    """Last N {question, answer_short} pairs for this session, oldest
+    first — purely for the model's own continuity ("as I mentioned
+    earlier..."). Never re-fetches or embeds Identity data; this is
+    conversation-scope memory only (implementation plan §12), never a
+    separate memory store — it just reads back the same InterviewResponse
+    rows.
+    """
+    if not session_id:
+        return []
+    try:
+        session_uuid = UUID(session_id)
+    except ValueError:
+        return []
+
+    result = await db.execute(
+        select(InterviewResponse)
+        .where(InterviewResponse.user_id == user_id)
+        .where(InterviewResponse.session_id == session_uuid)
+        .order_by(InterviewResponse.created_at.desc())
+        .limit(limit)
+    )
+    rows = list(reversed(result.scalars().all()))
+    turns = []
+    for r in rows:
+        rj = r.response_json or {}
+        turns.append({"question": r.question, "answer_short": rj.get("answer_short", "")})
+    return turns
+
+
 async def build_interview_context(
     db: AsyncSession,
     user_id,
@@ -206,21 +216,28 @@ async def build_interview_context(
     target_role: str | None,
     target_company: str | None,
     job_intelligence_id: str | None = None,
+    session_id: str | None = None,
+    correction: str | None = None,
 ) -> dict:
     projects = await _get_all_projects(db, user_id)
     experiences = await _get_all_experiences(db, user_id)
     education = await _get_all_education(db, user_id)
-    skills = await _get_all_skills_with_evidence(db, user_id)
+    skills = await _get_all_skills_reconciled(db, user_id)
     github_repos = await _get_github_repo_evidence(db, user_id)
     leetcode_evidence = await _get_leetcode_evidence(db, user_id)
     company_notes = await _get_company_notes(db, user_id, target_company)
     target_job_intelligence = await _get_target_job_intelligence(db, job_intelligence_id)
+    identity = await build_identity_context_for_interview(db, user_id)
+    recent_conversation = await _get_recent_conversation_turns(db, user_id, session_id)
 
     return {
         "question": question,
         "target_role": target_role,
         "target_company": target_company,
         "target_job_intelligence": target_job_intelligence,
+        "identity": identity,
+        "recent_conversation": recent_conversation,
+        "correction": correction,
         "profile": {
             "projects": projects,
             "experiences": experiences,
@@ -228,12 +245,15 @@ async def build_interview_context(
             "skills": skills,
             "github_repos": github_repos,
             "leetcode_evidence": leetcode_evidence,
-            "project_claim_flags": await _get_project_claim_flags(db, user_id),
+            # Claim-risk flags now come straight from the shared Identity
+            # layer instead of being independently re-derived here.
+            "project_claim_flags": identity["claim_risk_details"],
         },
         "company_notes": company_notes,
         "blueprint_library": get_blueprint_library(),
         "persona": get_persona(),
     }
+
 
 async def _get_github_repo_evidence(db: AsyncSession, user_id, limit: int = 6) -> list[dict]:
     result = await db.execute(

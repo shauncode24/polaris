@@ -5,7 +5,13 @@ import { useAuth } from '../contexts/AuthContext'
 import Sidebar from '../components/layout/Sidebar'
 import BreadcrumbBar from '../components/layout/BreadcrumbBar'
 import { listJobAnalyses } from '../api/jobs'
-import { askInterviewQuestion, listInterviewSessions } from '../api/interview'
+import {
+  askInterviewQuestion,
+  correctInterviewResponse,
+  getInterviewSessionThread,
+  listInterviewSessions,
+} from '../api/interview'
+import { getEngineeringIdentity } from '../api/identity'
 import { listCompanyNotes, createCompanyNote } from '../api/companyNotes'
 import TargetInterviewBar from '../components/interview/TargetInterviewBar'
 import LivePracticeCard from '../components/interview/LivePracticeCard'
@@ -33,12 +39,15 @@ function InterviewPrepPage() {
   const [sessions, setSessions] = useState([])
   const [sessionsLoading, setSessionsLoading] = useState(true)
   const [activeSessionId, setActiveSessionId] = useState(null)
+  const [sessionLoadPending, setSessionLoadPending] = useState(false)
 
   const [targetRole, setTargetRole] = useState('')
   const [targetCompany, setTargetCompany] = useState('')
 
   const [companyNotes, setCompanyNotes] = useState([])
   const [notesLoading, setNotesLoading] = useState(false)
+
+  const [identityBadges, setIdentityBadges] = useState(null)
 
   const [messages, setMessages] = useState([])
   const [pending, setPending] = useState(false)
@@ -63,6 +72,37 @@ function InterviewPrepPage() {
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
+
+  useEffect(() => {
+    let cancelled = false
+    getEngineeringIdentity(token)
+      .then((report) => {
+        if (cancelled || !report) return
+        const roleFit = report.facts?.role_fit || []
+        const topRoleFit = roleFit.length
+          ? [...roleFit].sort((a, b) => b.rating - a.rating)[0]
+          : null
+        setIdentityBadges((prev) => ({ ...prev, topRoleFit }))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [token])
+
+  useEffect(() => {
+    if (!identityBadges || !targetCompany) return
+    getEngineeringIdentity(token)
+      .then((report) => {
+        if (!report) return
+        const readiness = (report.facts?.company_readiness || []).find(
+          (c) => c.company.toLowerCase().includes(targetCompany.toLowerCase())
+        )
+        if (readiness) {
+          setIdentityBadges((prev) => ({ ...prev, companyReadiness: readiness }))
+        }
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetCompany, token])
 
   function refreshSessions() {
     setSessionsLoading(true)
@@ -99,6 +139,7 @@ function InterviewPrepPage() {
   }, [targetRole])
 
   function startSession(intro) {
+    setActiveSessionId(null)
     setMessages([
       { id: nextId('coach'), role: 'coach-prompt', text: 'Ask me a question', intro },
     ])
@@ -109,9 +150,6 @@ function InterviewPrepPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Lets other pages (e.g. Projects' "Project intelligence" quick actions)
-  // hand off a ready-made question via ?prefill=... and have it asked
-  // automatically, exactly once per navigation.
   useEffect(() => {
     const prefill = searchParams.get('prefill')
     if (prefill && !prefillHandled.current) {
@@ -130,6 +168,18 @@ function InterviewPrepPage() {
     handleSubmitAnswer(question)
   }
 
+  function decorateAssistantMessage(response) {
+    return {
+      id: response.response_id || nextId('assistant'),
+      role: 'assistant',
+      data: {
+        ...response,
+        onFollowUp: askFollowUp,
+        onCorrect: handleCorrect,
+      },
+    }
+  }
+
   async function handleSubmitAnswer(questionText) {
     if (!questionText.trim() || pending) return
 
@@ -141,16 +191,42 @@ function InterviewPrepPage() {
         question: questionText,
         targetRole,
         targetCompany,
+        sessionId: activeSessionId,
       })
-      setMessages((prev) => [
-        ...prev,
-        { id: data.response_id || nextId('assistant'), role: 'assistant', data: { ...data, onFollowUp: askFollowUp } },
-      ])
+      setActiveSessionId(data.session_id)
+      setMessages((prev) => [...prev, decorateAssistantMessage(data)])
       refreshSessions()
     } catch (err) {
       setMessages((prev) => [
         ...prev,
         { id: nextId('error'), role: 'error', message: err.message || 'Something went wrong generating coaching for that answer.' },
+      ])
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function handleCorrect(originalMessage, correctionText) {
+    const parentResponseId = originalMessage.data.response_id
+    if (!parentResponseId) return
+
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId('correction'), role: 'correction-note', text: correctionText },
+    ])
+    setPending(true)
+
+    try {
+      const data = await correctInterviewResponse(token, {
+        parentResponseId,
+        correction: correctionText,
+      })
+      setMessages((prev) => [...prev, decorateAssistantMessage(data)])
+      refreshSessions()
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId('error'), role: 'error', message: err.message || 'Something went wrong applying that correction.' },
       ])
     } finally {
       setPending(false)
@@ -172,10 +248,39 @@ function InterviewPrepPage() {
     setCompanyNotes((prev) => [note, ...prev])
   }
 
-  function handleSelectSession(session) {
-    setActiveSessionId(session.id)
-    if (session.target_role) setTargetRole(session.target_role)
-    if (session.target_company !== undefined) setTargetCompany(session.target_company || '')
+  async function handleSelectSession(session) {
+    const sessionId = session.session_id || session.id
+    if (sessionLoadPending || sessionId === activeSessionId) return
+
+    setSessionLoadPending(true)
+    try {
+      const thread = await getInterviewSessionThread(token, sessionId)
+      const rebuilt = []
+      thread.forEach((item) => {
+        if (item.correction_of) {
+          // The correction's own user-facing "what was wrong" text isn't
+          // persisted separately from the regenerated answer, so this
+          // just renders as a revised answer with its "Revised" badge —
+          // still fully readable, just without replaying the original
+          // correction note text.
+          rebuilt.push(decorateAssistantMessage(item))
+        } else {
+          rebuilt.push({ id: nextId('user'), role: 'user', text: item.question })
+          rebuilt.push(decorateAssistantMessage(item))
+        }
+      })
+      setMessages(rebuilt)
+      setActiveSessionId(sessionId)
+      if (session.target_role) setTargetRole(session.target_role)
+      if (session.target_company !== undefined) setTargetCompany(session.target_company || '')
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId('error'), role: 'error', message: 'Could not load that session.' },
+      ])
+    } finally {
+      setSessionLoadPending(false)
+    }
   }
 
   return (
@@ -204,6 +309,7 @@ function InterviewPrepPage() {
             jobs={jobs}
             onSelectJob={handleSelectJob}
             onManualChange={handleManualTarget}
+            identityBadges={identityBadges}
           />
 
           <div className="interview-page__columns">
@@ -220,7 +326,7 @@ function InterviewPrepPage() {
               <PastSessionsPanel
                 sessions={sessions}
                 loading={sessionsLoading}
-                activeId={activeSessionId}
+                activeSessionId={activeSessionId}
                 onSelect={handleSelectSession}
               />
               <CompanyNotesPanel
