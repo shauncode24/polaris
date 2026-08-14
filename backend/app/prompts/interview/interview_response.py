@@ -25,8 +25,17 @@ asking. If nothing fits well, pick whichever generic fallback best suits the que
 (an explain-your-work question with no better specific match), or "motivation_default" (a why/what
 draws you question with no better specific match).
 
+Also report:
+- "confidence": "high" if the question clearly and specifically matches the chosen blueprint's
+  objective; "medium" if it's a reasonable but not clean-cut fit; "low" if you're essentially guessing
+  (this is expected and honest for oddly-phrased or highly generic questions — do not inflate it).
+- "competency_tags": which of these exact interview competencies this question is actually testing —
+  "leadership", "teamwork", "conflict_resolution", "ownership", "problem_solving", "technical_depth",
+  "failure_recovery", "mentorship". Zero, one, or several. Only include a tag the question genuinely
+  probes, not one that could theoretically apply to any answer.
+
 Output ONLY valid JSON, no prose, no markdown fences:
-{"blueprint_key": str, "reason": "one short sentence explaining the match"}
+{"blueprint_key": str, "reason": "one short sentence explaining the match", "confidence": str, "competency_tags": [str]}
 
 "blueprint_key" MUST be exactly one of the keys given to you — never invent a new key."""
 

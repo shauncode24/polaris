@@ -22,17 +22,25 @@ class CoachingNote(BaseModel):
 class BlueprintClassification(BaseModel):
     blueprint_key: str
     reason: str = ""
+    # NEW (implementation plan §A) — a confidence read on the match
+    # itself, and the competency tags the classifier believes this
+    # question tests, independent of whatever competency hints the
+    # matched blueprint happens to carry in BLUEPRINT_COMPETENCY_HINTS.
+    # Never trusted blindly downstream — competency_tags is filtered to
+    # the same CANONICAL_COMPETENCIES vocabulary used everywhere else
+    # in the interview module (see competency_tagging.py) before use.
+    confidence: str = "medium"  # "low" | "medium" | "high"
+    competency_tags: list[str] = []
 
 
 class GroundingReport(BaseModel):
     """Deterministic, non-LLM check — never rewrites the answer, only
     reports. See services/interview/grounding.py. This SAME shape is
-    reused for two distinct passes now (Phase 1):
+    reused for two distinct passes:
       - validate_plan(): runs on the structured AnswerPlan, BEFORE any
         prose exists — this is what actually gates a re-plan attempt.
       - validate_answer(): runs on the final prose, AFTER generation —
-        a last-line defensive scan, purely advisory (nothing blocks on
-        this one, since by this point the plan already passed).
+        a last-line defensive scan, purely advisory.
     """
     unverifiable_claims: list[str] = []
     uses_flagged_project: bool = False
@@ -43,10 +51,7 @@ class PlanEvidenceCitation(BaseModel):
     """One piece of evidence the plan is relying on — `source` MUST be
     a real, literal name from the candidate's profile (a project name,
     a "{role} at {company}" experience label, or a github_repos entry's
-    name); `fact` is the specific detail drawn from that source. This
-    is the mechanism that makes pre-prose grounding possible at all:
-    without a structured citation, there'd be nothing to check a claim
-    against except free text.
+    name); `fact` is the specific detail drawn from that source.
     """
     source: str
     fact: str
@@ -54,25 +59,19 @@ class PlanEvidenceCitation(BaseModel):
 
 class PlanSection(BaseModel):
     """One blueprint section, filled with factual notes — NOT yet
-    styled prose. Kept terse and declarative on purpose; all of the
-    persona/voice work (contractions, plain-language-before-jargon,
-    bridge sentences, sentence-length variation) happens later, in the
-    prose-generation stage, over content that has already been
-    validated against the real profile.
+    styled prose. All persona/voice work happens later, in the
+    prose-generation stage, over content already validated against the
+    real profile.
     """
     label: str
     content: str
 
 
 class AnswerPlan(BaseModel):
-    """The Phase 1 intermediate stage (implementation plan §F/§G). The
-    model reasons over the ENTIRE real profile here, once, and commits
-    to a set of real, citable facts. Everything downstream (prose
-    generation) is only ever allowed to restyle THIS object — it can
-    no longer introduce a new fact, story, or number, which is what
-    makes pre-prose grounding meaningful: reject/re-plan here is cheap
-    and catches a hallucination before it's dressed up in natural
-    language and harder to spot.
+    """The Phase 1 intermediate stage. The model reasons over the
+    ENTIRE real profile here, once, and commits to a set of real,
+    citable facts. Prose generation is only ever allowed to restyle
+    THIS object.
     """
     question_type: str = ""
     blueprint_used: str = ""
@@ -90,9 +89,7 @@ class AnswerPlan(BaseModel):
 class ProseOutput(BaseModel):
     """The narrow, low-risk second-stage output — restyles an already-
     validated AnswerPlan into spoken-style prose. Never carries new
-    facts, so it never needs its own grounding pass against the profile
-    (the plan already cleared that bar); the post-prose scan in
-    grounding.validate_answer() is a defensive-in-depth safety net only.
+    facts.
     """
     answer: str = ""
     answer_short: str = ""
@@ -108,6 +105,9 @@ class InterviewLLMOutput(BaseModel):
     follow_up_questions: list[str] = []
     coaching: list[CoachingNote] = []
     insufficient_context: bool = False
+    # WHY insufficient_context is true: "empty_profile" |
+    # "model_declined" | "grounding_rejected". "" whenever false.
+    insufficient_context_reason: str = ""
     context_note: str = ""
     claims_needing_verification: list[str] = []
     grounding: GroundingReport = GroundingReport()
@@ -125,6 +125,7 @@ class InterviewResponseOutput(BaseModel):
     follow_up_questions: list[str] = []
     coaching: list[CoachingNote] = []
     insufficient_context: bool = False
+    insufficient_context_reason: str = ""
     context_note: str = ""
     target_role: str | None = None
     target_company: str | None = None
@@ -135,6 +136,13 @@ class InterviewResponseOutput(BaseModel):
     parent_response_id: str | None = None
     correction_of: str | None = None
     suggested_action: str | None = None
+    trace_id: str | None = None
+    # NEW (implementation plan §M) — set when job_intelligence_id was
+    # not explicitly passed by the caller but a real, active Goal's
+    # attached job was auto-attached instead, so the frontend can show
+    # "using context from your goal: X" rather than the JD context
+    # silently appearing with no explanation.
+    auto_attached_job_intelligence_id: str | None = None
 
 
 class InterviewSessionSummary(BaseModel):

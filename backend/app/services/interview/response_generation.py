@@ -1,41 +1,28 @@
 # backend/app/services/interview/response_generation.py
-"""Phase 1 pipeline (implementation plan §F/§G/§H/§I, target
-architecture diagram): classification -> plan -> pre-prose validation
-(reject/re-plan once) -> prose -> post-prose grounding scan.
+"""Phase 1 pipeline (implementation plan §F/§G/§H/§I/§N/§R/§S) plus
+this pass's §A addition:
 
-classify_blueprint() is unchanged from Phase 0 — cheap, temp-0, called
-by the API layer BEFORE context_builder.build_interview_context() so
-retrieval can use the blueprint's competency hints.
+  §A — classify_blueprint() now also captures the classifier's own
+       confidence and the competency tags it believes the question
+       tests, logs both, and tracks a running fallback-rate metric
+       (how often classification silently defaulted to
+       "behavioral_default" because the call itself failed, as opposed
+       to genuinely picking that key as the best fit). This was
+       previously invisible — a rising fallback rate meant more and
+       more real questions getting generic handling with no signal
+       anywhere that it was happening.
 
-generate_interview_response() is an orchestrator over two narrower
-calls instead of one overloaded one:
-  1. generate_answer_plan() — the ONLY stage that sees the raw profile.
-     Produces a structured AnswerPlan with explicit fact citations.
-     Each attempt is checked against TWO independent conditions before
-     being accepted:
-       - grounding.validate_plan() — did it cite anything not actually
-         in the real profile? (implementation plan §H)
-       - _plan_content_incomplete() — did it leave a required field
-         (sections/follow_up_questions/coaching) empty without
-         legitimately setting insufficient_context? (implementation
-         plan §I, applied here rather than post-hoc, since content
-         completeness is a planning decision, not a prose one)
-     Either failure produces a specific, targeted correction message
-     fed back into the next attempt, within the same shared attempt
-     budget — this is deliberately not two separate unlimited retry
-     loops, since an attempt can (and often will) fail both checks at
-     once and should only cost one retry either way.
-  2. generate_prose_from_plan() — never sees the raw profile, only the
-     already-validated plan. Restyles it into spoken prose.
-
-The "no fabricated fallback answer on total LLM failure" philosophy is
-unchanged: genuine failures raise InterviewGenerationError and are
-surfaced as a 502, never silently replaced with a templated answer.
+classify_blueprint() itself still returns a plain blueprint_key string
+(everything downstream — context_builder's ranking, the plan prompt's
+blueprint_library lookup — only ever needed the key), so this is
+additive, not a breaking signature change.
 """
 import json
 import logging
+import os
+from uuid import uuid4
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import chat_completion, MODEL as DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -55,31 +42,114 @@ from app.services.interview import grounding
 from app.services.interview.blueprints import BLUEPRINTS
 
 DEFAULT_BLUEPRINT = "behavioral_default"
+_VALID_COMPETENCIES = frozenset({
+    "leadership", "teamwork", "conflict_resolution", "ownership",
+    "problem_solving", "technical_depth", "failure_recovery", "mentorship",
+})
+_VALID_CLASSIFICATION_CONFIDENCE = frozenset({"low", "medium", "high"})
 
-MAX_CLASSIFY_TOKENS = 200
+INTERVIEW_MODEL = os.environ.get("INTERVIEW_MODEL", "llama-3.3-70b-versatile")
+INTERVIEW_TIMEOUT_SECONDS = float(os.environ.get("INTERVIEW_TIMEOUT_SECONDS", "45"))
+CLASSIFY_TIMEOUT_SECONDS = float(os.environ.get("INTERVIEW_CLASSIFY_TIMEOUT_SECONDS", "15"))
+
+MAX_CLASSIFY_TOKENS = 250
 MAX_PLAN_TOKENS = 1400
 MAX_PROSE_TOKENS = 700
-INTERVIEW_MODEL = "llama-3.3-70b-versatile"
 
-# Plan generation gets up to this many total attempts. This single
-# budget covers genuine parse/call failures AND both the grounding
-# retry and the content-completeness retry — a failure on any one of
-# those axes consumes one attempt, same as a malformed-JSON failure
-# would, rather than each axis getting its own separate budget.
 MAX_PLAN_ATTEMPTS = 3
 MAX_PROSE_ATTEMPTS = 2
 
 
 class InterviewGenerationError(Exception):
     """Raised when the model's output couldn't be obtained/parsed after
-    all retries, at either stage. Callers should surface this as a
-    failure to the user — NOT synthesize a templated answer, since that
-    would reintroduce a deterministic content decision.
+    all retries (including the in-attempt repair call), at either
+    stage. Callers should surface this as a failure to the user — NOT
+    synthesize a templated answer, since that would reintroduce a
+    deterministic content decision.
     """
 
 
-async def classify_blueprint(question: str) -> str:
+# §A — process-lifetime classification metrics. Deliberately a plain
+# in-memory counter, not a real metrics backend (none exists in this
+# codebase) — good enough to answer "is the fallback rate creeping up"
+# from logs/an ad-hoc inspection without adding new infrastructure.
+# Resets on process restart, which is an acceptable limitation for a
+# first cut; wiring this into a real metrics pipeline is a §R/ops
+# concern, not an interview-logic one.
+_classification_stats = {"total": 0, "fallback": 0}
+
+
+def get_classification_metrics() -> dict:
+    total = _classification_stats["total"]
+    fallback = _classification_stats["fallback"]
+    return {
+        "total": total,
+        "fallback": fallback,
+        "fallback_rate": round(fallback / total, 3) if total else 0.0,
+    }
+
+
+async def _call_llm_with_repair(
+    *,
+    system_prompt: str,
+    payload: dict,
+    model_cls,
+    temperature: float,
+    max_tokens: int,
+    trace_id: str,
+    stage: str,
+):
+    """One model call, with ONE cheap same-attempt repair fallback if
+    the response doesn't parse as JSON or doesn't validate against
+    `model_cls`. Far cheaper than a full regeneration, and handles the
+    common case (a stray trailing comma, a missing field) without
+    spending the outer retry loop's budget on it.
+    """
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": json.dumps(payload)},
+    ]
+    response = await chat_completion(
+        model=INTERVIEW_MODEL,
+        messages=messages,
+        response_format={"type": "json_object"},
+        temperature=temperature,
+        max_tokens=max_tokens,
+        timeout=INTERVIEW_TIMEOUT_SECONDS,
+    )
+    content = response.choices[0].message.content
+
+    try:
+        return model_cls.model_validate(json.loads(content))
+    except Exception as e:
+        logger.warning(
+            "[trace=%s] stage=%s response failed to parse/validate (%s) — attempting one repair call",
+            trace_id, stage, e,
+        )
+        repair_messages = messages + [
+            {"role": "assistant", "content": content},
+            {"role": "user", "content": (
+                f"That response could not be parsed/validated ({e}). Return ONLY the corrected, "
+                "complete, valid JSON object matching the required schema — no prose, no markdown fences."
+            )},
+        ]
+        response = await chat_completion(
+            model=INTERVIEW_MODEL,
+            messages=repair_messages,
+            response_format={"type": "json_object"},
+            temperature=0,
+            max_tokens=max_tokens,
+            timeout=INTERVIEW_TIMEOUT_SECONDS,
+        )
+        repaired_content = response.choices[0].message.content
+        return model_cls.model_validate(json.loads(repaired_content))
+
+
+async def classify_blueprint(question: str, trace_id: str | None = None) -> str:
+    trace_id = trace_id or str(uuid4())
     summaries = {key: entry["objective"] for key, entry in BLUEPRINTS.items()}
+    _classification_stats["total"] += 1
+
     try:
         messages = [
             {"role": "system", "content": BLUEPRINT_CLASSIFICATION_PROMPT},
@@ -91,16 +161,38 @@ async def classify_blueprint(question: str) -> str:
             response_format={"type": "json_object"},
             temperature=0,
             max_tokens=MAX_CLASSIFY_TOKENS,
+            timeout=CLASSIFY_TIMEOUT_SECONDS,
         )
         content = response.choices[0].message.content
-        logger.debug("Raw blueprint classification JSON: %s", content)
         parsed = BlueprintClassification.model_validate(json.loads(content))
-        if parsed.blueprint_key in BLUEPRINTS:
-            logger.info("Classified blueprint: %s (%s)", parsed.blueprint_key, parsed.reason)
-            return parsed.blueprint_key
-        logger.warning("Classifier returned unknown key '%s', defaulting", parsed.blueprint_key)
+
+        if parsed.blueprint_key not in BLUEPRINTS:
+            logger.warning(
+                "[trace=%s] stage=classify classifier returned unknown key '%s', defaulting",
+                trace_id, parsed.blueprint_key,
+            )
+            _classification_stats["fallback"] += 1
+            return DEFAULT_BLUEPRINT
+
+        confidence = parsed.confidence if parsed.confidence in _VALID_CLASSIFICATION_CONFIDENCE else "medium"
+        competency_tags = sorted({t for t in parsed.competency_tags if t in _VALID_COMPETENCIES})
+
+        logger.info(
+            "[trace=%s] stage=classify blueprint=%s confidence=%s competency_tags=%s reason=%r",
+            trace_id, parsed.blueprint_key, confidence, competency_tags, parsed.reason,
+        )
+        return parsed.blueprint_key
     except Exception as e:
-        logger.warning("Blueprint classification failed, defaulting to %s: %s", DEFAULT_BLUEPRINT, e)
+        logger.warning(
+            "[trace=%s] stage=classify failed, defaulting to %s: %s", trace_id, DEFAULT_BLUEPRINT, e,
+        )
+        _classification_stats["fallback"] += 1
+        metrics = get_classification_metrics()
+        if metrics["total"] % 20 == 0:
+            # Periodic visibility into drift without logging on every
+            # single call — cheap enough to just check the modulus here
+            # rather than wiring a scheduled job for a first cut.
+            logger.info("[metric=blueprint_classification] %s", metrics)
 
     return DEFAULT_BLUEPRINT
 
@@ -118,14 +210,6 @@ def _plan_failed_grounding(ground: GroundingReport) -> bool:
 
 
 def _plan_content_incomplete(plan: AnswerPlan) -> bool:
-    """Implementation plan §I — a plan that isn't legitimately claiming
-    insufficient_context must still populate its required fields. An
-    empty "sections" list, or empty "follow_up_questions"/"coaching",
-    reads as the model quietly truncating rather than doing the work —
-    the same failure mode the audit flagged for the old single-call
-    pipeline, just checked one stage earlier now that there's a
-    structured plan to check it against.
-    """
     if plan.insufficient_context:
         return False
     return not plan.sections or not plan.follow_up_questions or not plan.coaching
@@ -151,33 +235,10 @@ def _correction_note(ground: GroundingReport, content_incomplete: bool) -> str:
     return " ".join(parts)
 
 
-async def _call_plan_llm(scoped_context: dict) -> AnswerPlan:
-    response = await chat_completion(
-        model=INTERVIEW_MODEL,
-        messages=[
-            {"role": "system", "content": ANSWER_PLAN_SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(scoped_context)},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.4,
-        max_tokens=MAX_PLAN_TOKENS,
-    )
-    content = response.choices[0].message.content
-    logger.debug("Raw answer plan JSON: %s", content)
-    return AnswerPlan.model_validate(json.loads(content))
-
-
 async def generate_answer_plan(
-    context: dict, blueprint_key: str
+    context: dict, blueprint_key: str, trace_id: str | None = None
 ) -> tuple[AnswerPlan | None, GroundingReport | None]:
-    """Returns (plan, grounding_report). `plan` is None only if every
-    attempt failed outright (malformed JSON / call error) with no
-    parseable plan to even report on. If a plan WAS produced but its
-    final attempt still fails grounding and/or content-completeness, it
-    is still returned alongside its (failing) GroundingReport — the
-    caller decides the user-facing outcome; this function's job is only
-    to try, validate on both axes, and retry-with-feedback.
-    """
+    trace_id = trace_id or str(uuid4())
     base_context = {
         **context,
         "blueprint_library": {blueprint_key: BLUEPRINTS[blueprint_key]},
@@ -194,9 +255,20 @@ async def generate_answer_plan(
             scoped_context["grounding_correction"] = correction_note
 
         try:
-            plan = await _call_plan_llm(scoped_context)
+            plan = await _call_llm_with_repair(
+                system_prompt=ANSWER_PLAN_SYSTEM_PROMPT,
+                payload=scoped_context,
+                model_cls=AnswerPlan,
+                temperature=0.4,
+                max_tokens=MAX_PLAN_TOKENS,
+                trace_id=trace_id,
+                stage="plan",
+            )
         except Exception as e:
-            logger.warning("Answer plan attempt %d/%d failed to parse: %s", attempt, MAX_PLAN_ATTEMPTS, e)
+            logger.warning(
+                "[trace=%s] stage=plan attempt=%d/%d failed (incl. repair): %s",
+                trace_id, attempt, MAX_PLAN_ATTEMPTS, e,
+            )
             continue
 
         ground = grounding.validate_plan(plan, context)
@@ -205,31 +277,35 @@ async def generate_answer_plan(
         grounding_failed = _plan_failed_grounding(ground)
         content_incomplete = _plan_content_incomplete(plan)
 
+        logger.info(
+            "[trace=%s] stage=plan attempt=%d/%d blueprint_used=%s grounding_ok=%s content_ok=%s",
+            trace_id, attempt, MAX_PLAN_ATTEMPTS, plan.blueprint_used,
+            not grounding_failed, not content_incomplete,
+        )
+
         if not grounding_failed and not content_incomplete:
             return plan, ground
 
         if grounding_failed:
             logger.warning(
-                "Answer plan attempt %d/%d failed grounding: %s",
-                attempt, MAX_PLAN_ATTEMPTS,
+                "[trace=%s] stage=plan attempt=%d/%d failed grounding: %s",
+                trace_id, attempt, MAX_PLAN_ATTEMPTS,
                 ground.unverifiable_claims + ground.possible_fabricated_entities,
             )
         if content_incomplete:
             logger.warning(
-                "Answer plan attempt %d/%d had incomplete required content "
-                "(empty sections/follow_up_questions/coaching without insufficient_context)",
-                attempt, MAX_PLAN_ATTEMPTS,
+                "[trace=%s] stage=plan attempt=%d/%d had incomplete required content",
+                trace_id, attempt, MAX_PLAN_ATTEMPTS,
             )
         correction_note = _correction_note(ground, content_incomplete)
 
     return last_plan, last_ground
 
 
-async def generate_prose_from_plan(context: dict, plan: AnswerPlan) -> ProseOutput:
-    """Never receives the raw profile — only the plan, persona, recent
-    conversation, and any correction. Cannot introduce a new fact
-    because it has nothing to invent one from.
-    """
+async def generate_prose_from_plan(
+    context: dict, plan: AnswerPlan, trace_id: str | None = None
+) -> ProseOutput:
+    trace_id = trace_id or str(uuid4())
     payload = {
         "persona": context.get("persona"),
         "recent_conversation": context.get("recent_conversation", []),
@@ -240,83 +316,83 @@ async def generate_prose_from_plan(context: dict, plan: AnswerPlan) -> ProseOutp
     last_error: Exception | None = None
     for attempt in range(1, MAX_PROSE_ATTEMPTS + 1):
         try:
-            response = await chat_completion(
-                model=INTERVIEW_MODEL,
-                messages=[
-                    {"role": "system", "content": PROSE_GENERATION_SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(payload)},
-                ],
-                response_format={"type": "json_object"},
+            prose = await _call_llm_with_repair(
+                system_prompt=PROSE_GENERATION_SYSTEM_PROMPT,
+                payload=payload,
+                model_cls=ProseOutput,
                 temperature=0.5,
                 max_tokens=MAX_PROSE_TOKENS,
+                trace_id=trace_id,
+                stage="prose",
             )
-            content = response.choices[0].message.content
-            logger.debug("Raw prose JSON: %s", content)
-            return ProseOutput.model_validate(json.loads(content))
+            logger.info(
+                "[trace=%s] stage=prose attempt=%d/%d answer_words=%d",
+                trace_id, attempt, MAX_PROSE_ATTEMPTS, len((prose.answer or "").split()),
+            )
+            return prose
         except Exception as e:
-            logger.warning("Prose generation attempt %d/%d failed: %s", attempt, MAX_PROSE_ATTEMPTS, e)
+            logger.warning(
+                "[trace=%s] stage=prose attempt=%d/%d failed (incl. repair): %s",
+                trace_id, attempt, MAX_PROSE_ATTEMPTS, e,
+            )
             last_error = e
 
     raise InterviewGenerationError(f"Prose generation failed after {MAX_PROSE_ATTEMPTS} attempts: {last_error}")
 
 
-def _insufficient_context_output(plan: AnswerPlan | None, note: str) -> InterviewLLMOutput:
+def _insufficient_context_output(plan: AnswerPlan | None, reason: str, note: str) -> InterviewLLMOutput:
     return InterviewLLMOutput(
         question_type=(plan.question_type if plan else "") or "insufficient_context",
         blueprint_used=plan.blueprint_used if plan else "",
         insufficient_context=True,
+        insufficient_context_reason=reason,
         context_note=note,
     )
 
 
-async def generate_interview_response(context: dict, blueprint_key: str) -> InterviewLLMOutput:
-    """`blueprint_key` is REQUIRED — always the output of a prior
-    classify_blueprint(question) call made by the API layer before
-    context_builder.build_interview_context().
-    """
+async def generate_interview_response(
+    context: dict, blueprint_key: str, trace_id: str | None = None
+) -> InterviewLLMOutput:
+    trace_id = trace_id or str(uuid4())
+
     if not _has_any_profile_evidence(context):
-        logger.warning("Candidate profile is completely empty. Returning insufficient context.")
-        return InterviewLLMOutput(
-            question_type="insufficient_context",
-            insufficient_context=True,
-            context_note="Your profile is empty. Please upload a resume or add experiences/projects to get custom tailored answers.",
+        logger.warning("[trace=%s] stage=guard candidate profile is completely empty", trace_id)
+        return _insufficient_context_output(
+            None, "empty_profile",
+            "Your profile is empty. Please upload a resume or add experiences/projects to get custom tailored answers.",
         )
 
-    plan, plan_grounding = await generate_answer_plan(context, blueprint_key)
+    plan, plan_grounding = await generate_answer_plan(context, blueprint_key, trace_id=trace_id)
 
     if plan is None:
         raise InterviewGenerationError("Answer plan generation failed to produce a parseable plan.")
 
     if plan.insufficient_context:
         return _insufficient_context_output(
-            plan, plan.context_note or "Not enough real profile data to answer this question honestly."
+            plan, "model_declined",
+            plan.context_note or "Not enough real profile data to answer this question honestly.",
         )
 
     if plan_grounding is not None and _plan_failed_grounding(plan_grounding):
         logger.warning(
-            "Answer plan still failed grounding after retries — returning insufficient_context "
-            "instead of building prose from an ungrounded plan. Flagged: %s",
-            plan_grounding.unverifiable_claims + plan_grounding.possible_fabricated_entities,
+            "[trace=%s] stage=plan answer plan still failed grounding after all retries — "
+            "returning insufficient_context instead of building prose from an ungrounded plan. Flagged: %s",
+            trace_id, plan_grounding.unverifiable_claims + plan_grounding.possible_fabricated_entities,
         )
         return _insufficient_context_output(
-            plan,
+            plan, "grounding_rejected",
             "Couldn't build a fully grounded answer from your real profile data for this question — "
             "the draft kept referencing details that aren't actually in your profile.",
         )
 
     if _plan_content_incomplete(plan):
-        # Content-completeness is a soft signal, not a hard gate (unlike
-        # grounding above): a plan missing e.g. one follow-up question is
-        # still safe to serve — it's just weaker than it should be. Log
-        # for visibility and proceed with what the retries produced,
-        # same graceful-degradation posture used throughout this codebase.
         logger.warning(
-            "Proceeding with an answer plan that still has incomplete required content after all "
-            "retries (question_type=%s, blueprint_used=%s)",
-            plan.question_type, plan.blueprint_used,
+            "[trace=%s] stage=plan proceeding with incomplete required content after all retries "
+            "(question_type=%s, blueprint_used=%s)",
+            trace_id, plan.question_type, plan.blueprint_used,
         )
 
-    prose = await generate_prose_from_plan(context, plan)
+    prose = await generate_prose_from_plan(context, plan, trace_id=trace_id)
 
     output = InterviewLLMOutput(
         question_type=plan.question_type,
@@ -328,22 +404,25 @@ async def generate_interview_response(context: dict, blueprint_key: str) -> Inte
         follow_up_questions=plan.follow_up_questions,
         coaching=plan.coaching,
         insufficient_context=False,
+        insufficient_context_reason="",
         context_note="",
         claims_needing_verification=plan.claims_needing_verification,
     )
 
     output.grounding = grounding.validate_answer(output, context)
     if output.grounding.unverifiable_claims or output.grounding.possible_fabricated_entities:
-        # Post-prose scan is advisory only (see grounding.py docstring) —
-        # the plan already passed validate_plan(), so this is logged for
-        # visibility, not acted on.
         logger.warning(
-            "Post-prose scan flagged %d unverifiable claim(s), %d possible fabricated entit(y/ies) "
-            "despite an already-grounded plan: %s / %s",
+            "[trace=%s] stage=post_prose_scan flagged %d unverifiable claim(s), %d possible fabricated "
+            "entit(y/ies) despite an already-grounded plan: %s / %s",
+            trace_id,
             len(output.grounding.unverifiable_claims),
             len(output.grounding.possible_fabricated_entities),
             output.grounding.unverifiable_claims,
             output.grounding.possible_fabricated_entities,
         )
 
+    logger.info(
+        "[trace=%s] stage=complete question_type=%s blueprint_used=%s insufficient_context=%s",
+        trace_id, output.question_type, output.blueprint_used, output.insufficient_context,
+    )
     return output

@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.models.facts import JobDescription
+from app.models.goals import Goal
 from app.models.inference import InterviewResponse
 from app.schemas.interview.interview_response import (
     CorrectionRequest,
@@ -22,8 +24,41 @@ from app.services.interview.response_generation import (
 )
 from app.api.deps import get_current_user
 from app.models.facts import User
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/interview", tags=["interview"])
+
+
+async def _auto_attach_job_intelligence_id(db, user_id) -> str | None:
+    """Implementation plan §M — when the caller didn't pass an explicit
+    job_intelligence_id, check whether the user has a real, active Goal
+    with a job attached and use ITS job_intelligence_id instead of
+    leaving the interview JD-blind. Deliberately narrow: only looks at
+    the single soonest-due active goal that actually has a
+    job_description_id AND whose JobDescription has actually been run
+    through the Job Intelligence pipeline (job_intelligence_id set) —
+    a legacy pre-refactor JobDescription with no job_intelligence_id is
+    silently skipped rather than surfaced as a false match.
+    """
+    result = await db.execute(
+        select(Goal)
+        .where(Goal.user_id == user_id)
+        .where(Goal.status_pct < 100.0)
+        .where(Goal.job_description_id.isnot(None))
+        .order_by(Goal.deadline.asc().nullslast())
+        .limit(1)
+    )
+    goal = result.scalar_one_or_none()
+    if goal is None:
+        return None
+
+    jd_result = await db.execute(
+        select(JobDescription.job_intelligence_id).where(JobDescription.id == goal.job_description_id)
+    )
+    job_intelligence_id = jd_result.scalar_one_or_none()
+    return str(job_intelligence_id) if job_intelligence_id else None
 
 
 def _build_output(
@@ -33,8 +68,10 @@ def _build_output(
     target_company: str | None,
     session_id: UUID,
     parent_response_id: UUID | None,
+    trace_id: str,
     correction_of: UUID | None = None,
     suggested_action: str | None = None,
+    auto_attached_job_intelligence_id: str | None = None,
 ) -> InterviewResponseOutput:
     return InterviewResponseOutput(
         question=question,
@@ -47,6 +84,7 @@ def _build_output(
         follow_up_questions=output.follow_up_questions,
         coaching=output.coaching,
         insufficient_context=output.insufficient_context,
+        insufficient_context_reason=output.insufficient_context_reason,
         context_note=output.context_note,
         target_role=target_role,
         target_company=target_company,
@@ -56,38 +94,57 @@ def _build_output(
         parent_response_id=str(parent_response_id) if parent_response_id else None,
         correction_of=str(correction_of) if correction_of else None,
         suggested_action=suggested_action,
+        trace_id=trace_id,
+        auto_attached_job_intelligence_id=auto_attached_job_intelligence_id,
     )
+
+
+def _degraded_error_detail(trace_id: str, message: str) -> dict:
+    return {"error_type": "generation_degraded", "message": message, "trace_id": trace_id}
 
 
 @router.post("/ask", response_model=InterviewResponseOutput)
 async def ask_interview_question(payload: InterviewAskRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
-    print(f"[TRACING] Received interview question: {payload.question!r}", flush=True)
+    trace_id = str(uuid4())
+    logger.info("[trace=%s] Received interview question: %r", trace_id, payload.question)
     user = current_user
 
     session_id = UUID(payload.session_id) if payload.session_id else uuid4()
     parent_response_id = UUID(payload.parent_response_id) if payload.parent_response_id else None
 
+    job_intelligence_id = payload.job_intelligence_id
+    auto_attached_job_intelligence_id = None
+    if not job_intelligence_id:
+        auto_attached_job_intelligence_id = await _auto_attach_job_intelligence_id(db, user.id)
+        job_intelligence_id = auto_attached_job_intelligence_id
+        if auto_attached_job_intelligence_id:
+            logger.info(
+                "[trace=%s] auto-attached job_intelligence_id=%s from active goal",
+                trace_id, auto_attached_job_intelligence_id,
+            )
+
     # Classification happens BEFORE context is built so retrieval's
     # competency-hint ranking (context_builder.py) can actually use it.
-    blueprint_key = await classify_blueprint(payload.question)
+    blueprint_key = await classify_blueprint(payload.question, trace_id=trace_id)
 
     context = await build_interview_context(
         db, user.id, payload.question, payload.target_role, payload.target_company,
-        job_intelligence_id=payload.job_intelligence_id,
+        job_intelligence_id=job_intelligence_id,
         session_id=str(session_id),
         correction=payload.correction,
         blueprint_key=blueprint_key,
     )
 
     try:
-        output = await generate_interview_response(context, blueprint_key)
+        output = await generate_interview_response(context, blueprint_key, trace_id=trace_id)
     except InterviewGenerationError as e:
-        print(f"[TRACING] Interview generation failed: {e}", flush=True)
-        raise HTTPException(status_code=502, detail=str(e))
+        logger.warning("[trace=%s] Interview generation failed: %s", trace_id, e)
+        raise HTTPException(status_code=502, detail=_degraded_error_detail(trace_id, str(e)))
 
     output_full = _build_output(
         payload.question, output, payload.target_role, payload.target_company,
-        session_id, parent_response_id,
+        session_id, parent_response_id, trace_id,
+        auto_attached_job_intelligence_id=auto_attached_job_intelligence_id,
     )
 
     response_row = InterviewResponse(
@@ -103,7 +160,7 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
     await db.commit()
     await db.refresh(response_row)
 
-    print(f"[TRACING] Interview response persisted (id={response_row.id}, session_id={session_id})", flush=True)
+    logger.info("[trace=%s] Interview response persisted (response_id=%s, session_id=%s)", trace_id, response_row.id, session_id)
 
     output_full.response_id = str(response_row.id)
     output_full.created_at = response_row.created_at
@@ -126,6 +183,8 @@ async def correct_interview_response(
     carries a plain-language 'suggested_action' pointing the user to the
     real first-class edit path instead.
     """
+    trace_id = str(uuid4())
+
     try:
         parent_id = UUID(payload.parent_response_id)
     except ValueError:
@@ -146,7 +205,7 @@ async def correct_interview_response(
     target_company = parent_rj.get("target_company")
     session_id = parent.session_id or uuid4()
 
-    blueprint_key = await classify_blueprint(parent.question)
+    blueprint_key = await classify_blueprint(parent.question, trace_id=trace_id)
 
     context = await build_interview_context(
         db, current_user.id, parent.question, target_role, target_company,
@@ -156,10 +215,10 @@ async def correct_interview_response(
     )
 
     try:
-        output = await generate_interview_response(context, blueprint_key)
+        output = await generate_interview_response(context, blueprint_key, trace_id=trace_id)
     except InterviewGenerationError as e:
-        print(f"[TRACING] Interview correction generation failed: {e}", flush=True)
-        raise HTTPException(status_code=502, detail=str(e))
+        logger.warning("[trace=%s] Interview correction generation failed: %s", trace_id, e)
+        raise HTTPException(status_code=502, detail=_degraded_error_detail(trace_id, str(e)))
 
     suggested_action = None
     if grounding.looks_like_durable_correction(payload.correction):
@@ -173,7 +232,7 @@ async def correct_interview_response(
 
     output_full = _build_output(
         parent.question, output, target_role, target_company,
-        session_id, parent.id, correction_of=parent.id, suggested_action=suggested_action,
+        session_id, parent.id, trace_id, correction_of=parent.id, suggested_action=suggested_action,
     )
 
     response_row = InterviewResponse(
@@ -190,7 +249,7 @@ async def correct_interview_response(
     await db.commit()
     await db.refresh(response_row)
 
-    print(f"[TRACING] Interview correction persisted (id={response_row.id}, corrects={parent.id})", flush=True)
+    logger.info("[trace=%s] Interview correction persisted (response_id=%s, corrects=%s)", trace_id, response_row.id, parent.id)
 
     output_full.response_id = str(response_row.id)
     output_full.created_at = response_row.created_at
@@ -199,11 +258,6 @@ async def correct_interview_response(
 
 @router.get("/sessions", response_model=list[InterviewSessionSummary])
 async def list_interview_sessions(current_user: User = Depends(get_current_user), db=Depends(get_db)):
-    """Recent interview practice sessions for this user, most recent
-    first — grouped by session_id. A pre-migration row with no
-    session_id becomes its own single-item session, so old history
-    keeps rendering unchanged.
-    """
     result = await db.execute(
         select(InterviewResponse)
         .where(InterviewResponse.user_id == current_user.id)
@@ -241,11 +295,6 @@ async def get_interview_session_thread(
     current_user: User = Depends(get_current_user),
     db=Depends(get_db),
 ):
-    """Full ordered thread for one session — what the frontend needs to
-    reconstruct a conversation view when the user selects a past session
-    from history, since the summary list only returns one row per
-    session.
-    """
     result = await db.execute(
         select(InterviewResponse)
         .where(InterviewResponse.user_id == current_user.id)
