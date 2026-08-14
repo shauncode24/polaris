@@ -1,31 +1,24 @@
+# backend/app/services/interview/response_generation.py
 """Two-stage generation for the Interview Response Agent:
 
 1. classify_blueprint() — a cheap, small-payload call that picks ONE
-   blueprint key from the ~24-entry library based on just the question
-   and each blueprint's one-line objective.
+   blueprint key from the blueprint library based on just the question
+   and each blueprint's one-line objective. Called by the API layer
+   BEFORE context_builder.build_interview_context(), since Phase 0's
+   retrieval layer needs the blueprint's competency hints to rank
+   evidence (see context_builder.py) — this is the one call-order
+   change from the original two-stage design.
 2. generate_interview_response() — the full reasoning call, given only
    the ONE selected blueprint instead of the entire library, PLUS the
-   Engineering Identity framing layer (role_fit, engineering_quadrant,
-   claim_risk_details, evidence_coverage, ...), recent conversation
-   turns, and an optional correction to honor as a hard constraint.
+   Engineering Identity framing layer, recent conversation turns, and
+   an optional correction to honor as a hard constraint.
 
 This module does not decide interview CONTENT itself — it only (a)
-calls the model, (b) retries on genuinely unparseable output, (c) picks
-which blueprint to hand to step 2, and (d) runs the deterministic,
-non-LLM grounding pass afterward (services/interview/grounding.py).
-None of that is a content decision. If generation genuinely fails, we
-surface that failure rather than writing a fallback answer ourselves.
-
-TOKEN BUDGET: max_tokens for both calls below are sized to what the
-prompts actually ask for, not left at a generous round number. The
-prompt caps "answer" at 220 words, "answer_short" at 60 words, at most
-4 follow_up_questions, and at most 3 coaching entries — MAX_GENERATE_TOKENS
-covers that plus JSON overhead with room to spare. The classification
-call only ever returns a blueprint_key + a one-sentence reason —
-MAX_CLASSIFY_TOKENS is sized accordingly. Reserved completion tokens
-count against the same per-minute token budget as the prompt itself
-(see the 413 "Request too large" failure this fixes), so over-reserving
-here directly eats into the room available for real profile data.
+calls the model, (b) retries on genuinely unparseable output, (c) runs
+the deterministic, non-LLM grounding pass afterward
+(services/interview/grounding.py). None of that is a content decision.
+If generation genuinely fails, we surface that failure rather than
+writing a fallback answer ourselves.
 """
 import json
 import logging
@@ -65,10 +58,6 @@ async def classify_blueprint(question: str) -> str:
             {"role": "system", "content": BLUEPRINT_CLASSIFICATION_PROMPT},
             {"role": "user", "content": json.dumps({"question": question, "blueprints": summaries})},
         ]
-        print("=== CLASSIFY BLUEPRINT LLM REQUEST ===")
-        print(f"Model: {INTERVIEW_MODEL}")
-        print(f"Messages: {json.dumps(messages, indent=2)}")
-        print("=======================================")
         response = await chat_completion(
             model=INTERVIEW_MODEL,
             messages=messages,
@@ -89,7 +78,14 @@ async def classify_blueprint(question: str) -> str:
     return DEFAULT_BLUEPRINT
 
 
-async def generate_interview_response(context: dict) -> InterviewLLMOutput:
+async def generate_interview_response(context: dict, blueprint_key: str) -> InterviewLLMOutput:
+    """`blueprint_key` is now REQUIRED — always the output of a prior
+    classify_blueprint(question) call made by the API layer before
+    context_builder.build_interview_context(), so retrieval and
+    generation agree on which blueprint this question is being answered
+    under (previously this function classified independently, AFTER
+    context had already been built with no knowledge of the blueprint).
+    """
     profile = context.get("profile", {})
     has_projects = bool(profile.get("projects"))
     has_experiences = bool(profile.get("experiences"))
@@ -110,8 +106,6 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
             insufficient_context=True,
             context_note="Your profile is empty. Please upload a resume or add experiences/projects to get custom tailored answers."
         )
-
-    blueprint_key = await classify_blueprint(context["question"])
 
     scoped_context = {
         **context,
@@ -142,10 +136,6 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
                 {"role": "system", "content": INTERVIEW_RESPONSE_SYSTEM_PROMPT},
                 {"role": "user", "content": json.dumps(scoped_context)},
             ]
-            print(f"=== GENERATE INTERVIEW RESPONSE LLM REQUEST (Attempt {attempt}/{MAX_ATTEMPTS}) ===")
-            print(f"Model: {INTERVIEW_MODEL}")
-            print(f"Messages: {json.dumps(messages, indent=2)}")
-            print("=========================================================================")
             response = await chat_completion(
                 model=INTERVIEW_MODEL,
                 messages=messages,
@@ -158,14 +148,14 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
             parsed = InterviewLLMOutput.model_validate(json.loads(content))
             logger.info("Blueprint used: %s", parsed.blueprint_used)
 
-            # Deterministic, non-LLM grounding pass — never edits the
-            # answer, only annotates it (implementation plan §10).
             parsed.grounding = grounding.validate_answer(parsed, context)
-            if parsed.grounding.unverifiable_claims:
+            if parsed.grounding.unverifiable_claims or parsed.grounding.possible_fabricated_entities:
                 logger.warning(
-                    "Grounding flagged %d unverifiable claim(s): %s",
+                    "Grounding flagged %d unverifiable claim(s), %d possible fabricated entit(y/ies): %s / %s",
                     len(parsed.grounding.unverifiable_claims),
+                    len(parsed.grounding.possible_fabricated_entities),
                     parsed.grounding.unverifiable_claims,
+                    parsed.grounding.possible_fabricated_entities,
                 )
 
             return parsed

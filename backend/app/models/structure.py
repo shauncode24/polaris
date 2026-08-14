@@ -1,8 +1,9 @@
+# backend/app/models/structure.py
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -77,6 +78,28 @@ class SkillAlias(Base):
     raw_string: Mapped[str] = mapped_column(String(255), index=True, unique=True)
     canonical_name: Mapped[str | None] = mapped_column(String(255))
     is_valid_skill: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class CompetencyTagAlias(Base):
+    """Cache of text-hash -> LLM-classified interview-competency tags —
+    tier 2 of competency tagging (services/interview/competency_tagging.py).
+    Once a piece of evidence text (a project description, an experience's
+    bullets) has been classified, that decision is persisted here so it's
+    never re-classified again, for any user, from this point forward —
+    same pattern as SkillAlias above. Keyed by a hash of the text itself
+    rather than a project/experience id, since the same bullet text can
+    legitimately recur across different rows (re-uploads, near-duplicate
+    experiences) and shouldn't cost a second LLM call each time.
+    """
+
+    __tablename__ = "competency_tag_cache"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    text_hash: Mapped[str] = mapped_column(String(64), index=True, unique=True)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -1,3 +1,4 @@
+# backend/app/models/facts.py
 import uuid
 from datetime import date, datetime, timezone
 
@@ -42,6 +43,13 @@ class Experience(Base):
     end_date: Mapped[date | None] = mapped_column(Date)
     stack: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     bullets: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    # Interview Agent Phase 0 (plan §C/§D) — which interview competencies
+    # (leadership, teamwork, ownership, ...) this experience's own bullet
+    # text evidences. NULL means "never tagged yet" — distinct from an
+    # empty list, which means "tagged, and genuinely evidences none."
+    # See services/interview/competency_tagging.py for how this gets
+    # populated (lazily, on first read by context_builder.py).
+    competency_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     created_at: Mapped[datetime] = created_at_col()
 
 
@@ -59,6 +67,9 @@ class Project(Base):
     github_repo_name: Mapped[str | None] = mapped_column(String(255))
     repo_link_status: Mapped[str] = mapped_column(String(30), default="unmatched")
     impact_metrics: Mapped[dict | None] = mapped_column(JSONB)
+    # See Experience.competency_tags docstring above — same field, same
+    # lazy-backfill behavior, applied to project descriptions instead.
+    competency_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -134,12 +145,6 @@ class JobDescription(Base):
     raw_text: Mapped[str] = mapped_column(Text)
     extracted_requirements: Mapped[dict | None] = mapped_column(JSONB)
     analysis_result: Mapped[dict | None] = mapped_column(JSONB)
-    # Job Intelligence refactor: nullable FKs to the new, user-independent
-    # Job Intelligence / Company Intelligence profiles this JD's analysis
-    # was built from. extracted_requirements/analysis_result are still
-    # dual-written for backward compatibility during the transition
-    # (career_planner/context_builder.py and resume/tailoring_llm.py still
-    # read extracted_requirements unchanged).
     job_intelligence_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("job_intelligence_profiles.id")
     )

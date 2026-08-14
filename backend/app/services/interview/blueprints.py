@@ -1,6 +1,7 @@
+# backend/app/services/interview/blueprints.py
 """Deterministic library of interview-answer blueprints — hand-curated
-structural scaffolding for ~24 common interview question types, based on
-how real interview coaches teach candidates to structure answers.
+structural scaffolding for interview question types, based on how real
+interview coaches teach candidates to structure answers.
 
 This is DATA, not decision logic. The LLM still decides everything about
 content: which blueprint (if any) actually fits the real question in
@@ -176,6 +177,34 @@ BLUEPRINTS: dict[str, dict] = {
         "sections": ["A question about the role", "A question about the team", "A question about engineering practices", "A question about growth", "A question about what success looks like"],
         "notes": ["Never answer with 'no, I don't have any questions.'"],
     },
+    "ownership": {
+        "objective": "Show genuine end-to-end ownership of something real — not just contribution, but being the person accountable for it.",
+        "sections": [
+            "The real thing you owned and its scope",
+            "A concrete decision you made unprompted, without being told what to do",
+            "How you handled the parts nobody else was covering",
+            "The real outcome",
+            "What owning it taught you about responsibility",
+        ],
+        "notes": [
+            "Ownership can be a feature, a service, a process, or a project — it doesn't require a title.",
+            "Never claim ownership of something a team collectively drove without a real individual thread to point to.",
+        ],
+    },
+    "internship": {
+        "objective": "Talk about an internship/early experience honestly — what you actually did, and what you genuinely learned, without inflating scope.",
+        "sections": [
+            "The real team/context you were placed in",
+            "What you were actually asked to do first",
+            "How your scope grew (if it genuinely did) over the internship",
+            "A real contribution, sized honestly for an internship",
+            "What you took away that changed how you work now",
+        ],
+        "notes": [
+            "Never inflate an internship task into a headline ownership claim it wasn't.",
+            "It's fine, and often more credible, to describe a bounded, well-executed task rather than claiming broad scope.",
+        ],
+    },
     # Generic fallbacks for questions that don't cleanly match anything above.
     "behavioral_default": {
         "objective": "Generic behavioral story structure.",
@@ -215,6 +244,32 @@ PERSONA: dict = {
 }
 
 
+# Maps a blueprint key to the interview-competency tags (see
+# services/interview/competency_tagging.py) most relevant to that
+# question shape — used by context_builder.py's retrieval layer to RANK
+# evidence, never to filter anything out entirely. A blueprint with no
+# entry here (e.g. "questions_for_us", which needs no personal story)
+# simply gets no competency bonus during ranking — that's a correct
+# no-op, not a missing case that needs handling.
+BLUEPRINT_COMPETENCY_HINTS: dict[str, list[str]] = {
+    "leadership": ["leadership", "ownership"],
+    "teamwork": ["teamwork", "conflict_resolution"],
+    "conflict": ["conflict_resolution", "teamwork"],
+    "challenge": ["problem_solving", "ownership"],
+    "failure": ["failure_recovery", "ownership"],
+    "mistake": ["failure_recovery", "ownership"],
+    "proud_project": ["technical_depth", "ownership"],
+    "explain_project": ["technical_depth"],
+    "biggest_weakness": ["failure_recovery"],
+    "biggest_strength": ["ownership", "technical_depth"],
+    "ownership": ["ownership", "leadership"],
+    "internship": ["mentorship", "teamwork"],
+    "not_on_resume": ["mentorship", "teamwork"],
+    "technical_default": ["technical_depth", "problem_solving"],
+    "behavioral_default": ["ownership", "problem_solving"],
+}
+
+
 def get_blueprint_library() -> dict[str, dict]:
     """Returns the full blueprint library as-is. The model picks/adapts
     from it — this function never chooses a blueprint for any question.
@@ -224,3 +279,12 @@ def get_blueprint_library() -> dict[str, dict]:
 
 def get_persona() -> dict:
     return PERSONA
+
+
+def get_blueprint_competency_hints(blueprint_key: str) -> set[str]:
+    """Competency tags to prefer when ranking evidence for this
+    blueprint. Empty set (not an error) when the blueprint has no
+    strong competency lean — retrieval falls back to JD-overlap/
+    confidence/recency alone in that case.
+    """
+    return set(BLUEPRINT_COMPETENCY_HINTS.get(blueprint_key, []))

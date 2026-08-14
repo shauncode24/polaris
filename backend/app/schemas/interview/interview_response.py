@@ -1,4 +1,4 @@
-# backend/app/schemas/interview_response.py
+# backend/app/schemas/interview/interview_response.py
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -9,13 +9,8 @@ class InterviewAskRequest(BaseModel):
     target_role: str | None = None
     target_company: str | None = None
     job_intelligence_id: str | None = None
-    # Session threading — if session_id is omitted, the API layer
-    # generates one and returns it, so the frontend can thread every
-    # subsequent call in the same conversation.
     session_id: str | None = None
     parent_response_id: str | None = None
-    # Set only by POST /interview/correct's internal re-ask; accepted
-    # here too so the same request/response plumbing serves both.
     correction: str | None = None
 
 
@@ -35,6 +30,13 @@ class GroundingReport(BaseModel):
     """
     unverifiable_claims: list[str] = []
     uses_flagged_project: bool = False
+    # NEW (Phase 0, plan §H) — real/likely-fabricated entity names found
+    # by scanning the full answer prose for known placeholder patterns
+    # (e.g. "Project Alpha", "Innovate Solutions"), independent of what
+    # the model self-reported in stories_used. Advisory only in Phase 0
+    # — nothing blocks or regenerates on this yet (that's Phase 1's
+    # pre-prose plan-validation stage).
+    possible_fabricated_entities: list[str] = []
 
 
 class InterviewLLMOutput(BaseModel):
@@ -48,12 +50,7 @@ class InterviewLLMOutput(BaseModel):
     coaching: list[CoachingNote] = []
     insufficient_context: bool = False
     context_note: str = ""
-    # The model's own self-reported list of its least-verified
-    # statements. Never trusted blindly — grounding.py independently
-    # cross-checks the answer text regardless of what's reported here.
     claims_needing_verification: list[str] = []
-    # Populated after generation by grounding.validate_answer() — never
-    # set by the LLM itself; defaults empty until that pass runs.
     grounding: GroundingReport = GroundingReport()
 
 
@@ -78,8 +75,6 @@ class InterviewResponseOutput(BaseModel):
     session_id: str | None = None
     parent_response_id: str | None = None
     correction_of: str | None = None
-    # Only populated on a response to POST /interview/correct, and only
-    # when the correction looks like it fixes a durable fact.
     suggested_action: str | None = None
 
 
