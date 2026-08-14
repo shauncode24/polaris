@@ -1,22 +1,30 @@
 """Gathers the candidate's ENTIRE real profile as-is, plus the static
 blueprint library and persona config, and hands all of it to the LLM
-untouched. No scoring, no filtering, no pre-selection of stories or
-blueprints: the model decides what's relevant and which blueprint fits,
-not this module.
+untouched. No scoring, no filtering of WHICH stories/evidence to use —
+the model still decides that, not this module.
+
+TOKEN BUDGET FIX: this module previously sent the full, un-slimmed
+reconciled skill list (every individual evidence source string per
+skill, unbounded count) AND a byte-for-byte duplicate of
+identity.claim_risk_details under profile.project_claim_flags. Combined
+with a duplicate-project bug elsewhere in the codebase (two Project rows
+for the same conceptual project each carrying their own Claim Audit
+finding), a real profile could push a single request well past Groq's
+TPM limit (see the 413 "Request too large" failure this fixes). Nothing
+here got smarter — the same real facts are still sent, just once each,
+and without repeating the same evidence label dozens of times per skill.
 
 Engineering Identity integration (implementation plan §3/§5): the
 framing/self-knowledge layer (top_skills summary, role_fit,
 engineering_quadrant, company_readiness, claim_risk_details,
-coverage_gaps, evidence_coverage, source_freshness) is now sourced from
-the single shared identity_context adapter instead of being
-independently re-derived here. The full, unbounded reconciled skill
-list used for context["profile"]["skills"] comes straight from
-reconciled_confidence.get_reconciled_skill_confidences() — the exact
-function Identity and Skill Gap already use, so a skill's confidence
-can never disagree between GET /identity and the Interview Agent again.
+coverage_gaps, evidence_coverage) is sourced from the single shared
+identity_context adapter — see identity_context.py for the interview-
+specific slimming applied there (dedup, dropped unused fields).
+
 Raw narrative content (projects, experiences, education, github repos,
-leetcode) is still fetched directly, since IdentityFacts deliberately
-doesn't carry that granularity.
+leetcode) is still fetched directly and IN FULL, since IdentityFacts
+deliberately doesn't carry that granularity and the model genuinely
+needs it to write a real answer.
 """
 from uuid import UUID
 
@@ -35,6 +43,13 @@ from app.services.projects.linking import normalize_name
 from app.models.github_analysis import GithubProjectAnalysis
 
 MAX_CONVERSATION_TURNS = 6
+
+# Token-budget caps for profile.skills / profile.education. The full
+# reconciled skill list and the (occasionally duplicated) education list
+# are otherwise unbounded — see module docstring for why these two were
+# the largest contributors to the 413 this fixes.
+MAX_SKILLS_IN_CONTEXT = 25
+MAX_EDUCATION_IN_CONTEXT = 4
 
 
 async def _get_all_projects(db: AsyncSession, user_id) -> list[dict]:
@@ -101,20 +116,33 @@ async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
                 "is_current": e.is_current,
                 "details": e.details or [],
             })
-    return education
+    # Cap rather than perfect the dedup above — a resume-driven
+    # institution can still show up more than once with slightly
+    # different degree/field phrasing across re-uploads; capping bounds
+    # the size regardless of exactly how many near-duplicates exist.
+    return education[:MAX_EDUCATION_IN_CONTEXT]
 
 
 async def _get_all_skills_reconciled(db: AsyncSession, user_id) -> list[dict]:
-    """Full, unbounded reconciled skill list (every evidenced skill, not
-    just the top 10 IdentityFacts.top_skills carries) — same shape the
-    old _get_all_skills_with_evidence returned ({skill, confidence,
-    evidence}), but confidence is now the claim-risk/timeline-reconciled
-    number, not a raw decayed weight.
+    """Reconciled skill list for the prompt, SLIMMED to skill + confidence
+    only. The full per-skill evidence list (every individual project/
+    GitHub/experience label backing that skill — potentially 20+ strings
+    for a broadly-used skill like "javascript") is dropped entirely: the
+    prompt only ever needs to trust the confidence number as given (it
+    says so explicitly — "already-reconciled ... Trust it as-is"), and
+    it cites real stories by name from profile.projects/experiences/
+    github_repos directly, never by walking a skill's evidence list.
+
+    Capped to the MAX_SKILLS_IN_CONTEXT highest-confidence skills so a
+    profile with a long low-value tail (individual LeetCode topic tags
+    at confidence 0.1-0.2, for example) doesn't inflate the payload for
+    no real signal.
     """
     reconciled = await get_reconciled_skill_confidences(db, user_id)
+    ranked = sorted(reconciled.values(), key=lambda e: e["confidence"], reverse=True)
     return [
-        {"skill": data["skill"], "confidence": data["confidence"], "evidence": data.get("sources", [])}
-        for data in reconciled.values()
+        {"skill": e["skill"], "confidence": e["confidence"]}
+        for e in ranked[:MAX_SKILLS_IN_CONTEXT]
     ]
 
 
@@ -245,9 +273,12 @@ async def build_interview_context(
             "skills": skills,
             "github_repos": github_repos,
             "leetcode_evidence": leetcode_evidence,
-            # Claim-risk flags now come straight from the shared Identity
-            # layer instead of being independently re-derived here.
-            "project_claim_flags": identity["claim_risk_details"],
+            # NOTE: claim-risk flags are NOT duplicated here anymore.
+            # identity["claim_risk_details"] (already deduped by
+            # identity_context.py) is the single copy of this data — see
+            # STEP 0 / STEP 3 of the interview prompt, which now reads
+            # from identity.claim_risk_details directly instead of a
+            # second profile.project_claim_flags copy of the same facts.
         },
         "company_notes": company_notes,
         "blueprint_library": get_blueprint_library(),

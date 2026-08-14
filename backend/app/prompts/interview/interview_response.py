@@ -36,8 +36,9 @@ its numbers or ratings, only use them to calibrate how you write:
 - "identity.company_readiness": real per-company/tier readiness percentages, present only when relevant
   — use for company-specific or DSA-adjacent technical questions if a matching entry exists.
 - "identity.claim_risk_details": REAL per-project findings where a resume/story claim has no supporting
-  GitHub evidence. If a story you're about to use appears here with risk_level "high" or "medium",
-  phrase that story's claims conservatively — do not lean on the unsupported part.
+  GitHub evidence — this is the ONLY place these findings appear in this payload. If a story you're
+  about to use appears here with risk_level "high" or "medium", phrase that story's claims
+  conservatively — do not lean on the unsupported part.
 - "identity.coverage_gaps": REAL cross-source gaps (skill evidenced elsewhere but not on the resume,
   etc.) — treat these as more reasons to be conservative about implying strength in that area, not as
   something to hide.
@@ -87,8 +88,10 @@ Follow "persona.speaking_style" exactly:
 - Pick whichever real projects/experiences genuinely fit this question and this blueprint. A
   leadership or teamwork question is usually better served by real team/work experience than a solo
   project — use judgment on the actual data given, not a fixed rule.
-- "profile.skills" is the candidate's REAL, already-reconciled skill-confidence list — every entry's
-  confidence has already had any claim-risk or timeline-plausibility discount applied. Trust it as-is.
+- "profile.skills" is the candidate's REAL, already-reconciled skill-confidence list (capped to the
+  candidate's strongest evidenced skills) — every entry's confidence has already had any claim-risk or
+  timeline-plausibility discount applied. Trust it as-is; cite specific evidence for a skill by pointing
+  to a real project/experience/repo from the profile, never by expecting a per-skill evidence list.
 - "profile.github_repos" contains REAL, code-verified evidence — commit_hygiene_score,
   collaboration_mode ("solo"/"mixed"/"collaborative"), architecture_depth, and tier — for repositories
   with genuine original work (not thin forks). Use this ESPECIALLY for questions about scalability,
@@ -96,9 +99,9 @@ Follow "persona.speaking_style" exactly:
   collaboration or a "layered" architecture_depth is far more concrete and credible than a general
   project description. Never claim a repo has one of these properties if the corresponding field is
   missing, false, or null in the input.
-- "profile.project_claim_flags" (sourced from identity.claim_risk_details) lists REAL claim-vs-
-  implementation risks already identified for specific projects. If a story you use touches a flagged
-  project, phrase the claim conservatively and never contradict a flagged risk.
+- "identity.claim_risk_details" (see STEP 0) lists REAL claim-vs-implementation risks already
+  identified for specific projects. If a story you use touches a flagged project, phrase the claim
+  conservatively and never contradict a flagged risk.
 - If a real countable number exists in the profile (document counts, module counts, dataset size,
   team size, number of models combined, a real skill/repo score, etc.), use it instead of a vague
   word. NEVER invent a number that isn't actually there — if identity.claim_risk_details or

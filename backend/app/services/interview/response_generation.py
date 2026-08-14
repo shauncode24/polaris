@@ -15,6 +15,17 @@ which blueprint to hand to step 2, and (d) runs the deterministic,
 non-LLM grounding pass afterward (services/interview/grounding.py).
 None of that is a content decision. If generation genuinely fails, we
 surface that failure rather than writing a fallback answer ourselves.
+
+TOKEN BUDGET: max_tokens for both calls below are sized to what the
+prompts actually ask for, not left at a generous round number. The
+prompt caps "answer" at 220 words, "answer_short" at 60 words, at most
+4 follow_up_questions, and at most 3 coaching entries — MAX_GENERATE_TOKENS
+covers that plus JSON overhead with room to spare. The classification
+call only ever returns a blueprint_key + a one-sentence reason —
+MAX_CLASSIFY_TOKENS is sized accordingly. Reserved completion tokens
+count against the same per-minute token budget as the prompt itself
+(see the 413 "Request too large" failure this fixes), so over-reserving
+here directly eats into the room available for real profile data.
 """
 import json
 import logging
@@ -34,6 +45,10 @@ from app.services.interview.blueprints import BLUEPRINTS
 MAX_ATTEMPTS = 3
 DEFAULT_BLUEPRINT = "behavioral_default"
 
+MAX_CLASSIFY_TOKENS = 200
+MAX_GENERATE_TOKENS = 1200
+INTERVIEW_MODEL = "llama-3.3-70b-versatile"
+
 
 class InterviewGenerationError(Exception):
     """Raised when the model's output couldn't be obtained/parsed after
@@ -51,15 +66,15 @@ async def classify_blueprint(question: str) -> str:
             {"role": "user", "content": json.dumps({"question": question, "blueprints": summaries})},
         ]
         print("=== CLASSIFY BLUEPRINT LLM REQUEST ===")
-        print(f"Model: {MODEL}")
+        print(f"Model: {INTERVIEW_MODEL}")
         print(f"Messages: {json.dumps(messages, indent=2)}")
         print("=======================================")
         response = await chat_completion(
-            model=MODEL,
+            model=INTERVIEW_MODEL,
             messages=messages,
             response_format={"type": "json_object"},
             temperature=0,
-            max_tokens=2000,
+            max_tokens=MAX_CLASSIFY_TOKENS,
         )
         content = response.choices[0].message.content
         logger.debug("Raw blueprint classification JSON: %s", content)
@@ -106,9 +121,10 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
 
     prompt_size_chars = len(INTERVIEW_RESPONSE_SYSTEM_PROMPT) + len(json.dumps(scoped_context))
     logger.info(
-        "Interview generation prompt size: ~%d chars (~%d tokens)",
+        "Interview generation prompt size: ~%d chars (~%d tokens, ~%d tokens reserved for completion)",
         prompt_size_chars,
         prompt_size_chars // 4,
+        MAX_GENERATE_TOKENS,
     )
 
     last_error: Exception | None = None
@@ -127,15 +143,15 @@ async def generate_interview_response(context: dict) -> InterviewLLMOutput:
                 {"role": "user", "content": json.dumps(scoped_context)},
             ]
             print(f"=== GENERATE INTERVIEW RESPONSE LLM REQUEST (Attempt {attempt}/{MAX_ATTEMPTS}) ===")
-            print(f"Model: {MODEL}")
+            print(f"Model: {INTERVIEW_MODEL}")
             print(f"Messages: {json.dumps(messages, indent=2)}")
             print("=========================================================================")
             response = await chat_completion(
-                model=MODEL,
+                model=INTERVIEW_MODEL,
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.4,
-                max_tokens=3000,
+                max_tokens=MAX_GENERATE_TOKENS,
             )
             content = response.choices[0].message.content
             logger.debug("Raw interview response JSON: %s", content)
