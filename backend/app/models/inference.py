@@ -90,6 +90,11 @@ class InterviewResponse(Base):
     correction_of: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("interview_responses.id")
     )
+    # Phase 3 §Q/§R: the prompt version string that generated this response.
+    # Format: "<plan_prompt_hash>/<prose_prompt_hash>" or a named semver tag
+    # like "v1.2.0". NULL for responses created before version tracking was
+    # added — correct and expected, never treated as an error.
+    prompt_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

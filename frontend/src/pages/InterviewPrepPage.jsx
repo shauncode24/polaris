@@ -199,7 +199,13 @@ function InterviewPrepPage() {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { id: nextId('error'), role: 'error', message: err.message || 'Something went wrong generating coaching for that answer.' },
+        {
+          id: nextId('error'),
+          role: 'error',
+          message: err.message || 'Something went wrong generating coaching for that answer.',
+          error_type: err.error_type || null,
+          trace_id: err.trace_id || null,
+        },
       ])
     } finally {
       setPending(false)
@@ -226,7 +232,13 @@ function InterviewPrepPage() {
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { id: nextId('error'), role: 'error', message: err.message || 'Something went wrong applying that correction.' },
+        {
+          id: nextId('error'),
+          role: 'error',
+          message: err.message || 'Something went wrong applying that correction.',
+          error_type: err.error_type || null,
+          trace_id: err.trace_id || null,
+        },
       ])
     } finally {
       setPending(false)

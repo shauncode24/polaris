@@ -111,6 +111,10 @@ class InterviewLLMOutput(BaseModel):
     context_note: str = ""
     claims_needing_verification: list[str] = []
     grounding: GroundingReport = GroundingReport()
+    # Phase 3 §Q/§R — the prompt version hash that generated this
+    # output, set by generate_interview_response() using the stable
+    # 8-char prefix of the combined plan+prose prompt hashes.
+    prompt_version: str = ""
 
 
 class InterviewResponseOutput(BaseModel):
@@ -143,6 +147,11 @@ class InterviewResponseOutput(BaseModel):
     # "using context from your goal: X" rather than the JD context
     # silently appearing with no explanation.
     auto_attached_job_intelligence_id: str | None = None
+    # Phase 3 §Q/§R — prompt version hash for observability + regression
+    # tracking. Format: "<8-char plan hash>/<8-char prose hash>" derived
+    # deterministically from the actual prompt content, so it updates
+    # automatically whenever a prompt changes.
+    prompt_version: str | None = None
 
 
 class InterviewSessionSummary(BaseModel):

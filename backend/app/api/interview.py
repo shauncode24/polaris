@@ -96,6 +96,7 @@ def _build_output(
         suggested_action=suggested_action,
         trace_id=trace_id,
         auto_attached_job_intelligence_id=auto_attached_job_intelligence_id,
+        prompt_version=getattr(output, "prompt_version", None) or None,
     )
 
 
@@ -154,6 +155,7 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
         response_json=output_full.model_dump(mode="json"),
         session_id=session_id,
         parent_response_id=parent_response_id,
+        prompt_version=output_full.prompt_version or None,
         created_at=datetime.now(timezone.utc),
     )
     db.add(response_row)
@@ -243,6 +245,7 @@ async def correct_interview_response(
         session_id=session_id,
         parent_response_id=parent.id,
         correction_of=parent.id,
+        prompt_version=output_full.prompt_version or None,
         created_at=datetime.now(timezone.utc),
     )
     db.add(response_row)

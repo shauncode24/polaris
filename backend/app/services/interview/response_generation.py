@@ -17,6 +17,7 @@ classify_blueprint() itself still returns a plain blueprint_key string
 blueprint_library lookup — only ever needed the key), so this is
 additive, not a breaking signature change.
 """
+import hashlib
 import json
 import logging
 import os
@@ -58,6 +59,20 @@ MAX_PROSE_TOKENS = 700
 
 MAX_PLAN_ATTEMPTS = 3
 MAX_PROSE_ATTEMPTS = 2
+
+
+def _compute_prompt_version() -> str:
+    """Stable, content-addressed version tag for the two prompt strings
+    in use right now. Format: '<8-char plan hash>/<8-char prose hash>'.
+    Derived from the actual bytes of the prompts, so it changes
+    automatically whenever a prompt changes — no manual versioning
+    needed. Computed once per call rather than at module import so it
+    always reflects whatever the prompts read at call time (useful when
+    prompts are patched in tests).
+    """
+    plan_hash = hashlib.sha256(ANSWER_PLAN_SYSTEM_PROMPT.encode()).hexdigest()[:8]
+    prose_hash = hashlib.sha256(PROSE_GENERATION_SYSTEM_PROMPT.encode()).hexdigest()[:8]
+    return f"{plan_hash}/{prose_hash}"
 
 
 class InterviewGenerationError(Exception):
@@ -407,6 +422,7 @@ async def generate_interview_response(
         insufficient_context_reason="",
         context_note="",
         claims_needing_verification=plan.claims_needing_verification,
+        prompt_version=_compute_prompt_version(),
     )
 
     output.grounding = grounding.validate_answer(output, context)

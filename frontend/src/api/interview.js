@@ -1,12 +1,34 @@
 // frontend/src/api/interview.js
 import { API_BASE_URL } from './client'
 
+/**
+ * Parses backend responses, handling both:
+ *   - Normal API errors: detail is a string or {msg} object (FastAPI validation)
+ *   - Structured 502 degraded errors: detail is {error_type, message, trace_id}
+ *     (implementation plan §S — three distinct failure classes must be distinguishable)
+ *
+ * On error, throws an object (not a bare Error string) so callers can inspect
+ * error_type and trace_id without string-parsing:
+ *   { message, error_type, trace_id }
+ */
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(
-      (typeof data.detail === 'string' && data.detail) || data.reason || 'Something went wrong.'
-    )
+    const detail = data.detail
+    // Structured degraded-service error (§S)
+    if (detail && typeof detail === 'object' && detail.error_type) {
+      const err = new Error(detail.message || 'Generation service temporarily unavailable.')
+      err.error_type = detail.error_type
+      err.trace_id = detail.trace_id || null
+      throw err
+    }
+    // Standard FastAPI error (string detail or validation array)
+    const msg =
+      (typeof detail === 'string' && detail) ||
+      (Array.isArray(detail) && detail[0]?.msg) ||
+      data.reason ||
+      'Something went wrong.'
+    throw new Error(msg)
   }
   return data
 }

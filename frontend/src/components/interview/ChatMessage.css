@@ -22,6 +22,15 @@
   border: 1px solid rgba(224, 85, 79, 0.25);
   color: var(--danger);
   font-size: 13.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-msg__trace-id {
+  font-size: 11px;
+  opacity: 0.55;
+  font-family: monospace;
 }
 
 .chat-msg__coach-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -68,6 +77,7 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* ── Insufficient context — differentiated by reason ────── */
 .chat-msg__insufficient {
   font-size: 13px;
   color: #a2760f;
@@ -75,7 +85,37 @@
   border: 1px solid rgba(230, 179, 47, 0.3);
   padding: 8px 12px;
   border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
+.chat-msg__insufficient p { margin: 0; opacity: 0.85; }
+
+.chat-msg__insufficient--grounding {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.chat-msg__insufficient--empty {
+  color: var(--text);
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
+
+/* ── Auto-attached job context notice ───────────────────── */
+.chat-msg__auto-job {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+}
+.chat-msg__auto-job-icon { font-size: 11px; opacity: 0.7; }
 
 .chat-msg__answer { font-size: 15px; line-height: 1.65; color: var(--ink); white-space: pre-wrap; }
 
@@ -103,6 +143,73 @@
 .pill--story { color: var(--accent-strong); background: var(--accent-soft); border-color: transparent; }
 .pill--competency { color: var(--success); background: var(--success-soft); border-color: transparent; }
 
+/* ── Grounding badge — now covers fabricated entities too ── */
+.chat-msg__grounding {
+  font-size: 12px;
+  border: 1px solid rgba(230, 179, 47, 0.35);
+  background: var(--warning-soft);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+.chat-msg__grounding summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #a2760f;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-msg__grounding summary::-webkit-details-marker { display: none; }
+.chat-msg__grounding-body { margin-top: 8px; color: var(--text); display: flex; flex-direction: column; gap: 6px; }
+.chat-msg__grounding-body ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.chat-msg__grounding-body ul li code {
+  font-size: 11.5px;
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--danger);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+.chat-msg__grounding-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a2760f;
+  margin: 0;
+}
+.chat-msg__grounding-desc { font-size: 12px; margin: 0; }
+.chat-msg__grounding-flag {
+  font-size: 12px;
+  margin: 0;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ── Claims needing verification ────────────────────────── */
+.chat-msg__claims-verify {
+  font-size: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: var(--info-soft);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+.chat-msg__claims-verify summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--info);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-msg__claims-verify summary::-webkit-details-marker { display: none; }
+.chat-msg__claims-verify-body { margin-top: 8px; color: var(--text); display: flex; flex-direction: column; gap: 4px; }
+.chat-msg__claims-verify-body p { font-size: 12px; margin: 0; }
+.chat-msg__claims-verify-body ul { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+
+/* ── Coaching + follow-ups ──────────────────────────────── */
 .chat-msg__coaching { font-size: 13px; }
 .chat-msg__coaching summary {
   cursor: pointer;
@@ -130,6 +237,7 @@
 }
 .chip:hover { border-color: var(--accent); background: var(--accent-soft); }
 
+/* ── Correction badge & bubble ──────────────────────────── */
 .chat-msg__correction-badge {
   margin-left: auto;
   font-size: 10.5px;
@@ -155,21 +263,7 @@
   opacity: 0.75;
 }
 
-.chat-msg__grounding {
-  font-size: 12px;
-  border: 1px solid rgba(230, 179, 47, 0.35);
-  background: var(--warning-soft);
-  border-radius: var(--radius-sm);
-  padding: 6px 10px;
-}
-.chat-msg__grounding summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: #a2760f;
-}
-.chat-msg__grounding-body { margin-top: 6px; color: var(--text); }
-.chat-msg__grounding-body ul { margin: 4px 0 0; padding-left: 18px; }
-
+/* ── Suggested action ───────────────────────────────────── */
 .chat-msg__suggested-action {
   font-size: 12.5px;
   color: var(--text);
@@ -180,6 +274,7 @@
   line-height: 1.5;
 }
 
+/* ── Correct button ─────────────────────────────────────── */
 .chat-msg__correct-btn {
   align-self: flex-start;
   margin-top: 4px;
