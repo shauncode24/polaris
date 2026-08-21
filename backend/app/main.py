@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+import time
+from collections import defaultdict, deque
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.resume import router as resume_router
@@ -24,6 +29,75 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class MaxBodySizeMiddleware(BaseHTTPMiddleware):
+    """Phase 1 security baseline (§1.4) — rejects requests whose
+    declared Content-Length exceeds a configured ceiling before any
+    handler (and therefore any file-parsing library) ever touches the
+    body. This is a coarse, header-based check — it does not protect
+    against a client lying about Content-Length and streaming more
+    anyway, but it stops the common case cheaply and is a real
+    improvement over no limit at all.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                if int(content_length) > settings.max_request_body_bytes:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Request body exceeds the maximum allowed size."},
+                    )
+            except ValueError:
+                pass
+        return await call_next(request)
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Minimal in-memory sliding-window rate limiter — Phase 1 security
+    baseline (§1.4). Deliberately simple (per-process, per-client-IP, no
+    external store): nothing in this codebase describes a distributed/
+    multi-process deployment, so a Redis-backed limiter would be
+    speculative infrastructure not grounded in anything actually here.
+    This is enough to blunt basic abuse (a runaway client, a scripted
+    loop) without adding a new external dependency.
+    """
+
+    def __init__(self, app, max_requests: int, window_seconds: int):
+        super().__init__(app)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._hits: dict[str, deque] = defaultdict(deque)
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path == "/health":
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.monotonic()
+        hits = self._hits[client_ip]
+
+        while hits and now - hits[0] > self.window_seconds:
+            hits.popleft()
+
+        if len(hits) >= self.max_requests:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please slow down and try again shortly."},
+            )
+
+        hits.append(now)
+        return await call_next(request)
+
+
+app.add_middleware(
+    RateLimitMiddleware,
+    max_requests=settings.rate_limit_requests,
+    window_seconds=settings.rate_limit_window_seconds,
+)
+app.add_middleware(MaxBodySizeMiddleware)
 
 app.include_router(auth_router)
 app.include_router(resume_router)

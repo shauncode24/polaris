@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.security import decrypt_secret, encrypt_secret
 from app.models.facts import User
 from app.schemas.leetcode.leetcode_sync import LeetCodeManualSubmission
 from app.schemas.shared.sync import GithubSyncRequest, LeetcodeSyncRequest
@@ -32,7 +33,11 @@ async def trigger_github_sync(
     db: AsyncSession = Depends(get_db),
 ):
     username = payload.username or current_user.github_username
-    token = payload.token or current_user.github_token
+    # SECURITY FIX (Phase 1 §1.4): current_user.github_token is now
+    # stored ENCRYPTED at rest (see below) — it must be decrypted before
+    # use. A token supplied directly in this request's payload is
+    # already plaintext and is used as-is.
+    token = payload.token or decrypt_secret(current_user.github_token)
 
     if not username or not token:
         return JSONResponse(
@@ -41,7 +46,11 @@ async def trigger_github_sync(
         )
 
     current_user.github_username = username
-    current_user.github_token = token
+    # SECURITY FIX (Phase 1 §1.4): previously stored in plaintext. Only
+    # the encrypted form is ever persisted; the plaintext `token` local
+    # variable is used for the actual GitHub API calls below and never
+    # written to the database.
+    current_user.github_token = encrypt_secret(token)
     await db.commit()
 
     try:

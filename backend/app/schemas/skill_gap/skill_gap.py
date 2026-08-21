@@ -1,10 +1,26 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.core.settings import settings
 
 
 class JDPasteRequest(BaseModel):
     raw_text: str
     company: str | None = None
     role: str | None = None
+
+    @field_validator("raw_text")
+    @classmethod
+    def validate_raw_text(cls, v: str) -> str:
+        # SECURITY FIX (Phase 1 §1.4 — input-size limits): raw_text
+        # previously had no length ceiling at all.
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("raw_text must not be empty.")
+        if len(stripped) > settings.max_paste_text_chars:
+            raise ValueError(
+                f"raw_text exceeds the maximum allowed length of {settings.max_paste_text_chars} characters."
+            )
+        return v
 
 
 class HaveSkill(BaseModel):

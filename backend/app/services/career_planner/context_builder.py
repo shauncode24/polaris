@@ -13,7 +13,7 @@ from app.services.evidence import build_evidence_details
 from app.services.career_planner.curriculum import get_curriculum_topics, get_relevant_domains
 from app.services.career_planner.topic_signals import build_topic_signals
 from app.services.job_intelligence.builder import get_job_intelligence
-from app.services.resume.confidence import compute_skill_confidence
+from app.services.resume.confidence import compute_decayed_skill_confidence
 
 MAX_PLAN_DAYS = 14
 DEFAULT_PLAN_DAYS = 5
@@ -27,19 +27,38 @@ def compute_days_available(deadline: date | None) -> int:
     return max(1, min(days_remaining, MAX_PLAN_DAYS))
 
 
-async def _get_skills_by_confidence(db: AsyncSession) -> list[dict]:
+async def _get_skills_by_confidence(db: AsyncSession, user_id) -> list[dict]:
+    """FIX (Phase 1 §1.2 — confirmed, top-priority cross-user data
+    scoping bug): this previously queried SkillEvidence by skill_id
+    ALONE, with no user_id filter at all — meaning every Career Plan's
+    'profile_skills_summary'/'topic_signals' context was silently built
+    from EVERY user's evidence for a given skill, not just the
+    requesting user's. Now explicitly scoped to user_id, matching every
+    other SkillEvidence query in the codebase (see evidence.py,
+    role_fit_scoping.py, skill_gap/comparison.py, interview/context_builder.py).
+
+    Also switched from the undecayed compute_skill_confidence(weights)
+    to the canonical, recency-decayed compute_decayed_skill_confidence
+    (resume/confidence.py + resume/decay.py) — this was the one
+    remaining caller in the codebase computing "confidence" its own way
+    instead of going through the single canonical formula every other
+    consumer (Skill Gap, Identity, Interview) already uses.
+    """
     skill_result = await db.execute(select(Skill))
     skills = skill_result.scalars().all()
 
     out = []
     for skill in skills:
         evidence_result = await db.execute(
-            select(SkillEvidence).where(SkillEvidence.skill_id == skill.id)
+            select(SkillEvidence).where(
+                SkillEvidence.skill_id == skill.id,
+                SkillEvidence.user_id == user_id,
+            )
         )
         evidence_rows = list(evidence_result.scalars().all())
         if not evidence_rows:
             continue
-        confidence = compute_skill_confidence([e.weight for e in evidence_rows])
+        confidence = compute_decayed_skill_confidence(evidence_rows)
         details = await build_evidence_details(db, evidence_rows)
         out.append({"skill": skill.canonical_name, "confidence": confidence, "evidence": details})
 
@@ -238,7 +257,7 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
     relevant_domains = get_relevant_domains(goal.title)
     curriculum_topics = get_curriculum_topics(relevant_domains)
 
-    skills_by_confidence = await _get_skills_by_confidence(db)
+    skills_by_confidence = await _get_skills_by_confidence(db, user_id)
     target_job = await _get_job_description_context(db, user_id, goal.job_description_id)
     jd_missing_skills = {m["skill"] for m in (target_job["missing_skills"] if target_job else []) if m.get("skill")}
     ats_missing_keywords, resume_top_fixes = await _get_latest_ats_flags(db, user_id)

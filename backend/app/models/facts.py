@@ -27,7 +27,14 @@ class User(Base):
     location_pref: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = created_at_col()
     github_username: Mapped[str | None] = mapped_column(String(255))
-    github_token: Mapped[str | None] = mapped_column(String(255))
+    # Phase 1 §1.4: widened from String(255) to String(512) — this now
+    # stores a Fernet-encrypted ciphertext (see core/security.py's
+    # encrypt_secret/decrypt_secret, wired in api/sync.py), never a raw
+    # PAT, and the encrypted form is longer than the plaintext token.
+    # NOTE: this model change requires a corresponding Alembic migration
+    # to widen the physical column — not generated here since the
+    # migrations directory isn't part of this changeset.
+    github_token: Mapped[str | None] = mapped_column(String(512))
     leetcode_username: Mapped[str | None] = mapped_column(String(255))
 
 

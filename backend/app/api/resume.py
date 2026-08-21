@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_current_user_from_query
 from app.core.database import get_db
+from app.core.settings import settings
 from app.models.facts import (
     User, Resume, Experience, Project, Education, Certificate, JobDescription,
     GithubSnapshot, LeetcodeSnapshot
@@ -38,6 +39,22 @@ async def upload_resume(
     db: AsyncSession = Depends(get_db),
 ):
     raw_bytes = await file.read()
+
+    # SECURITY FIX (Phase 1 §1.4 — validate uploaded documents + input-
+    # size limits): previously any file, of any size or type, was handed
+    # straight to the PDF parser. Now rejected up front with a clear 4xx
+    # instead of failing deep inside pdfplumber (or silently accepting
+    # something that isn't actually a resume).
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(raw_bytes) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the maximum allowed size of {settings.max_upload_bytes // (1024 * 1024)}MB.",
+        )
+    if not raw_bytes.lstrip().startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Uploaded file does not appear to be a valid PDF.")
+
     result = await ingest_resume(raw_bytes, db, current_user, filename=file.filename)
     # Freshness fix: keep Engineering Identity current the instant new
     # resume data lands, instead of only on a manual POST /identity/refresh.

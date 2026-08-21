@@ -9,6 +9,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.core.settings import settings
 from app.models.facts import JobDescription, Project, Resume
 from app.models.job_intelligence import GapAnalysisResultRow
 from app.services.projects.linking import normalize_name
@@ -348,9 +349,25 @@ async def analyze_job_description_pdf(
     db=Depends(get_db),
 ):
     raw_bytes = await file.read()
+
+    # SECURITY FIX (Phase 1 §1.4 — validate uploaded documents + input-
+    # size limits).
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(raw_bytes) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the maximum allowed size of {settings.max_upload_bytes // (1024 * 1024)}MB.",
+        )
+    if not raw_bytes.lstrip().startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Uploaded file does not appear to be a valid PDF.")
+
     raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
+    if len(raw_text) > settings.max_paste_text_chars:
+        raw_text = raw_text[: settings.max_paste_text_chars]
+
     try:
         return await _run_job_analysis(raw_text, company, role, current_user, db)
     except JobIntelligenceExtractionError as e:

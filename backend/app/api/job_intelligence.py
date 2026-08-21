@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.settings import settings
 from app.models.facts import User
 from app.models.job_intelligence import JobIntelligenceProfileRow
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceSummary
@@ -40,6 +41,17 @@ async def analyze_job_intelligence(
     Intelligence) from the single combined extraction call — this is
     the Job & Company Intelligence module's own entry point, entirely
     separate from /jobs/analyze (Comparison Engine)."""
+    # SECURITY FIX (Phase 1 §1.4 — input-size limits): raw_text had no
+    # length ceiling, so an arbitrarily large paste would be sent
+    # straight into the extraction LLM call.
+    if not payload.raw_text.strip():
+        raise HTTPException(status_code=400, detail="raw_text must not be empty.")
+    if len(payload.raw_text) > settings.max_paste_text_chars:
+        raise HTTPException(
+            status_code=413,
+            detail=f"raw_text exceeds the maximum allowed length of {settings.max_paste_text_chars} characters.",
+        )
+
     try:
         job_profile, company_profile = await build_job_intelligence(
             db, current_user.id, payload.raw_text, payload.company, payload.role,
@@ -58,9 +70,25 @@ async def analyze_job_intelligence_pdf(
     db: AsyncSession = Depends(get_db),
 ):
     raw_bytes = await file.read()
+
+    # SECURITY FIX (Phase 1 §1.4 — validate uploaded documents + input-
+    # size limits).
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(raw_bytes) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the maximum allowed size of {settings.max_upload_bytes // (1024 * 1024)}MB.",
+        )
+    if not raw_bytes.lstrip().startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Uploaded file does not appear to be a valid PDF.")
+
     raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
+    if len(raw_text) > settings.max_paste_text_chars:
+        raw_text = raw_text[: settings.max_paste_text_chars]
+
     try:
         job_profile, company_profile = await build_job_intelligence(db, current_user.id, raw_text, company, role)
     except JobIntelligenceExtractionError as e:
