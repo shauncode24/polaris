@@ -27,13 +27,6 @@ class User(Base):
     location_pref: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = created_at_col()
     github_username: Mapped[str | None] = mapped_column(String(255))
-    # Phase 1 §1.4: widened from String(255) to String(512) — this now
-    # stores a Fernet-encrypted ciphertext (see core/security.py's
-    # encrypt_secret/decrypt_secret, wired in api/sync.py), never a raw
-    # PAT, and the encrypted form is longer than the plaintext token.
-    # NOTE: this model change requires a corresponding Alembic migration
-    # to widen the physical column — not generated here since the
-    # migrations directory isn't part of this changeset.
     github_token: Mapped[str | None] = mapped_column(String(512))
     leetcode_username: Mapped[str | None] = mapped_column(String(255))
 
@@ -50,13 +43,13 @@ class Experience(Base):
     end_date: Mapped[date | None] = mapped_column(Date)
     stack: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     bullets: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
-    # Interview Agent Phase 0 (plan §C/§D) — which interview competencies
-    # (leadership, teamwork, ownership, ...) this experience's own bullet
-    # text evidences. NULL means "never tagged yet" — distinct from an
-    # empty list, which means "tagged, and genuinely evidences none."
-    # See services/interview/competency_tagging.py for how this gets
-    # populated (lazily, on first read by context_builder.py).
     competency_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
+    # Phase 4 (provenance) — which ingestion source produced this row.
+    # "resume" | "linkedin". Defaults to "resume" so every pre-Phase-4
+    # row (all of which came from resume ingestion) reads correctly
+    # without a data backfill. REQUIRES a new Alembic migration to add
+    # this column to the real database — not generated in this pass.
+    source: Mapped[str] = mapped_column(String(20), default="resume")
     created_at: Mapped[datetime] = created_at_col()
 
 
@@ -74,9 +67,9 @@ class Project(Base):
     github_repo_name: Mapped[str | None] = mapped_column(String(255))
     repo_link_status: Mapped[str] = mapped_column(String(30), default="unmatched")
     impact_metrics: Mapped[dict | None] = mapped_column(JSONB)
-    # See Experience.competency_tags docstring above — same field, same
-    # lazy-backfill behavior, applied to project descriptions instead.
     competency_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
+    # Phase 4 (provenance) — same rule as Experience.source above.
+    source: Mapped[str] = mapped_column(String(20), default="resume")
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -86,12 +79,6 @@ class Project(Base):
 
 
 class Education(Base):
-    """Facts table (§5.5) — raw, append-only, sourced directly from resume
-    extraction. Was missing entirely from the original schema/pipeline,
-    which is why education never appeared anywhere downstream (Interview
-    Response Agent, Resume Reviewer, etc.) — it was simply never captured,
-    not filtered out.
-    """
     __tablename__ = "educations"
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -104,6 +91,8 @@ class Education(Base):
     end_date: Mapped[date | None] = mapped_column(Date)
     is_current: Mapped[bool] = mapped_column(Boolean, default=False)
     details: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    # Phase 4 (provenance) — same rule as Experience.source above.
+    source: Mapped[str] = mapped_column(String(20), default="resume")
     created_at: Mapped[datetime] = created_at_col()
 
 
@@ -183,12 +172,6 @@ class Note(Base):
 
 
 class Resume(Base):
-    """Raw, immutable resume text — a fact table per §5.5, kept for its
-    own sake (ATS-style checks need real layout/wording, not just what
-    the extraction pipeline pulled structurally out of it in Phase 2).
-    Append-only: every re-upload creates a new row rather than
-    overwriting the previous one.
-    """
     __tablename__ = "resumes"
 
     id: Mapped[uuid.UUID] = uuid_pk()

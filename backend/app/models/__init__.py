@@ -8,3 +8,4 @@ from app.models.retrieval import *  # noqa
 from app.models.github_analysis import *  # noqa
 from app.models.leetcode_analysis import *  # noqa
 from app.models.job_intelligence import *  # noqa
+from app.models.linkedin import *  # noqa

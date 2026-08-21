@@ -1,3 +1,5 @@
+import io
+
 from fastapi import APIRouter, HTTPException, UploadFile, Depends
 from fastapi.responses import Response
 from sqlalchemy import select, func
@@ -12,6 +14,8 @@ from app.models.facts import (
 )
 from app.models.inference import ResumeReview, ResumeAnalysis, SkillEvidence
 from app.models.structure import Skill, SkillAlias
+from app.services.resume.pdf_parser import extract_text_from_pdf
+from app.services.resume.docx_parser import extract_text_from_docx
 from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
 from app.services.resume.ats_checks import run_ats_checks
@@ -32,6 +36,19 @@ from app.services.identity.identity_refresh import trigger_identity_refresh
 router = APIRouter(prefix="/resume", tags=["resume"])
 
 
+def _is_pdf(raw_bytes: bytes) -> bool:
+    return raw_bytes.lstrip().startswith(b"%PDF")
+
+
+def _is_docx(raw_bytes: bytes, filename: str | None) -> bool:
+    # .docx is a ZIP container — sniff the ZIP local-file-header magic
+    # bytes AND require a .docx extension, so a renamed/other ZIP-based
+    # file (e.g. a plain .zip) doesn't get silently misread as a resume.
+    looks_like_zip = raw_bytes[:4] == b"PK\x03\x04"
+    has_docx_extension = (filename or "").lower().endswith(".docx")
+    return looks_like_zip and has_docx_extension
+
+
 @router.post("/upload")
 async def upload_resume(
     file: UploadFile,
@@ -41,10 +58,8 @@ async def upload_resume(
     raw_bytes = await file.read()
 
     # SECURITY FIX (Phase 1 §1.4 — validate uploaded documents + input-
-    # size limits): previously any file, of any size or type, was handed
-    # straight to the PDF parser. Now rejected up front with a clear 4xx
-    # instead of failing deep inside pdfplumber (or silently accepting
-    # something that isn't actually a resume).
+    # size limits): every file, of any size or type, is checked up front
+    # with a clear 4xx instead of failing deep inside a parser.
     if not raw_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     if len(raw_bytes) > settings.max_upload_bytes:
@@ -52,10 +67,35 @@ async def upload_resume(
             status_code=413,
             detail=f"File exceeds the maximum allowed size of {settings.max_upload_bytes // (1024 * 1024)}MB.",
         )
-    if not raw_bytes.lstrip().startswith(b"%PDF"):
-        raise HTTPException(status_code=400, detail="Uploaded file does not appear to be a valid PDF.")
 
-    result = await ingest_resume(raw_bytes, db, current_user, filename=file.filename)
+    # Phase 4 — DOCX support: the frontend has always advertised
+    # accept=".pdf,.docx"; the backend previously rejected everything
+    # that wasn't a PDF. Both extractors converge on the same raw_text
+    # contract, so everything downstream (extraction, ingestion, skill
+    # evidence) is unchanged regardless of which file type was uploaded.
+    if _is_pdf(raw_bytes):
+        raw_text = extract_text_from_pdf(io.BytesIO(raw_bytes))
+        pdf_bytes: bytes | None = raw_bytes
+    elif _is_docx(raw_bytes, file.filename):
+        try:
+            raw_text = extract_text_from_docx(io.BytesIO(raw_bytes))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not read this .docx file: {e}")
+        pdf_bytes = None
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file must be a valid PDF or a .docx Word document.",
+        )
+
+    if not raw_text.strip():
+        raise HTTPException(status_code=400, detail="No extractable text found in the uploaded file.")
+
+    try:
+        result = await ingest_resume(raw_text, db, current_user, filename=file.filename, pdf_bytes=pdf_bytes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # Freshness fix: keep Engineering Identity current the instant new
     # resume data lands, instead of only on a manual POST /identity/refresh.
     await trigger_identity_refresh(db, current_user.id, "resume upload")

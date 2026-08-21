@@ -12,6 +12,11 @@ async def build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvid
     """Human-readable evidence trail for a list of SkillEvidence rows.
     Unchanged by the user-scoping fix — it operates on rows already
     handed to it by a caller, and never queries SkillEvidence itself.
+
+    Phase 4: added a "linkedin_profile" branch so LinkedIn-sourced
+    evidence gets a real, visible provenance label instead of silently
+    contributing to confidence math with no corresponding detail string
+    (previously the only source_type that fell through every branch).
     """
     project_ids = [e.source_id for e in evidence_rows if e.source_type == "project" and e.source_id]
     experience_ids = [e.source_id for e in evidence_rows if e.source_type == "experience" and e.source_id]
@@ -47,6 +52,8 @@ async def build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvid
             details.append("LeetCode practice history")
         elif e.source_type == "certificate":
             details.append("Certificate")
+        elif e.source_type == "linkedin_profile":
+            details.append("LinkedIn profile")
     return list(dict.fromkeys(details))
 
 
@@ -54,13 +61,7 @@ async def get_all_skill_confidences(db: AsyncSession, user_id) -> dict[str, floa
     """canonical_name -> recency-decayed confidence, for ONE user.
 
     FIX (cross-user evidence leak): `user_id` is now a REQUIRED parameter
-    with no default. Previously this queried SkillEvidence by skill_id
-    alone, meaning every skill's "confidence" was secretly an aggregate
-    across every user in the system — a candidate's Skill Gap report,
-    role-fit evidence, resume tailoring, and narrative coherence could
-    all be silently influenced by other users' evidence for the same
-    canonical skill. Every caller must now say explicitly whose evidence
-    it wants.
+    with no default.
     """
     result = await db.execute(select(Skill))
     skills = result.scalars().all()

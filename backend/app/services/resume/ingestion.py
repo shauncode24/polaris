@@ -1,4 +1,3 @@
-from io import BytesIO
 from datetime import datetime, timezone
 from uuid import UUID
 import re
@@ -11,7 +10,6 @@ from app.models.facts import User, Experience, Project, Education, Resume
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence, ProfileSnapshot
 
-from app.services.resume.pdf_parser import extract_text_from_pdf
 from app.services.resume.extraction import extract_resume_data
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.resume.confidence import WEIGHTS, STACK_ONLY_MULTIPLIER, compute_skill_confidence
@@ -75,10 +73,27 @@ async def _get_or_create_skill(db: AsyncSession, canonical_name: str, display_na
     return Skill(id=skill_id, name=display_name, canonical_name=canonical_name)
 
 
-async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str | None = None) -> dict:
-    raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
+async def ingest_resume(
+    raw_text: str,
+    db: AsyncSession,
+    user,
+    filename: str | None = None,
+    pdf_bytes: bytes | None = None,
+) -> dict:
+    """`raw_text` is pre-extracted by the caller (api/resume.py), which
+    picks the right extractor for the uploaded file's real type — PDF
+    via pdf_parser.py, DOCX via docx_parser.py. This function no longer
+    assumes PDF and no longer does extraction itself (Phase 4 — DOCX
+    support).
+
+    `pdf_bytes` is OPTIONAL and used ONLY to power the inline PDF
+    preview/download endpoints (ResumePdfViewer embeds a real PDF byte
+    stream). DOCX uploads pass pdf_bytes=None; the frontend's existing
+    "PDF preview not available" empty state already handles this case
+    correctly with no further changes needed.
+    """
     if not raw_text.strip():
-        raise ValueError("No extractable text found in PDF")
+        raise ValueError("No extractable text found in the uploaded resume")
 
     extraction = await extract_resume_data(raw_text)
     extraction.experiences = [
@@ -95,7 +110,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
     ]
 
     resume_row = Resume(
-        user_id=user.id, raw_text=raw_text, raw_bytes=raw_bytes, filename=filename,
+        user_id=user.id, raw_text=raw_text, raw_bytes=pdf_bytes, filename=filename,
         created_at=datetime.now(timezone.utc),
     )
     db.add(resume_row)
@@ -106,6 +121,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
         row = Experience(
             user_id=user.id, resume_id=resume_row.id, role=exp.role, company=exp.company,
             start_date=None, end_date=None, stack=exp.stack, bullets=exp.bullets,
+            source="resume",
             created_at=datetime.now(timezone.utc),
         )
         db.add(row)
@@ -116,6 +132,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
         row = Project(
             user_id=user.id, resume_id=resume_row.id, name=proj.name, description=proj.description,
             stack=proj.stack, repo_url=None, impact_metrics=None,
+            source="resume",
             created_at=datetime.now(timezone.utc),
         )
         db.add(row)
@@ -127,6 +144,7 @@ async def ingest_resume(raw_bytes: bytes, db: AsyncSession, user, filename: str 
             user_id=user.id, resume_id=resume_row.id,
             institution=edu.institution, degree=edu.degree, field_of_study=edu.field_of_study,
             start_date=None, end_date=None, is_current=edu.is_current, details=edu.details,
+            source="resume",
             created_at=datetime.now(timezone.utc),
         )
         db.add(row)

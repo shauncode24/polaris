@@ -70,7 +70,11 @@ async def get_profile_data(
                 "end_year": e.end_date.year if e.end_date else None,
                 "skills_used": e.stack or [],
                 "description": (e.bullets[0] if e.bullets else None),
-                "sources": ["resume"],
+                # Phase 4 — real provenance instead of a hardcoded
+                # ["resume"] literal. Falls back to "resume" for any
+                # pre-Phase-4 row where the new column's Python-side
+                # default hasn't been applied by a fresh insert.
+                "sources": [getattr(e, "source", None) or "resume"],
             }
             for e in experiences
         ],
@@ -80,7 +84,7 @@ async def get_profile_data(
                 "name": p.name,
                 "description": p.description,
                 "skills_used": p.stack or [],
-                "sources": ["resume"],
+                "sources": [getattr(p, "source", None) or "resume"],
             }
             for p in projects
         ],

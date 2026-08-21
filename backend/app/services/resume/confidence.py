@@ -4,6 +4,13 @@ WEIGHTS = {
     "experience": 0.25,
     "certificate": 0.15,
     "leetcode_tag": 0.10,
+    # Phase 4 — LinkedIn evidence. Deliberately weighted below every
+    # other source: a LinkedIn skill mention is self-reported with no
+    # deeper corroboration (unlike a project/GitHub repo/experience
+    # bullet, which are themselves the evidence). It's real signal, but
+    # the weakest kind — same reasoning as leetcode_tag being the
+    # lowest of the pre-existing weights.
+    "linkedin": 0.20,
 }
 CONFIDENCE_CAP = 0.97
 
