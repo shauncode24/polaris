@@ -7,13 +7,11 @@ from app.models.facts import JobDescription, Note, Project, Resume
 from app.models.goals import Goal
 from app.models.job_intelligence import GapAnalysisResultRow
 from app.services.projects.linking import normalize_name
-from app.models.inference import ProfileSnapshot, ResumeReview, SkillEvidence
-from app.models.structure import Skill
-from app.services.evidence import build_evidence_details
+from app.models.inference import ProfileSnapshot, ResumeReview
 from app.services.career_planner.curriculum import get_curriculum_topics, get_relevant_domains
 from app.services.career_planner.topic_signals import build_topic_signals
 from app.services.job_intelligence.builder import get_job_intelligence
-from app.services.resume.confidence import compute_decayed_skill_confidence
+from app.services.identity.reconciled_confidence import get_reconciled_skill_confidences
 
 MAX_PLAN_DAYS = 14
 DEFAULT_PLAN_DAYS = 5
@@ -28,41 +26,29 @@ def compute_days_available(deadline: date | None) -> int:
 
 
 async def _get_skills_by_confidence(db: AsyncSession, user_id) -> list[dict]:
-    """FIX (Phase 1 §1.2 — confirmed, top-priority cross-user data
-    scoping bug): this previously queried SkillEvidence by skill_id
-    ALONE, with no user_id filter at all — meaning every Career Plan's
-    'profile_skills_summary'/'topic_signals' context was silently built
-    from EVERY user's evidence for a given skill, not just the
-    requesting user's. Now explicitly scoped to user_id, matching every
-    other SkillEvidence query in the codebase (see evidence.py,
-    role_fit_scoping.py, skill_gap/comparison.py, interview/context_builder.py).
+    """Phase 3 alignment fix: now delegates to the shared, unbounded
+    reconciled-confidence map (get_reconciled_skill_confidences) so the
+    Career Planner sees the same claim-risk / timeline-discounted
+    confidence values as Engineering Identity and the Skill Gap Analyzer.
 
-    Also switched from the undecayed compute_skill_confidence(weights)
-    to the canonical, recency-decayed compute_decayed_skill_confidence
-    (resume/confidence.py + resume/decay.py) — this was the one
-    remaining caller in the codebase computing "confidence" its own way
-    instead of going through the single canonical formula every other
-    consumer (Skill Gap, Identity, Interview) already uses.
+    Previously this re-derived confidence directly from SkillEvidence
+    using compute_decayed_skill_confidence — missing the claim-risk and
+    timeline-plausibility discounting that reconciled_confidence applies.
+    This was the last place in the codebase with an independent confidence
+    derivation.
+
+    Return shape preserved: [{"skill": str, "confidence": float, "evidence": list[str]}]
+    so build_topic_signals() and profile_skills_summary work unchanged.
     """
-    skill_result = await db.execute(select(Skill))
-    skills = skill_result.scalars().all()
-
-    out = []
-    for skill in skills:
-        evidence_result = await db.execute(
-            select(SkillEvidence).where(
-                SkillEvidence.skill_id == skill.id,
-                SkillEvidence.user_id == user_id,
-            )
-        )
-        evidence_rows = list(evidence_result.scalars().all())
-        if not evidence_rows:
-            continue
-        confidence = compute_decayed_skill_confidence(evidence_rows)
-        details = await build_evidence_details(db, evidence_rows)
-        out.append({"skill": skill.canonical_name, "confidence": confidence, "evidence": details})
-
-    return out
+    reconciled = await get_reconciled_skill_confidences(db, user_id)
+    return [
+        {
+            "skill": entry["skill"],
+            "confidence": entry["confidence"],
+            "evidence": entry.get("sources", []),
+        }
+        for entry in reconciled.values()
+    ]
 
 
 async def _get_latest_gap_analysis_result(db: AsyncSession, job_intelligence_id) -> dict | None:

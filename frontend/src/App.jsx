@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProfileDataProvider } from './contexts/ProfileDataContext'
+import { PolarisIdentityProvider } from './contexts/PolarisIdentityContext'
 import ProtectedRoute from './components/auth/routing/ProtectedRoute'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
@@ -24,7 +25,8 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <ProfileDataProvider>
-          <BrowserRouter>
+          <PolarisIdentityProvider>
+            <BrowserRouter>
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
@@ -43,6 +45,7 @@ function App() {
               <Route path="/job-intelligence" element={<ProtectedRoute><JobIntelligencePage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
+          </PolarisIdentityProvider>
         </ProfileDataProvider>
       </AuthProvider>
     </ThemeProvider>

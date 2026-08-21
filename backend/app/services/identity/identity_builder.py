@@ -30,7 +30,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import JobDescription, Resume, Project
+from app.models.facts import Education, Experience, JobDescription, Project, Resume, User
 from app.models.goals import Goal
 from app.models.inference import (
     ResumeAnalysis,
@@ -39,8 +39,16 @@ from app.models.inference import (
     EngineeringIdentity,
 )
 from app.models.structure import Skill
-from app.schemas.identity.engineering_identity import IdentityFacts, PortfolioNarrativeFacts
+from app.schemas.identity.engineering_identity import (
+    IdentityFacts,
+    PolarisProfileFacts,
+    PortfolioNarrativeFacts,
+    ProfileEducationEntry,
+    ProfileExperienceEntry,
+    ProfileProjectEntry,
+)
 from app.services.evidence import build_evidence_details, get_all_skill_confidences
+from app.services.projects.linking import normalize_name
 from app.services.github.github_knowledge import build_github_knowledge_object
 # from app.services.identity.confidence_reconciliation import reconcile_skill_confidence
 from app.services.identity.freshness import compute_evidence_coverage, compute_source_freshness
@@ -184,34 +192,103 @@ async def _get_recent_job_matches(db: AsyncSession, user_id, limit: int = MAX_RE
         })
     return out
 
-# --- Claim risk details ------------------------------------------------------
-async def _get_claim_risk_details(db: AsyncSession, user_id) -> list[dict]:
-    """Each entry carries "unsupported_claims" (the real skill/tech
-    strings the Claim Audit found with no supporting GitHub evidence),
-    which confidence_reconciliation.py relies on to discount the right
-    skill's top_skills confidence, not just flag the project.
+# --- Profile facts (Phase 3 — Polaris Identity) --------------------------------
+async def build_profile_facts(db: AsyncSession, user_id) -> PolarisProfileFacts:
+    """Builds the canonical PolarisProfileFacts snapshot from existing domain
+    tables. This is the bridge between raw domain facts and the Polaris
+    Identity layer:
+
+      Experience / Education / Project / User / Goal  (facts tables)
+              ↓  dedup  ↓  reconcile  ↓  snapshot
+      PolarisProfileFacts  →  persisted in IdentityFacts.profile
+
+    Deduplication uses the same normalize_name() rule every other module
+    (profile.py, context_builder.py, overview.py) already uses, so a
+    skill that appears on two resume re-uploads is counted once.
+
+    User isolation: every query is scoped to user_id. No cross-user access
+    is possible because every query has an explicit .where(...user_id==...).
     """
-    proj_result = await db.execute(select(Project.id, Project.name).where(Project.user_id == user_id))
-    projects_by_id = {pid: name for pid, name in proj_result.all()}
-    if not projects_by_id:
-        return []
-    audit_result = await db.execute(
-        select(ProjectClaimAuditReview).where(ProjectClaimAuditReview.project_id.in_(projects_by_id.keys()))
+    # Career direction — User.target_roles / User.target_companies
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    target_roles: list[str] = (user.target_roles or []) if user else []
+    target_companies: list[str] = (user.target_companies or []) if user else []
+
+    # Active goal count
+    goal_result = await db.execute(
+        select(Goal).where(Goal.user_id == user_id).where(Goal.status_pct < 100.0)
     )
-    details: list[dict] = []
-    for row in audit_result.scalars().all():
-        report_json = row.report_json or {}
-        narrative = report_json.get("narrative", {})
-        facts = report_json.get("facts", {})
-        level = narrative.get("risk_level", "low")
-        if level in ("high", "medium"):
-            details.append({
-                "project": projects_by_id.get(row.project_id, "Unknown project"),
-                "risk_level": level,
-                "headline": narrative.get("headline", ""),
-                "unsupported_claims": facts.get("unsupported_claims", []),
-            })
-    return details
+    active_goal_count = len(list(goal_result.scalars().all()))
+
+    # Experiences — deduplicated by role+company (same rule as profile.py)
+    exp_result = await db.execute(
+        select(Experience)
+        .where(Experience.user_id == user_id)
+        .order_by(Experience.start_date.desc().nullsfirst(), Experience.created_at.desc())
+    )
+    seen_exps: set[str] = set()
+    experiences: list[ProfileExperienceEntry] = []
+    for e in exp_result.scalars().all():
+        key = f"{normalize_name(e.role)}@{normalize_name(e.company)}"
+        if key not in seen_exps:
+            seen_exps.add(key)
+            experiences.append(ProfileExperienceEntry(
+                role=e.role,
+                company=e.company,
+                start_date=e.start_date.isoformat() if e.start_date else None,
+                end_date=e.end_date.isoformat() if e.end_date else None,
+                stack=e.stack or [],
+                bullets=e.bullets or [],
+            ))
+
+    # Education — deduplicated by institution+degree (same rule as profile.py)
+    edu_result = await db.execute(
+        select(Education)
+        .where(Education.user_id == user_id)
+        .order_by(Education.end_date.desc().nullsfirst(), Education.created_at.desc())
+    )
+    seen_edus: set[str] = set()
+    education: list[ProfileEducationEntry] = []
+    for e in edu_result.scalars().all():
+        key = f"{normalize_name(e.institution)}@{normalize_name(e.degree or '')}"
+        if key not in seen_edus:
+            seen_edus.add(key)
+            education.append(ProfileEducationEntry(
+                institution=e.institution,
+                degree=e.degree,
+                field_of_study=e.field_of_study,
+                end_date=e.end_date.isoformat() if e.end_date else None,
+                is_current=e.is_current,
+            ))
+
+    # Projects — deduplicated by name (same rule as profile.py, projects/overview.py)
+    proj_result = await db.execute(
+        select(Project)
+        .where(Project.user_id == user_id)
+        .order_by(Project.created_at.desc())
+    )
+    seen_projs: set[str] = set()
+    projects: list[ProfileProjectEntry] = []
+    for p in proj_result.scalars().all():
+        key = normalize_name(p.name)
+        if key not in seen_projs:
+            seen_projs.add(key)
+            projects.append(ProfileProjectEntry(
+                name=p.name,
+                description=p.description,
+                stack=p.stack or [],
+                repo_link_status=p.repo_link_status,
+            ))
+
+    return PolarisProfileFacts(
+        experiences=experiences,
+        education=education,
+        projects=projects,
+        target_roles=target_roles,
+        target_companies=target_companies,
+        active_goal_count=active_goal_count,
+    )
 
 # --- Technology breadth helper ------------------------------------------------
 def _build_technology_breadth(github_knowledge: dict) -> dict:
@@ -298,7 +375,9 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
         coverage_gaps = await analyze_cross_source_coverage(db, user_id, latest_resume.id)
         timeline_plausibility_notes = coverage_gaps.get("timeline_plausibility_notes", [])
 
-    claim_risk_details = await _get_claim_risk_details(db, user_id)
+    # Delegated to the canonical public function — removes the stale private
+    # duplicate that previously lived in this file (Phase 3 consolidation).
+    claim_risk_details = await get_claim_risk_details(db, user_id)
 
     # Build evidence and compute hash (new version only uses evidence)
     all_sources_evidence = await build_scoped_skill_evidence(db, user_id, source_types=None)
@@ -349,6 +428,7 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
 
     active_goals = await _get_active_goals(db, user_id)
     recent_job_matches = await _get_recent_job_matches(db, user_id)
+    profile = await build_profile_facts(db, user_id)
 
     source_freshness = await compute_source_freshness(db, user_id)
     evidence_coverage = compute_evidence_coverage(source_freshness)
@@ -393,5 +473,6 @@ async def build_identity_facts(db: AsyncSession, user_id) -> IdentityFacts:
         claim_risk_details=claim_risk_details,
         source_freshness=source_freshness,
         evidence_coverage=evidence_coverage,
+        profile=profile,
         # portfolio_narrative=portfolio_narrative,
     )

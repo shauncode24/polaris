@@ -35,6 +35,103 @@ class PortfolioNarrativeFacts(BaseModel):
     analysis_degraded: bool = False
 
 
+# ---------------------------------------------------------------------------
+# Phase 3 — Polaris Identity: structured professional profile sub-schema
+#
+# These models capture the user's professional history as it existed at the
+# moment an EngineeringIdentity snapshot was generated. They are sourced
+# exclusively from the existing domain tables (Experience, Education, Project,
+# User, Goal) and deduplicated by the same normalize_name() rule every other
+# module already uses — they do NOT duplicate domain ownership, only
+# reconcile and snapshot it.
+#
+# All fields are optional / defaulted so that existing serialised
+# facts_json blobs (which lack the "profile" key) deserialise cleanly
+# with profile=None — no migration required.
+# ---------------------------------------------------------------------------
+
+class ProfileExperienceEntry(BaseModel):
+    """Deduplicated resume experience record — one per unique role+company
+    combination. Sourced from the Experience table (facts layer).
+
+    Evidence provenance:
+      Source table: experiences (facts.py::Experience)
+      Deduplication key: normalize_name(role) + "@" + normalize_name(company)
+      Source event: resume upload (resume parser → resume_extraction.py)
+    """
+    role: str
+    company: str
+    start_date: str | None = None  # ISO date string, e.g. "2022-06-01"
+    end_date: str | None = None    # None means current position
+    stack: list[str] = []          # Raw stack strings from resume
+    bullets: list[str] = []        # Achievement/responsibility bullets
+
+
+class ProfileEducationEntry(BaseModel):
+    """Deduplicated education record. Sourced from the Education table.
+
+    Evidence provenance:
+      Source table: educations (facts.py::Education)
+      Deduplication key: normalize_name(institution) + "@" + normalize_name(degree)
+      Source event: resume upload
+    """
+    institution: str
+    degree: str | None = None
+    field_of_study: str | None = None
+    end_date: str | None = None  # None for current students
+    is_current: bool = False
+
+
+class ProfileProjectEntry(BaseModel):
+    """Deduplicated project record with GitHub link status. Sourced from
+    the Project table.
+
+    Evidence provenance:
+      Source table: projects (facts.py::Project)
+      Deduplication key: normalize_name(name)
+      Source event: resume upload and/or manual project creation
+      GitHub link: repo_link_status tracks whether a GitHub repo has been
+        confirmed as backing this project (confirmed > unmatched > rejected)
+    """
+    name: str
+    description: str | None = None
+    stack: list[str] = []
+    repo_link_status: str = "unmatched"  # "confirmed" | "unmatched" | "rejected"
+
+
+class PolarisProfileFacts(BaseModel):
+    """The canonical structured professional profile — the Phase 3 addition
+    to IdentityFacts. Represents the user's professional identity as a
+    reconciled, deduplicated snapshot of existing domain facts at the time
+    of identity generation.
+
+    This is NOT a copy of the domain tables. It is a cross-domain reconciled
+    view that answers "who is this engineer, professionally?" at a glance:
+
+      Domain Data (Experience/Education/Project/User/Goal)
+           ↓
+      build_profile_facts() — dedup, reconcile, snapshot
+           ↓
+      PolarisProfileFacts (inside IdentityFacts, persisted in facts_json)
+           ↓
+      Downstream consumers (Identity API, Career Planner, Interview Agent)
+
+    All fields default so pre-Phase-3 facts_json blobs deserialise cleanly
+    with profile=None (no Alembic migration required).
+    """
+    experiences: list[ProfileExperienceEntry] = []
+    education: list[ProfileEducationEntry] = []
+    projects: list[ProfileProjectEntry] = []
+
+    # Career direction — from User.target_roles / User.target_companies
+    target_roles: list[str] = []
+    target_companies: list[str] = []
+
+    # Active goal count — how many in-progress goals exist (not the full
+    # Goal objects — those belong to the career domain, not identity)
+    active_goal_count: int = 0
+
+
 class IdentityFacts(BaseModel):
     top_skills: list[TopSkillEntry] = []
     role_fit: list[RoleFitResult] = []
@@ -77,6 +174,9 @@ class IdentityFacts(BaseModel):
     # specialization, biggest weakness). None when no narrative has been
     # generated yet (user hasn't synced enough projects).
     portfolio_narrative: PortfolioNarrativeFacts | None = None
+    # Phase 3 — Polaris Identity: canonical structured professional profile.
+    # None for existing snapshots that pre-date Phase 3 (no migration needed).
+    profile: PolarisProfileFacts | None = None
 
 
 class NarrativeClaim(BaseModel):

@@ -6,8 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
-from app.schemas.identity.engineering_identity import EngineeringIdentityReport, InvalidateIdentityRequest
+from app.schemas.identity.engineering_identity import (
+    EngineeringIdentityReport,
+    InvalidateIdentityRequest,
+    PolarisProfileFacts,
+)
 from app.schemas.identity.weekly_brief import WeeklyBriefReport
+from app.services.identity.identity_builder import build_profile_facts
 from app.services.identity.identity_synthesizer import (
     generate_engineering_identity,
     get_engineering_identity_history,
@@ -72,6 +77,29 @@ async def invalidate_identity_snapshot(
     if report is None:
         raise HTTPException(status_code=404, detail="Engineering Identity snapshot not found.")
     return report
+
+
+@router.get("/profile", response_model=PolarisProfileFacts)
+async def get_identity_profile(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns the canonical Polaris structured professional profile —
+    experience, education, projects, and career targets — for consumers
+    that need only the profile sub-set and not the full identity report.
+
+    Prefers the profile captured in the latest valid identity snapshot
+    (so it reflects what was true at generation time). Falls back to a
+    live, deterministic computation if no snapshot exists yet. No LLM
+    is involved in either path.
+
+    User isolation: scoped to current_user.id in every query.
+    """
+    cached = await get_latest_engineering_identity(db, current_user.id)
+    if cached is not None and cached.facts.profile is not None:
+        return cached.facts.profile
+    # Live computation — profile facts only, no LLM, no full identity rebuild
+    return await build_profile_facts(db, current_user.id)
 
 
 @router.get("/weekly-brief", response_model=WeeklyBriefReport)
