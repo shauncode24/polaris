@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import datetime, timezone
 
@@ -27,6 +28,8 @@ from app.services.resume.bullet_analysis import analyze_bullet, build_bullet_uni
 from app.services.resume.text_sanitize import sanitize_ai_text as sanitize_ai_review_text
 
 from app.models.inference import ResumeAnalysis, ProjectClaimAuditReview
+
+logger = logging.getLogger(__name__)
 
 class ReviewGenerationError(Exception):
     """Raised when the narrative/rewrite LLM call fails or returns
@@ -59,9 +62,7 @@ def _compute_score(flagged_count: int, unit_count: int, ats_flags: list[dict]) -
 
 
 async def _call_narrative_llm(context: dict) -> LLMNarrativeOutput:
-    print(
-        f"[TRACING] Requesting resume review narrative...", flush=True
-    )
+    logger.debug("Requesting resume review narrative...")
     # We pass context containing the first 15 flagged bullets
     # plus the total count to keep the narrative prompt token count reasonable.
     light_context = {
@@ -80,16 +81,14 @@ async def _call_narrative_llm(context: dict) -> LLMNarrativeOutput:
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw resume narrative JSON:\n{content}", flush=True)
+        logger.debug("Raw resume narrative JSON:\n%s", content)
         return LLMNarrativeOutput.model_validate(json.loads(content))
     except Exception as e:
         raise ReviewGenerationError(f"Resume review narrative LLM call failed: {e}") from e
 
 
 async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewriteSuggestion]:
-    print(
-        f"[TRACING] Requesting resume bullet rewrites for {len(bullets_batch)} bullets...", flush=True
-    )
+    logger.debug("Requesting resume bullet rewrites for %d bullets...", len(bullets_batch))
     try:
         response = await chat_completion(
             model=MODEL,
@@ -101,7 +100,7 @@ async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewr
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw resume rewrites batch JSON:\n{content}", flush=True)
+        logger.debug("Raw resume rewrites batch JSON:\n%s", content)
         parsed = LLMRewritesOutput.model_validate(json.loads(content))
         return parsed.rewrites
     except Exception as e:
@@ -232,7 +231,7 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
         try:
             narrative = await _call_narrative_llm(context)
         except ReviewGenerationError as e:
-            print(f"[TRACING] Resume review narrative degraded, using fallback: {e}", flush=True)
+            logger.warning("Resume review narrative degraded, using fallback: %s", e)
             narrative = LLMNarrativeOutput(
                 summary=(
                     f"{len(flagged_for_llm)} of {len(units)} bullets were flagged for missing metrics, "
@@ -254,7 +253,7 @@ async def generate_resume_review(db: AsyncSession, user_id) -> ResumeReviewRepor
                 batch_rewrites = await _call_rewrites_llm_batch(batch)
                 rewrites.extend(batch_rewrites)
             except ReviewGenerationError as e:
-                print(f"[TRACING] Bullet rewrites batch failed: {e}", flush=True)
+                logger.warning("Bullet rewrites batch failed: %s", e)
                 degraded = True
                 continue
     else:

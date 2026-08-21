@@ -18,7 +18,10 @@ from app.api.company_notes import router as company_notes_router
 from app.api.projects import router as projects_router
 from app.api.github import router as github_router
 from app.api.identity import router as identity_router
+from app.core.logging_config import configure_logging
 from app.core.settings import settings
+
+configure_logging(level=settings.log_level)
 
 app = FastAPI(title="Polaris API")
 

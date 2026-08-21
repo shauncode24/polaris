@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -64,6 +65,7 @@ async def _persist_interview_questions(db: AsyncSession, user_id, project_id, re
     )
     await db.execute(stmt)
     await db.commit()
+logger = logging.getLogger(__name__)
 
 
 async def generate_interview_questions(project_context: dict) -> InterviewQuestionsReport:
@@ -72,7 +74,7 @@ async def generate_interview_questions(project_context: dict) -> InterviewQuesti
     """
     degraded = False
     try:
-        print(f"[TRACING] Requesting interview questions for '{project_context['name']}'...", flush=True)
+        logger.debug("Requesting interview questions for '%s'...", project_context['name'])
         response = await chat_completion(
             model=MODEL,
             messages=[
@@ -83,13 +85,13 @@ async def generate_interview_questions(project_context: dict) -> InterviewQuesti
             temperature=0.4,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw interview questions JSON:\n{content}", flush=True)
+        logger.debug("Raw interview questions JSON:\n%s", content)
         parsed = InterviewQuestionsLLMOutput.model_validate(json.loads(content))
         questions = parsed.questions
         if not questions:
             raise ValueError("Empty questions list")
     except Exception as e:
-        print(f"[TRACING] Interview question generation degraded, using fallback: {e}", flush=True)
+        logger.warning("Interview question generation degraded, using fallback: %s", e)
         questions = _fallback_questions(project_context)
         degraded = True
 

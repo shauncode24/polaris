@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+import logging
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,7 @@ from app.services.identity.identity_refresh import trigger_identity_refresh
 from app.models.inference import ProfileSnapshot, LeetcodePortfolioReview
 
 router = APIRouter(prefix="/sync", tags=["sync"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/github")
@@ -82,7 +84,7 @@ async def trigger_leetcode_sync(
     try:
         result = await sync_leetcode(db, current_user, username)
     except LeetCodeSyncError as e:
-        print(f"[TRACING] LeetCode sync degraded: {e}", flush=True)
+        logger.warning("LeetCode sync degraded: %s", e)
         return JSONResponse(
             status_code=200,
             content={"status": "degraded", "reason": str(e), "fallback_form_required": True},

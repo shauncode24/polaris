@@ -22,11 +22,15 @@ from app.services.resume.review import classify_match
 from app.services.skill_gap.effort_estimation import estimate_weeks
 from app.services.skill_gap.prioritization import PrioritizationError, prioritize_missing_skills
 from app.services.taxonomy.skill_taxonomy import get_curriculum_rank
+import logging
+
+logger = logging.getLogger(__name__)
 
 _BAND_ORDER = {"required": 0, "implicit": 1, "nice_to_have": 2}
 
 
 async def _historical_skill_frequency(db: AsyncSession, user_id) -> Counter:
+
     result = await db.execute(
         select(JobDescription.extracted_requirements).where(JobDescription.user_id == user_id)
     )
@@ -201,7 +205,7 @@ async def analyze_skill_gap(
                 s: max(1, result.estimated_weeks.get(s, estimate_weeks(1))) for s in missing_names
             }
         except PrioritizationError as e:
-            print(f"[TRACING] Prioritization degraded, using role-order fallback: {e}", flush=True)
+            logger.warning("Prioritization degraded, using role-order fallback: %s", e)
             valid_priority, weeks_by_skill = _fallback_prioritization(missing_names, frequency, role_priority_order)
     else:
         valid_priority, weeks_by_skill = [], {}

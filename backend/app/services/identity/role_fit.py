@@ -25,9 +25,12 @@ supposedly the same question:
     involved) — that clamp is removed entirely by this fix.
 """
 import json
+import logging
 
 from app.core.llm import chat_completion, MODEL
 from app.schemas.identity.role_fit import RoleFitLLMOutput, RoleFitResult
+
+logger = logging.getLogger(__name__)
 
 VALID_ROLES = [
     "Backend Engineer", "Frontend Engineer", "Full Stack Engineer",
@@ -96,10 +99,10 @@ async def get_role_fit(skill_evidence: list[dict], scope: str) -> list[RoleFitRe
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw role-fit LLM JSON (scope={scope}):\n{content}", flush=True)
+        logger.debug("Raw role-fit LLM JSON (scope=%s):\n%s", scope, content)
         parsed = RoleFitLLMOutput.model_validate(json.loads(content))
     except Exception as e:
-        print(f"[TRACING] Role-fit LLM call degraded (scope={scope}): {e}", flush=True)
+        logger.warning("Role-fit LLM call degraded (scope=%s): %s", scope, e)
         return _fallback_role_fit("Role-fit narrative is temporarily unavailable.")
 
     # Never trust the LLM's role names blindly — same defensive pattern

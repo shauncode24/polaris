@@ -16,11 +16,14 @@ trust" being misread as "125 years experience -> Staff"):
      matter what upstream logic concluded.
 """
 import json
+import logging
 import re
 
 from app.core.llm import chat_completion, MODEL
 from app.prompts.job_intelligence.seniority_llm import SENIORITY_LLM_SYSTEM_PROMPT
 from app.schemas.job_intelligence.job_intelligence import SeniorityLevel
+
+logger = logging.getLogger(__name__)
 
 MAX_PLAUSIBLE_EXPERIENCE_YEARS = 20
 
@@ -141,12 +144,12 @@ async def refine_seniority_with_llm(raw_text: str, role_title: str | None) -> Se
             temperature=0,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw seniority LLM-assist JSON:\n{content}", flush=True)
+        logger.debug("Raw seniority LLM-assist JSON:\n%s", content)
         parsed_dict = json.loads(content)
 
         level = parsed_dict.get("level")
         if level not in _VALID_LEVELS:
-            print(f"[TRACING] Seniority LLM-assist returned invalid level '{level}', discarding", flush=True)
+            logger.warning("Seniority LLM-assist returned invalid level '%s', discarding", level)
             return None
         if level == "unspecified":
             return None
@@ -161,7 +164,7 @@ async def refine_seniority_with_llm(raw_text: str, role_title: str | None) -> Se
 
         return SeniorityLevel(level=level, evidence=[str(e) for e in evidence][:3], confidence=confidence)
     except Exception as e:
-        print(f"[TRACING] Seniority LLM-assist degraded, keeping deterministic result: {e}", flush=True)
+        logger.warning("Seniority LLM-assist degraded, keeping deterministic result: %s", e)
         return None
 
 

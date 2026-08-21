@@ -1,8 +1,11 @@
 import json
+import logging
 
 from app.core.llm import chat_completion, MODEL
 from app.prompts.career_planner.career_planner import CAREER_PLANNER_SYSTEM_PROMPT
 from app.schemas.career_planner.career_plan import CareerPlanLLMOutput, DailyPlanItem
+
+logger = logging.getLogger(__name__)
 
 CHUNK_SIZE = 3
 RECENT_DAYS_DETAIL_WINDOW = 4
@@ -30,7 +33,7 @@ async def _call_llm_for_chunk(chunk_context: dict) -> dict[int, DailyPlanItem]:
         max_tokens=1200,
     )
     content = response.choices[0].message.content
-    print(f"[TRACING] Raw career plan chunk JSON:\n{content}", flush=True)
+    logger.debug("Raw career plan chunk JSON:\n%s", content)
     parsed = CareerPlanLLMOutput.model_validate(json.loads(content))
     out = {}
     for item in parsed.daily_plan:
@@ -47,7 +50,7 @@ async def _generate_chunk(
     choices about sequencing, task specificity, or which skill_signals
     to act on are never second-guessed or rejected by code.
     """
-    print(f"[TRACING] Requesting career plan chunk for days {chunk_days}...", flush=True)
+    logger.debug("Requesting career plan chunk for days %s...", chunk_days)
 
     resolved: dict[int, DailyPlanItem] = {}
     remaining = list(chunk_days)
@@ -72,17 +75,17 @@ async def _generate_chunk(
         try:
             by_day = await _call_llm_for_chunk(chunk_context)
         except Exception as e:
-            print(f"[TRACING] Days {remaining} attempt {attempt}/{MAX_ATTEMPTS_PER_CHUNK} errored: {e}", flush=True)
+            logger.warning("Days %s attempt %d/%d errored: %s", remaining, attempt, MAX_ATTEMPTS_PER_CHUNK, e)
             continue
 
         got = {d: by_day[d] for d in remaining if d in by_day}
         resolved.update(got)
         remaining = [d for d in remaining if d not in resolved]
         if remaining:
-            print(f"[TRACING] Attempt {attempt}/{MAX_ATTEMPTS_PER_CHUNK} still missing days {remaining}", flush=True)
+            logger.debug("Attempt %d/%d still missing days %s", attempt, MAX_ATTEMPTS_PER_CHUNK, remaining)
 
     if remaining:
-        print(f"[TRACING] Days {remaining} using deterministic fallback text after all retries failed", flush=True)
+        logger.warning("Days %s using deterministic fallback text after all retries failed", remaining)
         weak_items = _build_weak_items(context)
         covered = set(_focused_topics_so_far(full_plan))
         for i, day_num in enumerate(remaining):

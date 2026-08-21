@@ -8,10 +8,13 @@ modules (Career Planner, Resume, Interview). The LLM is only allowed to
 synthesise what is already computed here.
 """
 import json
+import logging
 
 from app.core.llm import chat_completion, MODEL
 from app.prompts.skill_gap.narrative import INTERPRETATION_SYSTEM_PROMPT
 from app.schemas.skill_gap.interpretation import NarrativeAnalysis
+
+logger = logging.getLogger(__name__)
 
 
 class InterpretationError(Exception):
@@ -53,7 +56,7 @@ def build_narrative_context(
 
 
 async def generate_narrative_analysis(context: dict) -> NarrativeAnalysis:
-    print("[TRACING] Requesting narrative interpretation from LLM...", flush=True)
+    logger.debug("Requesting narrative interpretation from LLM...")
     try:
         response = await chat_completion(
             model=MODEL,
@@ -66,7 +69,7 @@ async def generate_narrative_analysis(context: dict) -> NarrativeAnalysis:
             max_tokens=1500,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw narrative JSON:\n{content}", flush=True)
+        logger.debug("Raw narrative JSON:\n%s", content)
         parsed_dict = json.loads(content)
 
         # Normalise list fields in case LLM returns a bare string

@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -14,6 +15,8 @@ from app.prompts.projects.project_intelligence import PROJECT_INTELLIGENCE_SYSTE
 from app.schemas.projects.project_intelligence import ProjectIntelligenceLLMOutput, ProjectIntelligenceReport
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.projects.repo_linking import match_project_to_repo
+
+logger = logging.getLogger(__name__)
 
 
 async def build_project_context(db: AsyncSession, user_id, project_id) -> dict | None:
@@ -148,11 +151,11 @@ async def generate_project_intelligence(
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw project intelligence JSON:\n{content}", flush=True)
+        logger.debug("Raw project intelligence JSON:\n%s", content)
         llm_output = ProjectIntelligenceLLMOutput.model_validate(json.loads(content))
         degraded = False
     except Exception as e:
-        print(f"[TRACING] Project intelligence degraded, using fallback: {e}", flush=True)
+        logger.warning("Project intelligence degraded, using fallback: %s", e)
         llm_output = ProjectIntelligenceLLMOutput(
             framing=framing,
             explanation=f"Detailed explanation is temporarily unavailable for {project_context['name']}.",

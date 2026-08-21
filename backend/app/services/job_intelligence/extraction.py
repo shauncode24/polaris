@@ -1,9 +1,12 @@
 # backend/app/services/job_intelligence/extraction.py
 import json
+import logging
 
 from app.core.llm import chat_completion, MODEL
 from app.prompts.job_intelligence.extraction import JOB_AND_COMPANY_EXTRACTION_SYSTEM_PROMPT
 from app.schemas.job_intelligence.job_intelligence import ExtractedJobAndCompany
+
+logger = logging.getLogger(__name__)
 
 
 class JobIntelligenceExtractionError(Exception):
@@ -27,7 +30,7 @@ async def extract_job_and_company(raw_text: str) -> ExtractedJobAndCompany:
     backend splits this into two independent profiles immediately after
     parsing; see job_intelligence/builder.py.
     """
-    print(f"[TRACING] Extracting job+company data from text (length: {len(raw_text)} chars)...", flush=True)
+    logger.debug("Extracting job+company data from text (length: %d chars)...", len(raw_text))
     try:
         response = await chat_completion(
             model=MODEL,
@@ -39,8 +42,8 @@ async def extract_job_and_company(raw_text: str) -> ExtractedJobAndCompany:
             temperature=0,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw job+company extraction JSON:\n{content}", flush=True)
+        logger.debug("Raw job+company extraction JSON:\n%s", content)
         return ExtractedJobAndCompany.model_validate(json.loads(content))
     except Exception as e:
-        print(f"[TRACING] Job+company extraction failed: {e}", flush=True)
+        logger.warning("Job+company extraction failed: %s", e)
         raise JobIntelligenceExtractionError(f"Job+company extraction LLM call failed: {e}") from e

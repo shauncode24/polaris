@@ -1,6 +1,7 @@
 # backend/app/api/jobs.py
 from datetime import datetime, timezone
 from io import BytesIO
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -40,6 +41,7 @@ from app.models.facts import User
 from app.services.identity.identity_refresh import trigger_identity_refresh
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+logger = logging.getLogger(__name__)
 
 
 async def _fetch_profile_context(db, user_id, max_projects: int = 6) -> list[dict]:
@@ -99,7 +101,7 @@ async def _run_job_analysis(
     downstream of this stays clean (design doc §5.5, revision's
     high-level architecture diagram).
     """
-    print(f"[TRACING] Received JD analysis request, length={len(raw_text)}", flush=True)
+    logger.debug("Received JD analysis request, length=%d", len(raw_text))
 
     # JobIntelligenceExtractionError propagates to the route handlers
     # below, which translate it into an HTTP 502 — there is no
@@ -107,13 +109,14 @@ async def _run_job_analysis(
     job_intelligence, company_intelligence = await build_job_intelligence(db, user.id, raw_text, company, role)
     target_profile = build_target_profile(job_intelligence, company_intelligence)
 
-    print(
-        f"[TRACING] Job Intelligence extracted {len(job_intelligence.enriched_required_skills)} required, "
-        f"{len(job_intelligence.enriched_implicit_skills)} implicit, "
-        f"{len(job_intelligence.enriched_nice_to_have)} nice-to-have, "
-        f"{len(job_intelligence.architecture_topics)} architecture topics "
-        f"(extraction_quality={job_intelligence.extraction_quality.label}).",
-        flush=True,
+    logger.debug(
+        "Job Intelligence extracted %d required, %d implicit, %d nice-to-have, %d architecture topics "
+        "(extraction_quality=%s).",
+        len(job_intelligence.enriched_required_skills),
+        len(job_intelligence.enriched_implicit_skills),
+        len(job_intelligence.enriched_nice_to_have),
+        len(job_intelligence.architecture_topics),
+        job_intelligence.extraction_quality.label,
     )
 
     resolved_role = job_intelligence.role
@@ -143,10 +146,9 @@ async def _run_job_analysis(
     await db.commit()
 
     report = await analyze_skill_gap(db, user.id, target_profile.job_intelligence)
-    print(
-        f"[TRACING] Gap analysis complete: {len(report.have)} have, {len(report.partial)} partial, "
-        f"{len(report.missing)} missing, {report.estimated_weeks} total estimated weeks.",
-        flush=True,
+    logger.debug(
+        "Gap analysis complete: %d have, %d partial, %d missing, %d total estimated weeks.",
+        len(report.have), len(report.partial), len(report.missing), report.estimated_weeks,
     )
 
     category_breakdown = compute_category_breakdown(report.have, report.partial, report.missing)
@@ -169,7 +171,7 @@ async def _run_job_analysis(
     try:
         analysis = await generate_narrative_analysis(context)
     except InterpretationError as e:
-        print(f"[TRACING] Narrative generation degraded, using fallback: {e}", flush=True)
+        logger.warning("Narrative generation degraded, using fallback: %s", e)
         analysis = fallback_narrative(context)
         degraded = True
 
@@ -203,10 +205,9 @@ async def _run_job_analysis(
     )
     db.add(gap_result_row)
     await db.commit()
-    print(
-        f"[TRACING] Skill gap analysis + narrative persisted "
-        f"(JobDescription id={job_description.id}, GapAnalysisResult id={gap_result_row.id}).",
-        flush=True,
+    logger.info(
+        "Skill gap analysis + narrative persisted (JobDescription id=%s, GapAnalysisResult id=%s).",
+        job_description.id, gap_result_row.id,
     )
 
     await trigger_identity_refresh(db, user.id, "job description analysis")
@@ -239,10 +240,9 @@ async def _get_or_build_gap_result_for_job_intelligence(
     target_profile = build_target_profile(job_intelligence, company_intelligence)
 
     report = await analyze_skill_gap(db, user.id, target_profile.job_intelligence)
-    print(
-        f"[TRACING] Gap analysis (existing job_intelligence_id={job_intelligence_uuid}) complete: "
-        f"{len(report.have)} have, {len(report.partial)} partial, {len(report.missing)} missing.",
-        flush=True,
+    logger.debug(
+        "Gap analysis (existing job_intelligence_id=%s) complete: %d have, %d partial, %d missing.",
+        job_intelligence_uuid, len(report.have), len(report.partial), len(report.missing),
     )
 
     category_breakdown = compute_category_breakdown(report.have, report.partial, report.missing)
@@ -265,7 +265,7 @@ async def _get_or_build_gap_result_for_job_intelligence(
     try:
         analysis = await generate_narrative_analysis(context)
     except InterpretationError as e:
-        print(f"[TRACING] Narrative generation degraded, using fallback: {e}", flush=True)
+        logger.warning("Narrative generation degraded, using fallback: %s", e)
         analysis = fallback_narrative(context)
         degraded = True
 

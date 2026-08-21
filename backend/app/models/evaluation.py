@@ -10,6 +10,19 @@ from app.models.base_types import uuid_pk
 
 
 class AgentFeedback(Base):
+    """Phase 3 placeholder — agent output evaluation / RLHF data collection.
+
+    This table is intentionally unused in Phase 1 and Phase 2. It will be
+    populated when LLM outputs are surfaced to users with explicit
+    accept/reject controls (design doc §7 — Evaluation & Feedback). The
+    `agent_name` column will reference the specific LLM module (e.g.
+    'career_planner', 'identity_synthesizer') so that per-module accuracy
+    metrics can be computed.
+
+    Do NOT add queries against this table until the Phase 3 feedback
+    collection service is implemented; the table will be empty for all
+    existing users.
+    """
     __tablename__ = "agent_feedback"
 
     id: Mapped[uuid.UUID] = uuid_pk()

@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -13,6 +14,8 @@ from app.schemas.resume.resume_tailoring import RankedItem, TailoringLLMOutput, 
 from app.services.evidence import get_all_skill_confidences
 from app.services.resume.coherence_narrative import build_bullets_with_strength
 from app.services.resume.skill_classifier import resolve_skills
+
+logger = logging.getLogger(__name__)
 from app.services.resume.tailoring_ranking import rank_items_for_jd
 from app.services.resume.text_sanitize import sanitize_ai_text
 
@@ -189,7 +192,7 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
 
     degraded = False
     try:
-        print("[TRACING] Requesting resume tailoring recommendations from LLM...", flush=True)
+        logger.debug("Requesting resume tailoring recommendations from LLM...")
         response = await chat_completion(
             model=MODEL,
             messages=[
@@ -200,10 +203,10 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw tailoring JSON:\n{content}", flush=True)
+        logger.debug("Raw tailoring JSON:\n%s", content)
         llm_output = TailoringLLMOutput.model_validate(json.loads(content))
     except Exception as e:
-        print(f"[TRACING] Tailoring generation degraded, using fallback: {e}", flush=True)
+        logger.warning("Tailoring generation degraded, using fallback: %s", e)
         llm_output = TailoringLLMOutput(
             lead_items=[r["id"] for r in ranked[:2]],
             cut_bullets=[b["bullet_id"] for b in bullets_for_prompt if b["strength_score"] < 40][:3],

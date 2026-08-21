@@ -26,12 +26,24 @@ function DashboardPage() {
 
   const [jobAnalyses, setJobAnalyses] = useState([])
   const [jobsLoading, setJobsLoading] = useState(true)
+  // Phase 1 fix (no silent .catch(() => {})): a failed fetch previously
+  // vanished with no trace — jobsLoading just flipped to false and the
+  // UI silently rendered "No jobs analyzed yet", indistinguishable from
+  // a user who genuinely has none. Now a real fetch failure is logged
+  // and surfaced as its own honest state.
+  const [jobsError, setJobsError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
+    setJobsError(false)
     listJobAnalyses(token)
       .then((items) => { if (!cancelled) setJobAnalyses(items) })
-      .catch(() => {})
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('Failed to load recent job analyses:', err)
+          setJobsError(true)
+        }
+      })
       .finally(() => { if (!cancelled) setJobsLoading(false) })
     return () => { cancelled = true }
   }, [token])
@@ -137,6 +149,8 @@ function DashboardPage() {
               <InfoCard icon={IconBriefcase} iconTone="accent" title="Recent job analyses">
                 {jobsLoading ? (
                   <p className="dashboard-side-loading">Loading…</p>
+                ) : jobsError ? (
+                  <p className="dashboard-side-loading">Couldn't load your recent job analyses — try again shortly.</p>
                 ) : jobAnalyses.length === 0 ? (
                   <EmptyState message="No jobs analyzed yet." ctaLabel="Analyze a new job" onCta={() => navigate('/jobs')} />
                 ) : (

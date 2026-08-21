@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -9,6 +10,8 @@ from app.models.inference import EngineeringIdentity, WeeklyBrief
 from app.prompts.identity.weekly_brief import WEEKLY_BRIEF_SYSTEM_PROMPT
 from app.schemas.identity.engineering_identity import IdentityFacts
 from app.schemas.identity.weekly_brief import SkillDelta, WeeklyBriefFacts, WeeklyBriefLLMOutput, WeeklyBriefReport
+
+logger = logging.getLogger(__name__)
 
 MIN_DAYS_BETWEEN_SNAPSHOTS = 6
 SIGNIFICANT_CONFIDENCE_DELTA = 0.05
@@ -179,7 +182,7 @@ async def generate_weekly_brief(db: AsyncSession, user_id) -> WeeklyBriefReport:
         )
     else:
         try:
-            print("[TRACING] Requesting weekly brief narrative from LLM...", flush=True)
+            logger.debug("Requesting weekly brief narrative from LLM...")
             response = await chat_completion(
                 model=MODEL,
                 messages=[
@@ -190,10 +193,10 @@ async def generate_weekly_brief(db: AsyncSession, user_id) -> WeeklyBriefReport:
                 temperature=0.3,
             )
             content = response.choices[0].message.content
-            print(f"[TRACING] Raw weekly brief JSON:\n{content}", flush=True)
+            logger.debug("Raw weekly brief JSON:\n%s", content)
             narrative = WeeklyBriefLLMOutput.model_validate(json.loads(content))
         except Exception as e:
-            print(f"[TRACING] Weekly brief narrative degraded, using fallback: {e}", flush=True)
+            logger.warning("Weekly brief narrative degraded, using fallback: %s", e)
             narrative = _fallback_narrative(facts)
             degraded = True
 

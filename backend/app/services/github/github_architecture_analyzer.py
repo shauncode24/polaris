@@ -10,8 +10,11 @@ Input is file PATHS ONLY, never file contents — keeps the call cheap
 and keeps the model from inferring quality it can't actually see.
 """
 import json
+import logging
 
 from app.core.llm import chat_completion, MODEL
+
+logger = logging.getLogger(__name__)
 
 MIN_QUALITY_SCORE_FOR_ARCHITECTURE_PASS = 40
 MAX_PATHS_IN_PROMPT = 150
@@ -71,7 +74,7 @@ async def assess_architecture_depth(repo_name: str, technologies: list[str], fil
             temperature=0.2,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Architecture assessment for {repo_name}:\n{content}", flush=True)
+        logger.debug("Architecture assessment for %s:\n%s", repo_name, content)
         parsed = json.loads(content)
         if parsed.get("depth_label") not in {"flat_script", "basic_structure", "layered", "well_architected"}:
             return None
@@ -81,5 +84,5 @@ async def assess_architecture_depth(repo_name: str, technologies: list[str], fil
             "confidence": parsed.get("confidence", "low"),
         }
     except Exception as e:
-        print(f"[TRACING] Architecture assessment failed for {repo_name}, skipping: {e}", flush=True)
+        logger.warning("Architecture assessment failed for %s, skipping: %s", repo_name, e)
         return None

@@ -5,8 +5,11 @@ Planner can act on ('frontend-heavy, backend-light').
 Hardcoded dict, not an LLM call — same reasoning as skill_classifier.py's
 tier-1 CANONICAL_SKILLS: cheap, instant, covers the overwhelming
 majority of real repo tags. Extend by hand as new topics show up
-uncategorized (see the [TRACING] log line below).
+uncategorized (logged via logger.warning below).
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 TECH_CATEGORIES: dict[str, str] = {
     # languages (from GitHub's language-bytes stats)
@@ -119,6 +122,8 @@ def categorize_technologies(
             _bump(topic, topic.lower())
 
     if uncategorized:
-        print(f"[TRACING] Uncategorized tech topics — add to TECH_CATEGORIES: {sorted(uncategorized)}", flush=True)
+        logger.warning(
+            "Uncategorized tech topics — add to TECH_CATEGORIES: %s", sorted(uncategorized)
+        )
 
     return result

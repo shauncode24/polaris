@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -9,6 +10,8 @@ from app.core.llm import chat_completion, MODEL
 from app.models.inference import ProjectClaimAuditReview
 from app.prompts.projects.project_claim_audit import CLAIM_AUDIT_SYSTEM_PROMPT
 from app.schemas.projects.project_intelligence import ClaimAuditFacts, ClaimAuditNarrative, ClaimAuditReport
+
+logger = logging.getLogger(__name__)
 
 
 def _fallback_narrative(facts: ClaimAuditFacts) -> ClaimAuditNarrative:
@@ -65,7 +68,7 @@ async def generate_claim_audit_narrative(
     facts = ClaimAuditFacts(**facts_dict)
     degraded = False
     try:
-        print(f"[TRACING] Requesting claim-audit narrative for '{facts.project_name}'...", flush=True)
+        logger.debug("Requesting claim-audit narrative for '%s'...", facts.project_name)
         response = await chat_completion(
             model=MODEL,
             messages=[
@@ -76,11 +79,11 @@ async def generate_claim_audit_narrative(
             temperature=0.2,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw claim-audit JSON:\n{content}", flush=True)
+        logger.debug("Raw claim-audit JSON:\n%s", content)
         narrative = ClaimAuditNarrative.model_validate(json.loads(content))
         narrative.risk_level = facts.risk_level  # deterministic fact — never LLM-decided
     except Exception as e:
-        print(f"[TRACING] Claim-audit narrative degraded, using fallback: {e}", flush=True)
+        logger.warning("Claim-audit narrative degraded, using fallback: %s", e)
         narrative = _fallback_narrative(facts)
         degraded = True
 

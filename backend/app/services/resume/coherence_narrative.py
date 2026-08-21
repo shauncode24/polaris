@@ -12,6 +12,7 @@ generate_coherence_report() again, unless the resume or the target role
 actually changed.
 """
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -30,6 +31,8 @@ from app.services.resume.analysis.dilution import detect_dilution
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.resume.text_sanitize import sanitize_ai_text
 from app.services.resume.bullet_analysis import build_bullet_units
+
+logger = logging.getLogger(__name__)
 
 
 class CoherenceGenerationError(Exception):
@@ -195,7 +198,7 @@ async def generate_coherence_report(
 
     degraded = False
     try:
-        print("[TRACING] Requesting resume coherence narrative from LLM...", flush=True)
+        logger.debug("Requesting resume coherence narrative from LLM...")
         response = await chat_completion(
             model=MODEL,
             messages=[
@@ -210,10 +213,10 @@ async def generate_coherence_report(
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw coherence narrative JSON:\n{content}", flush=True)
+        logger.debug("Raw coherence narrative JSON:\n%s", content)
         narrative = CoherenceLLMOutput.model_validate(json.loads(content))
     except Exception as e:
-        print(f"[TRACING] Coherence narrative degraded, using fallback: {e}", flush=True)
+        logger.warning("Coherence narrative degraded, using fallback: %s", e)
         narrative = _fallback_narrative(facts, dilution)
         degraded = True
 

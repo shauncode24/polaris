@@ -1,5 +1,6 @@
 # backend/app/api/career.py
 from datetime import datetime, timezone
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,6 +20,8 @@ from app.models.facts import User
 from uuid import UUID as UUIDType
 
 router = APIRouter(prefix="/goals", tags=["goals"])
+
+logger = logging.getLogger(__name__)
 
 
 def _build_check_ins(days_available: int) -> list[str]:
@@ -66,7 +69,7 @@ async def create_goal(payload: GoalCreateRequest, current_user: User = Depends(g
     db.add(goal)
     await db.commit()
     await db.refresh(goal)
-    print(f"[TRACING] Created goal '{goal.title}' (id={goal.id}, deadline={goal.deadline})", flush=True)
+    logger.info("Created goal '%s' (id=%s, deadline=%s)", goal.title, goal.id, goal.deadline)
     return _to_goal_response(goal)
 
 
@@ -158,7 +161,9 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
         await write_db.commit()
         await write_db.refresh(plan_row)
 
-    print(f"[TRACING] Career plan generated and persisted (plan_id={plan_row.id}, degraded={degraded})", flush=True)
+    logger.info(
+        "Career plan generated and persisted (plan_id=%s, degraded=%s)", plan_row.id, degraded
+    )
 
     return CareerPlanResponse(
         plan_id=str(plan_row.id),

@@ -91,5 +91,11 @@ class Settings:
         self.rate_limit_requests = int(os.environ.get("RATE_LIMIT_REQUESTS", "120"))
         self.rate_limit_window_seconds = int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
+        # --- Observability (Phase 1 §1.1) ---
+        # Controls the root logger level set by app/core/logging_config.py.
+        # Use LOG_LEVEL=DEBUG locally to surface raw LLM payloads.
+        # Defaults to INFO in all other environments.
+        self.log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+
 
 settings = Settings()

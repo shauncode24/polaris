@@ -24,10 +24,13 @@ context_builder.py is what turns tags into a ranking.
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.core.llm import chat_completion, MODEL
 from app.models.structure import CompetencyTagAlias
@@ -149,7 +152,7 @@ async def tag_or_backfill_items(db: AsyncSession, items: list[dict]) -> dict[str
         try:
             classified = await _classify_via_llm(batch)
         except Exception as e:
-            print(f"[TRACING] Competency tagging LLM batch failed, leaving untagged: {e}", flush=True)
+            logger.warning("Competency tagging LLM batch failed, leaving untagged: %s", e)
             classified = {k: [] for k in batch_keys}
 
         for key in batch_keys:

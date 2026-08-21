@@ -1,6 +1,9 @@
 """Rule-based project scoring — same philosophy as resume/confidence.py
 and github/github_scoring.py: deterministic and explainable.
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 AI_SKILLS = {"langgraph", "langchain", "rag", "openai", "tensorflow", "pytorch", "vector_search"}
 BACKEND_SKILLS = {
@@ -65,7 +68,9 @@ def compute_tier(rating: float, has_repo: bool, github_tier: str | None) -> str:
             # visible, since github_tier should always be one of the
             # closed set of values github_analyzer.analyze_repo() emits;
             # anything else signals a real drift between the two modules.
-            print(f"[TRACING] Unrecognized github_tier '{github_tier}' — defaulting to 'Career Project'", flush=True)
+            logger.warning(
+                "Unrecognized github_tier '%s' — defaulting to 'Career Project'", github_tier
+            )
             return "Career Project"
         return label
     if rating >= 4.0 and has_repo:

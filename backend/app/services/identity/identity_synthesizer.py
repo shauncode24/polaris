@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -15,6 +16,8 @@ from app.schemas.identity.engineering_identity import (
 )
 from app.services.identity.identity_builder import build_identity_facts
 from app.services.projects.linking import normalize_name
+
+logger = logging.getLogger(__name__)
 
 
 class IdentitySynthesisError(Exception):
@@ -286,12 +289,12 @@ async def generate_engineering_identity(
     degraded = False
     try:
         llm_payload = _build_synthesis_payload(facts)
-        print(f"[TRACING] LLM payload JSON:\n{llm_payload}", flush=True)
-        print(
-            f"[TRACING] Requesting Engineering Identity synthesis from LLM "
-            f"(payload ~{len(json.dumps(llm_payload))} chars, "
-            f"full facts ~{len(json.dumps(facts.model_dump(mode='json')))} chars)...",
-            flush=True,
+        logger.debug("LLM payload JSON:\n%s", llm_payload)
+        logger.debug(
+            "Requesting Engineering Identity synthesis from LLM "
+            "(payload ~%d chars, full facts ~%d chars)...",
+            len(json.dumps(llm_payload)),
+            len(json.dumps(facts.model_dump(mode='json'))),
         )
         response = await chat_completion(
             model="llama-3.3-70b-versatile",
@@ -303,12 +306,12 @@ async def generate_engineering_identity(
             temperature=0.3,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw Engineering Identity synthesis JSON:\n{content}", flush=True)
+        logger.debug("Raw Engineering Identity synthesis JSON:\n%s", content)
         narrative = IdentityLLMOutput.model_validate(json.loads(content))
         narrative.strongest_signals = _validate_claims(narrative.strongest_signals)
         narrative.biggest_gaps = _validate_claims(narrative.biggest_gaps)
     except Exception as e:
-        print(f"[TRACING] Engineering Identity synthesis degraded, using fallback: {e}", flush=True)
+        logger.warning("Engineering Identity synthesis degraded, using fallback: %s", e)
         narrative = _fallback_narrative(facts)
         degraded = True
 

@@ -1,4 +1,5 @@
 from sqlalchemy.sql.functions import current_user
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_current_user
@@ -14,6 +15,7 @@ from app.services.auth.auth_service import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=AuthResponse)
@@ -24,7 +26,7 @@ async def register(payload: RegisterRequest, db=Depends(get_db)):
         )
     except AuthError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    print(f"[TRACING] Registered new user (id={user.id}, email={user.email})", flush=True)
+    logger.info("Registered new user (id=%s, email=%s)", user.id, user.email)
     return build_token_response(user)
 
 
@@ -34,7 +36,7 @@ async def login(payload: LoginRequest, db=Depends(get_db)):
         user = await authenticate_user(db, payload.email, payload.password)
     except AuthError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    print(f"[TRACING] Logged in user (id={user.id}, email={user.email})", flush=True)
+    logger.info("Logged in user (id=%s, email=%s)", user.id, user.email)
     return build_token_response(user)
 
 
@@ -44,7 +46,7 @@ async def google_auth(payload: GoogleAuthRequest, db=Depends(get_db)):
         user = await authenticate_with_google(db, payload.credential)
     except AuthError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    print(f"[TRACING] Google-authenticated user (id={user.id}, email={user.email})", flush=True)
+    logger.info("Google-authenticated user (id=%s, email=%s)", user.id, user.email)
     return build_token_response(user)
 
 

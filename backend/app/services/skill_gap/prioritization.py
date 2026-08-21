@@ -1,9 +1,12 @@
 # backend/app/services/skill_gap/prioritization.py
 import json
+import logging
 
 from app.core.llm import chat_completion, MODEL
 from app.prompts.skill_gap.prioritization import PRIORITIZATION_SYSTEM_PROMPT
 from app.schemas.skill_gap.prioritization import PrioritizationResult
+
+logger = logging.getLogger(__name__)
 
 
 class PrioritizationError(Exception):
@@ -15,9 +18,9 @@ class PrioritizationError(Exception):
 
 
 async def prioritize_missing_skills(context: dict) -> PrioritizationResult:
-    print(
-        f"[TRACING] Requesting user-specific prioritization adjustment for "
-        f"{len(context.get('missing', []))} missing skills...", flush=True,
+    logger.debug(
+        "Requesting prioritization adjustment for %d missing skills...",
+        len(context.get("missing", [])),
     )
     try:
         response = await chat_completion(
@@ -30,7 +33,7 @@ async def prioritize_missing_skills(context: dict) -> PrioritizationResult:
             temperature=0,
         )
         content = response.choices[0].message.content
-        print(f"[TRACING] Raw prioritization JSON:\n{content}", flush=True)
+        logger.debug("Raw prioritization JSON:\n%s", content)
         return PrioritizationResult.model_validate(json.loads(content))
     except Exception as e:
         raise PrioritizationError(f"Prioritization LLM call failed: {e}") from e
