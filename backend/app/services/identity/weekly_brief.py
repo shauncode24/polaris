@@ -17,13 +17,6 @@ MIN_DAYS_BETWEEN_SNAPSHOTS = 6
 SIGNIFICANT_CONFIDENCE_DELTA = 0.05
 
 
-class WeeklyBriefError(Exception):
-    """Raised when the weekly-brief narrative LLM call fails or returns
-    something we can't validate. Same graceful-degradation pattern used
-    throughout this codebase.
-    """
-
-
 class InsufficientHistoryError(Exception):
     """Raised when there isn't yet a second EngineeringIdentity snapshot
     old enough to diff against. Expected, non-error state for a new

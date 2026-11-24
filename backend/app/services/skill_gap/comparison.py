@@ -11,7 +11,7 @@ from collections import Counter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import JobDescription
+from app.models.job_intelligence import JobIntelligenceProfileRow
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
@@ -30,16 +30,23 @@ _BAND_ORDER = {"required": 0, "implicit": 1, "nice_to_have": 2}
 
 
 async def _historical_skill_frequency(db: AsyncSession, user_id) -> Counter:
-
+    """How often each canonical skill appears across all of this user's
+    parsed jobs (a job counts a skill once, however many bands list it).
+    """
     result = await db.execute(
-        select(JobDescription.extracted_requirements).where(JobDescription.user_id == user_id)
+        select(JobIntelligenceProfileRow.profile_json).where(JobIntelligenceProfileRow.user_id == user_id)
     )
     counter: Counter = Counter()
-    for (requirements,) in result.all():
-        if not requirements:
+    for (profile,) in result.all():
+        if not profile:
             continue
-        for skill in requirements.get("resolved_skills", []):
-            counter[skill] += 1
+        canonicals: set[str] = set()
+        for group in ("enriched_required_skills", "enriched_implicit_skills", "enriched_nice_to_have"):
+            for skill in profile.get(group) or []:
+                canonical = skill.get("canonical") if isinstance(skill, dict) else None
+                if canonical:
+                    canonicals.add(canonical)
+        counter.update(canonicals)
     return counter
 
 

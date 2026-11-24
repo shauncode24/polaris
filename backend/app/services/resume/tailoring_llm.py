@@ -7,11 +7,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
-from app.models.facts import Experience, JobDescription, Project
+from app.models.facts import Experience, Project
 from app.models.inference import ResumeTailoringReview, ProjectClaimAuditReview
 from app.prompts.resume.resume_tailoring import TAILORING_SYSTEM_PROMPT
 from app.schemas.resume.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
 from app.services.evidence import get_all_skill_confidences
+from app.services.job_intelligence.builder import get_job_intelligence
+from app.services.job_intelligence.requirements import requirements_from_profile
 from app.services.resume.coherence_narrative import build_bullets_with_strength
 from app.services.resume.skill_classifier import resolve_skills
 
@@ -45,26 +47,20 @@ async def _get_claim_risk_by_project_id(db: AsyncSession, project_ids: list) -> 
     return risk_by_id
 
 
-class TailoringGenerationError(Exception):
-    """Raised when the tailoring LLM call fails or returns something we
-    can't validate. Same graceful-degradation pattern as
-    PrioritizationError/InterpretationError elsewhere in this codebase.
-    """
-
-
 async def get_cached_tailoring_report(
-    db: AsyncSession, resume_id, job_description_id
+    db: AsyncSession, user_id, resume_id, job_intelligence_id
 ) -> TailoringReport | None:
     """Returns the last persisted tailoring report for this exact
-    (resume, job_description) pair, or None if it's never been run.
+    (resume, job) pair, or None if it's never been run.
     Tailoring is an LLM call — callers should read this back instead of
     calling generate_tailoring_report() again unless the resume or the
     target JD actually changed.
     """
     result = await db.execute(
         select(ResumeTailoringReview)
+        .where(ResumeTailoringReview.user_id == user_id)
         .where(ResumeTailoringReview.resume_id == resume_id)
-        .where(ResumeTailoringReview.job_description_id == job_description_id)
+        .where(ResumeTailoringReview.job_intelligence_id == job_intelligence_id)
     )
     row = result.scalar_one_or_none()
     if row is None:
@@ -73,7 +69,7 @@ async def get_cached_tailoring_report(
 
 
 async def _persist_tailoring_report(
-    db: AsyncSession, user_id, resume_id, job_description_id, report: TailoringReport
+    db: AsyncSession, user_id, resume_id, job_intelligence_id, report: TailoringReport
 ) -> None:
     payload = report.model_dump(mode="json")
     stmt = (
@@ -81,12 +77,12 @@ async def _persist_tailoring_report(
         .values(
             user_id=user_id,
             resume_id=resume_id,
-            job_description_id=job_description_id,
+            job_intelligence_id=job_intelligence_id,
             report_json=payload,
             created_at=datetime.now(timezone.utc),
         )
         .on_conflict_do_update(
-            constraint="uq_tailoring_resume_jd",
+            constraint="uq_tailoring_resume_job",
             set_={"report_json": payload, "created_at": datetime.now(timezone.utc)},
         )
     )
@@ -94,17 +90,15 @@ async def _persist_tailoring_report(
     await db.commit()
 
 
-async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_description_id) -> TailoringReport:
-    jd_result = await db.execute(
-        select(JobDescription).where(JobDescription.id == job_description_id, JobDescription.user_id == user_id)
-    )
-    jd = jd_result.scalar_one_or_none()
-    if jd is None or not jd.extracted_requirements:
-        raise ValueError("Job description not found or not yet analyzed.")
+async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_intelligence_id) -> TailoringReport:
+    job = await get_job_intelligence(db, user_id, job_intelligence_id)
+    if job is None:
+        raise ValueError("Job not found.")
+    requirements = requirements_from_profile(job)
 
-    raw_required = set(jd.extracted_requirements.get("raw_required", []))
-    raw_implicit = set(jd.extracted_requirements.get("raw_implicit", []))
-    raw_nice = set(jd.extracted_requirements.get("raw_nice_to_have", []))
+    raw_required = set(requirements["raw_required"])
+    raw_implicit = set(requirements["raw_implicit"])
+    raw_nice = set(requirements["raw_nice_to_have"])
 
     resolved_required = await resolve_skills(raw_required, db) if raw_required else {}
     resolved_implicit = await resolve_skills(raw_implicit, db) if raw_implicit else {}
@@ -180,7 +174,7 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
     ]
 
     context = {
-        "role": jd.role, "company": jd.company,
+        "role": job.role, "company": job.company,
         "required_skills": sorted(raw_required), "implicit_skills": sorted(raw_implicit),
         "nice_to_have": sorted(raw_nice),
         "ranked_items": ranked, "bullets": bullets_for_prompt,
@@ -223,11 +217,11 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_de
     llm_output.rationale = sanitize_ai_text(llm_output.rationale)
 
     report = TailoringReport(
-        role=jd.role, company=jd.company,
+        role=job.role, company=job.company,
         ranked_items=[RankedItem(**r) for r in ranked],
         llm=llm_output, analysis_degraded=degraded,
     )
 
-    await _persist_tailoring_report(db, user_id, resume_id, job_description_id, report)
+    await _persist_tailoring_report(db, user_id, resume_id, job_intelligence_id, report)
 
     return report

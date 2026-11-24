@@ -40,9 +40,11 @@ def _fallback_questions(project_context: dict) -> list[InterviewQuestionItem]:
     return questions[:5]
 
 
-async def get_cached_interview_questions(db: AsyncSession, project_id) -> InterviewQuestionsReport | None:
+async def get_cached_interview_questions(db: AsyncSession, user_id, project_id) -> InterviewQuestionsReport | None:
     result = await db.execute(
-        select(ProjectInterviewQuestionsReview).where(ProjectInterviewQuestionsReview.project_id == project_id)
+        select(ProjectInterviewQuestionsReview)
+        .where(ProjectInterviewQuestionsReview.user_id == user_id)
+        .where(ProjectInterviewQuestionsReview.project_id == project_id)
     )
     row = result.scalar_one_or_none()
     if row is None:

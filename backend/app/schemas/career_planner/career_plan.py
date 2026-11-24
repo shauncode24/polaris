@@ -8,7 +8,7 @@ class GoalCreateRequest(BaseModel):
     title: str
     deadline: date | None = None
     priority: str | None = None
-    job_description_id: str | None = None
+    job_intelligence_id: str | None = None
 
 
 class GoalUpdateRequest(BaseModel):
@@ -24,7 +24,7 @@ class GoalResponse(BaseModel):
     priority: str | None = None
     status_pct: float
     created_at: datetime
-    job_description_id: str | None = None
+    job_intelligence_id: str | None = None
 
 
 class DailyPlanItem(BaseModel):

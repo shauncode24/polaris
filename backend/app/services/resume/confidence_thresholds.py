@@ -48,7 +48,3 @@ def medium_floor() -> float:
     (rather than relying on callers to index CONFIDENCE_BUCKETS directly)
     so the intent is explicit at each call site."""
     return next(floor for floor, label in CONFIDENCE_BUCKETS if label == "medium")
-
-
-def high_floor() -> float:
-    return next(floor for floor, label in CONFIDENCE_BUCKETS if label == "high")

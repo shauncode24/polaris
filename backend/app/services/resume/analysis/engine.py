@@ -10,7 +10,9 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import Experience, Project, Education, JobDescription, Resume, GithubSnapshot, LeetcodeSnapshot, Certificate
+from app.services.job_intelligence.builder import get_job_intelligence
+from app.services.job_intelligence.requirements import requirements_from_profile
+from app.models.facts import Experience, Project, Education, Resume, GithubSnapshot, LeetcodeSnapshot, Certificate
 from app.models.structure import Skill
 from app.models.inference import ResumeAnalysis
 
@@ -59,7 +61,7 @@ def _collect_bullets(experiences: list, projects: list) -> list[str]:
 async def run_analysis(
     db: AsyncSession,
     user_id: uuid.UUID,
-    job_description_id: uuid.UUID | str | None = None,
+    job_intelligence_id: uuid.UUID | str | None = None,
 ) -> dict:
     """Run the full deterministic analysis pipeline and persist the result."""
 
@@ -102,19 +104,20 @@ async def run_analysis(
     all_bullets = _collect_bullets(experiences, projects)
 
     jd_keywords: set[str] | None = None
-    if job_description_id:
-        jd_id = uuid.UUID(str(job_description_id))
-        jd_result = await db.execute(
-            select(JobDescription).where(
-                JobDescription.id == jd_id,
-                JobDescription.user_id == user_id,
-            )
-        )
-        jd = jd_result.scalar_one_or_none()
-        if jd and jd.extracted_requirements:
-            skills = jd.extracted_requirements.get("skills", [])
-            if skills:
-                jd_keywords = {s.lower() for s in skills if s}
+    if job_intelligence_id:
+        try:
+            job_id = uuid.UUID(str(job_intelligence_id))
+        except ValueError:
+            raise ValueError("Invalid job_intelligence_id.")
+        job = await get_job_intelligence(db, user_id, job_id)
+        if job is None:
+            raise ValueError("Job not found.")
+        requirements = requirements_from_profile(job)
+        jd_keywords = {
+            skill.lower()
+            for skill in requirements["raw_required"] + requirements["raw_implicit"]
+            if skill
+        } or None
 
     structure  = analyze_structure(raw_text)
     parsing    = analyze_parsing(raw_text)

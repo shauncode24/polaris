@@ -8,7 +8,7 @@ the Project Intelligence agent, never here.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import JobDescription
+from app.services.job_intelligence.gap_results import get_latest_gap_result
 from app.schemas.projects.project_intelligence import GoalAwareRanking, PortfolioComparisonResponse
 from app.schemas.projects.projects import ComparisonMetric, ProjectComparison
 from app.services.projects.overview import build_projects_overview
@@ -33,20 +33,11 @@ ABANDONMENT_RETIRE_IT_PENALTY = 0.5
 _CLAIM_RISK_SEVERITY = {"high": 2, "medium": 1, "undersold": -1, None: 0}
 
 
-async def _latest_missing_skills(db: AsyncSession, user_id, job_description_id=None) -> set[str]:
-    stmt = (
-        select(JobDescription)
-        .where(JobDescription.user_id == user_id)
-        .where(JobDescription.analysis_result.isnot(None))
-    )
-    if job_description_id is not None:
-        stmt = stmt.where(JobDescription.id == job_description_id)
-    stmt = stmt.order_by(JobDescription.created_at.desc()).limit(1)
-    result = await db.execute(stmt)
-    jd = result.scalar_one_or_none()
-    if jd is None or not isinstance(jd.analysis_result, dict):
+async def _latest_missing_skills(db: AsyncSession, user_id, job_intelligence_id=None) -> set[str]:
+    gap_row = await get_latest_gap_result(db, user_id, job_intelligence_id)
+    if gap_row is None:
         return set()
-    missing = jd.analysis_result.get("report", {}).get("missing", [])
+    missing = (gap_row.report_json or {}).get("missing", [])
     return {m.get("skill") for m in missing if m.get("skill")}
 
 
@@ -56,12 +47,12 @@ def _winner(a_name: str, b_name: str, a_value: float, b_value: float) -> str:
     return a_name if a_value > b_value else b_name
 
 
-async def build_goal_aware_ranking(db: AsyncSession, user_id, job_description_id=None, overview=None) -> PortfolioComparisonResponse:
+async def build_goal_aware_ranking(db: AsyncSession, user_id, job_intelligence_id=None, overview=None) -> PortfolioComparisonResponse:
     overview = overview or await build_projects_overview(db, user_id)
     if not overview.projects:
         return PortfolioComparisonResponse(ranked=[], lead_project=None, recommendation="")
 
-    missing_skills = await _latest_missing_skills(db, user_id, job_description_id)
+    missing_skills = await _latest_missing_skills(db, user_id, job_intelligence_id)
     missing_lower = {s.lower() for s in missing_skills}
 
     ranked_items: list[GoalAwareRanking] = []

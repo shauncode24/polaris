@@ -1,24 +1,25 @@
 import io
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, UploadFile, Depends
 from fastapi.responses import Response
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_current_user_from_query
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.settings import settings
 from app.models.facts import (
-    User, Resume, Experience, Project, Education, Certificate, JobDescription,
+    User, Resume, Experience, Project, Education, Certificate,
     GithubSnapshot, LeetcodeSnapshot
 )
 from app.models.inference import ResumeReview, ResumeAnalysis, SkillEvidence
+from app.models.job_intelligence import GapAnalysisResultRow, JobIntelligenceProfileRow
 from app.models.structure import Skill, SkillAlias
-from app.services.resume.pdf_parser import extract_text_from_pdf
+from app.services.resume.pdf_parser import PdfParseError, extract_text_from_pdf_bytes
 from app.services.resume.docx_parser import extract_text_from_docx
 from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
-from app.services.resume.ats_checks import run_ats_checks
 from app.services.identity.role_fit import get_role_fit
 from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, RESUME_SOURCE_TYPES
 
@@ -32,8 +33,20 @@ from app.services.resume.tailoring_llm import generate_tailoring_report, get_cac
 from app.services.resume.evolution import build_evolution_report
 
 from app.services.identity.identity_refresh import trigger_identity_refresh
+from app.services.job_intelligence.builder import get_job_intelligence
 
 router = APIRouter(prefix="/resume", tags=["resume"])
+
+
+def _content_disposition(filename: str) -> str:
+    """Builds an `inline` Content-Disposition header from a user-supplied
+    filename. The plain `filename` is reduced to safe ASCII (no quotes,
+    slashes or control characters, so it can't break out of the header),
+    and the original name is passed percent-encoded in `filename*`.
+    """
+    safe = "".join(c if (c.isascii() and (c.isalnum() or c in "._- ")) else "_" for c in filename).strip()
+    safe = safe or "resume.pdf"
+    return f"inline; filename=\"{safe}\"; filename*=UTF-8''{quote(filename, safe='')}"
 
 
 def _is_pdf(raw_bytes: bytes) -> bool:
@@ -74,7 +87,10 @@ async def upload_resume(
     # contract, so everything downstream (extraction, ingestion, skill
     # evidence) is unchanged regardless of which file type was uploaded.
     if _is_pdf(raw_bytes):
-        raw_text = extract_text_from_pdf(io.BytesIO(raw_bytes))
+        try:
+            raw_text = await extract_text_from_pdf_bytes(raw_bytes)
+        except PdfParseError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         pdf_bytes: bytes | None = raw_bytes
     elif _is_docx(raw_bytes, file.filename):
         try:
@@ -115,17 +131,24 @@ async def review_resume(
 
 @router.post("/analyze")
 async def analyze_resume(
-    job_description_id: str | None = None,
+    job_intelligence_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Run the full deterministic Resume Analysis Engine and persist the result."""
+    if job_intelligence_id is not None:
+        try:
+            parsed_job_id = UUID(job_intelligence_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid job_intelligence_id.")
+        if await get_job_intelligence(db, current_user.id, parsed_job_id) is None:
+            raise HTTPException(status_code=404, detail="Job not found.")
     try:
         from app.services.resume.analysis.engine import run_analysis
         report = await run_analysis(
             db,
             current_user.id,
-            job_description_id=job_description_id,
+            job_intelligence_id=job_intelligence_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -138,7 +161,7 @@ async def analyze_resume(
 
 @router.get("/download")
 async def download_resume(
-    current_user: User = Depends(get_current_user_from_query),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -158,12 +181,11 @@ async def download_resume(
             detail="PDF not stored — please re-upload your resume to enable preview.",
         )
 
-    filename = resume.filename or "resume.pdf"
     return Response(
         content=resume.raw_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Disposition": _content_disposition(resume.filename or "resume.pdf"),
             "Cache-Control": "private, max-age=300",
         },
     )
@@ -275,27 +297,27 @@ async def get_resume_workspace(
     versions = list(reversed(versions))
 
     jobs_result = await db.execute(
-        select(JobDescription)
-        .where(
-            JobDescription.user_id == uid,
-            JobDescription.analysis_result.isnot(None),
-        )
-        .order_by(JobDescription.created_at.desc())
-        .limit(5)
+        select(GapAnalysisResultRow, JobIntelligenceProfileRow)
+        .join(JobIntelligenceProfileRow, JobIntelligenceProfileRow.id == GapAnalysisResultRow.job_intelligence_id)
+        .where(GapAnalysisResultRow.user_id == uid)
+        .order_by(GapAnalysisResultRow.created_at.desc())
     )
-    jobs = list(jobs_result.scalars().all())
-
-    resume_vs_jobs = [
-        {
-            "id": str(j.id),
-            "company": j.company or "Unknown",
-            "role": j.role or "Unknown",
-            "match_pct": round(j.analysis_result.get("overall_match_percentage", 0))
-            if j.analysis_result
-            else None,
-        }
-        for j in jobs
-    ]
+    resume_vs_jobs = []
+    seen_jobs: set = set()
+    for gap, job in jobs_result.all():
+        if job.id in seen_jobs:
+            continue  # one entry per job: its newest comparison
+        seen_jobs.add(job.id)
+        profile = job.profile_json or {}
+        percentage = (gap.overall_match_json or {}).get("percentage")
+        resume_vs_jobs.append({
+            "id": str(job.id),
+            "company": profile.get("company") or "Unknown",
+            "role": profile.get("role") or "Unknown",
+            "match_pct": round(percentage) if percentage is not None else None,
+        })
+        if len(resume_vs_jobs) >= 5:
+            break
 
     from app.services.resume.analysis.evidence import analyze_evidence
     from app.services.resume.analysis.coverage import analyze_cross_source_coverage
@@ -382,13 +404,16 @@ async def get_resume_coherence(
     return await generate_coherence_report(db, current_user.id, resume.id, target_role)
 
 
-@router.get("/tailor/{job_description_id}", response_model=TailoringReport)
+@router.get("/tailor/{job_intelligence_id}", response_model=TailoringReport)
 async def get_resume_tailoring(
-    job_description_id: UUID,
+    job_intelligence_id: UUID,
     regenerate: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if await get_job_intelligence(db, current_user.id, job_intelligence_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
     result = await db.execute(
         select(Resume).where(Resume.user_id == current_user.id).order_by(Resume.created_at.desc()).limit(1)
     )
@@ -397,12 +422,12 @@ async def get_resume_tailoring(
         raise HTTPException(status_code=400, detail="No uploaded resume found — upload a resume first.")
 
     if not regenerate:
-        cached = await get_cached_tailoring_report(db, resume.id, job_description_id)
+        cached = await get_cached_tailoring_report(db, current_user.id, resume.id, job_intelligence_id)
         if cached is not None:
             return cached
 
     try:
-        return await generate_tailoring_report(db, current_user.id, resume.id, job_description_id)
+        return await generate_tailoring_report(db, current_user.id, resume.id, job_intelligence_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

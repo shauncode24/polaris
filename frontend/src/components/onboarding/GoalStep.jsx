@@ -29,7 +29,7 @@ function GoalStep({ goal, onSuccess, onContinue, onSkip }) {
         title: buildTitle(role, company),
         deadline: date || null,
         priority: null,
-        jobDescriptionId: null,
+        jobIntelligenceId: null,
       })
       onSuccess({ role: role.trim(), company: company.trim(), date, goalId: created.id, title: created.title })
       onContinue()

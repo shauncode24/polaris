@@ -1,4 +1,3 @@
-from sqlalchemy.sql.functions import current_user
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -26,7 +25,7 @@ async def register(payload: RegisterRequest, db=Depends(get_db)):
         )
     except AuthError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    logger.info("Registered new user (id=%s, email=%s)", user.id, user.email)
+    logger.info("Registered new user (id=%s)", user.id)
     return build_token_response(user)
 
 
@@ -36,7 +35,7 @@ async def login(payload: LoginRequest, db=Depends(get_db)):
         user = await authenticate_user(db, payload.email, payload.password)
     except AuthError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    logger.info("Logged in user (id=%s, email=%s)", user.id, user.email)
+    logger.info("Logged in user (id=%s)", user.id)
     return build_token_response(user)
 
 
@@ -46,7 +45,7 @@ async def google_auth(payload: GoogleAuthRequest, db=Depends(get_db)):
         user = await authenticate_with_google(db, payload.credential)
     except AuthError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    logger.info("Google-authenticated user (id=%s, email=%s)", user.id, user.email)
+    logger.info("Google-authenticated user (id=%s)", user.id)
     return build_token_response(user)
 
 

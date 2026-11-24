@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis, getResumeCoherence, getResumeTailoring, getResumeEvolution } from '../api/resume'
-import { listJobAnalyses } from '../api/jobs'
+import { listParsedJobs } from '../api/skillGap'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
@@ -66,7 +66,7 @@ export default function ResumePage() {
 
   async function loadJobs() {
     try {
-      const data = await listJobAnalyses(token)
+      const data = await listParsedJobs(token)
       setJobs(Array.isArray(data) ? data : data?.items ?? [])
     } catch (_) {}
   }

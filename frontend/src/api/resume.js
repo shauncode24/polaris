@@ -19,8 +19,17 @@ export function getResumeWorkspace(token) {
   }).then(handle)
 }
 
-export function getResumeDownloadUrl() {
-  return `${API_BASE_URL}/resume/download`
+// Fetches the stored PDF with the auth header and returns it as a Blob, so
+// the token is never placed in a URL.
+export async function fetchResumePdf(token) {
+  const response = await fetch(`${API_BASE_URL}/resume/download`, {
+    headers: authHeaders(token),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error((typeof data.detail === 'string' && data.detail) || 'Could not load the PDF.')
+  }
+  return response.blob()
 }
 
 export function uploadResume(file, token) {
@@ -40,10 +49,10 @@ export function runResumeReview(token) {
   }).then(handle)
 }
 
-export function runResumeAnalysis(token, jobDescriptionId = null) {
+export function runResumeAnalysis(token, jobIntelligenceId = null) {
   const url = new URL(`${API_BASE_URL}/resume/analyze`)
-  if (jobDescriptionId) {
-    url.searchParams.append('job_description_id', jobDescriptionId)
+  if (jobIntelligenceId) {
+    url.searchParams.append('job_intelligence_id', jobIntelligenceId)
   }
   return fetch(url.toString(), {
     method: 'POST',
@@ -58,8 +67,8 @@ export function getResumeCoherence(token, targetRole = null, regenerate = false)
   return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
-export function getResumeTailoring(token, jobDescriptionId, regenerate = false) {
-  const url = new URL(`${API_BASE_URL}/resume/tailor/${jobDescriptionId}`)
+export function getResumeTailoring(token, jobIntelligenceId, regenerate = false) {
+  const url = new URL(`${API_BASE_URL}/resume/tailor/${jobIntelligenceId}`)
   if (regenerate) url.searchParams.append('regenerate', 'true')
   return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }

@@ -35,13 +35,6 @@ from app.services.resume.bullet_analysis import build_bullet_units
 logger = logging.getLogger(__name__)
 
 
-class CoherenceGenerationError(Exception):
-    """Raised when the coherence narrative LLM call fails or returns
-    something unvalidatable. Callers fall back to a deterministic
-    template — same graceful-degradation pattern as InterpretationError.
-    """
-
-
 def _normalize_target_role(target_role: str | None) -> str:
     return (target_role or "").strip()
 

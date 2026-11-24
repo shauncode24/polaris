@@ -13,7 +13,7 @@ function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-export function createGoal(token, { title, deadline, priority, jobDescriptionId }) {
+export function createGoal(token, { title, deadline, priority, jobIntelligenceId }) {
   return fetch(`${API_BASE_URL}/goals`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
@@ -21,7 +21,7 @@ export function createGoal(token, { title, deadline, priority, jobDescriptionId 
       title,
       deadline: deadline || null,
       priority: priority || null,
-      job_description_id: jobDescriptionId || null,
+      job_intelligence_id: jobIntelligenceId || null,
     }),
   }).then(handle)
 }

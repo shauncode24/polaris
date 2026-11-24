@@ -45,12 +45,9 @@ class CompanyIntelligenceProfileRow(Base):
 
 
 class GapAnalysisResultRow(Base):
-    """Replaces JobDescription.analysis_result's fused JSONB blob for
-    lineage purposes (design doc §5, Phase 3). References both source
-    profiles by id — same append-only, source-tagged pattern as
-    LeetcodeEngineeringSnapshot.source_event / EngineeringIdentity.source_event.
-    JobDescription.analysis_result is still ALSO written for now
-    (dual-write, Phase 2/3) so GET /jobs/{id} keeps working unchanged.
+    """The stored comparison between a user's evidence and one job
+    profile. References both source profiles by id. Append-only: a
+    re-run adds a new row and the newest row wins.
     """
     __tablename__ = "gap_analysis_results"
 

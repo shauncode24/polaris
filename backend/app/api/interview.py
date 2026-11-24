@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.models.facts import JobDescription
 from app.models.goals import Goal
 from app.models.inference import InterviewResponse
 from app.schemas.interview.interview_response import (
@@ -32,32 +31,19 @@ router = APIRouter(prefix="/interview", tags=["interview"])
 
 
 async def _auto_attach_job_intelligence_id(db, user_id) -> str | None:
-    """Implementation plan §M — when the caller didn't pass an explicit
-    job_intelligence_id, check whether the user has a real, active Goal
-    with a job attached and use ITS job_intelligence_id instead of
-    leaving the interview JD-blind. Deliberately narrow: only looks at
-    the single soonest-due active goal that actually has a
-    job_description_id AND whose JobDescription has actually been run
-    through the Job Intelligence pipeline (job_intelligence_id set) —
-    a legacy pre-refactor JobDescription with no job_intelligence_id is
-    silently skipped rather than surfaced as a false match.
+    """When the caller didn't pass an explicit job_intelligence_id, use
+    the job attached to the user's soonest-due active goal, so the
+    interview isn't left blind to the role they're preparing for.
     """
     result = await db.execute(
-        select(Goal)
+        select(Goal.job_intelligence_id)
         .where(Goal.user_id == user_id)
         .where(Goal.status_pct < 100.0)
-        .where(Goal.job_description_id.isnot(None))
+        .where(Goal.job_intelligence_id.isnot(None))
         .order_by(Goal.deadline.asc().nullslast())
         .limit(1)
     )
-    goal = result.scalar_one_or_none()
-    if goal is None:
-        return None
-
-    jd_result = await db.execute(
-        select(JobDescription.job_intelligence_id).where(JobDescription.id == goal.job_description_id)
-    )
-    job_intelligence_id = jd_result.scalar_one_or_none()
+    job_intelligence_id = result.scalar_one_or_none()
     return str(job_intelligence_id) if job_intelligence_id else None
 
 

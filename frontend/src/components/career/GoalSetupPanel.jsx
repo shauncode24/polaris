@@ -78,7 +78,7 @@ function GoalSetupPanel({
       title: title.trim(),
       deadline: deadline || null,
       priority: priority || null,
-      jobDescriptionId: source === 'job' ? selectedJobId : null,
+      jobIntelligenceId: source === 'job' ? selectedJobId : null,
     })
   }
 

@@ -7,18 +7,6 @@ from app.models.job_intelligence import CompanyIntelligenceProfileRow
 from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
 
 
-async def get_company_intelligence(db: AsyncSession, company_intelligence_id: UUID) -> CompanyIntelligenceProfile | None:
-    result = await db.execute(
-        select(CompanyIntelligenceProfileRow).where(CompanyIntelligenceProfileRow.id == company_intelligence_id)
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
-        return None
-    profile = CompanyIntelligenceProfile.model_validate(row.profile_json)
-    profile.id = str(row.id)
-    return profile
-
-
 async def get_company_intelligence_by_source_hash(
     db: AsyncSession, user_id, source_text_hash: str
 ) -> CompanyIntelligenceProfile | None:

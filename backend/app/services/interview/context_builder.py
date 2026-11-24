@@ -241,10 +241,14 @@ async def _get_leetcode_evidence(db: AsyncSession, user_id) -> dict | None:
     }
 
 
-async def _get_target_job_intelligence(db: AsyncSession, job_intelligence_id: str | None) -> dict | None:
+async def _get_target_job_intelligence(db: AsyncSession, user_id, job_intelligence_id: str | None) -> dict | None:
     if not job_intelligence_id:
         return None
-    profile = await get_job_intelligence(db, UUID(job_intelligence_id))
+    try:
+        parsed_id = UUID(job_intelligence_id)
+    except ValueError:
+        return None
+    profile = await get_job_intelligence(db, user_id, parsed_id)
     if profile is None:
         return None
     return {
@@ -329,7 +333,7 @@ async def build_interview_context(
     function still has a sane default (no competency bonus) if a caller
     genuinely doesn't have one yet; every real call site passes it.
     """
-    target_job_intelligence = await _get_target_job_intelligence(db, job_intelligence_id)
+    target_job_intelligence = await _get_target_job_intelligence(db, user_id, job_intelligence_id)
     required_technologies = set(target_job_intelligence["required_technologies"]) if target_job_intelligence else set()
     competency_hints = get_blueprint_competency_hints(blueprint_key) if blueprint_key else set()
 

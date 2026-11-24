@@ -20,13 +20,6 @@ from app.services.projects.linking import normalize_name
 logger = logging.getLogger(__name__)
 
 
-class IdentitySynthesisError(Exception):
-    """Raised when the synthesis LLM call fails or returns something we
-    can't validate. Callers fall back to a deterministic template
-    instead of crashing the whole report.
-    """
-
-
 # ---------------------------------------------------------------------
 # LLM payload slimming
 #

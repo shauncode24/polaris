@@ -16,6 +16,7 @@ silently dropping process/practice requirements), which this quality
 score does not separately detect.
 """
 import hashlib
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -30,6 +31,8 @@ from app.services.job_intelligence.interview_focus import derive_interview_focus
 from app.services.job_intelligence.keywords import derive_resume_keyword_tiers, derive_resume_keywords
 from app.services.job_intelligence.normalization import enrich_skill_requirements, enrich_skills
 from app.services.job_intelligence.seniority import detect_seniority_with_fallback
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["build_job_intelligence", "get_job_intelligence", "JobIntelligenceExtractionError"]
 
@@ -299,19 +302,27 @@ async def build_job_intelligence(
     company_profile.created_at = now.isoformat()
 
     await db.commit()
-    print(
-        f"[TRACING] Job Intelligence + Company Intelligence persisted "
-        f"(job_id={job_row.id}, company_id={company_row.id}, "
-        f"extraction_quality={extraction_quality.label}, seniority={seniority.level}).",
-        flush=True,
+    logger.info(
+        "Job Intelligence + Company Intelligence persisted (job_id=%s, company_id=%s, "
+        "extraction_quality=%s, seniority=%s).",
+        job_row.id, company_row.id, extraction_quality.label, seniority.level,
     )
 
     return job_profile, company_profile
 
 
-async def get_job_intelligence(db: AsyncSession, job_intelligence_id: UUID) -> JobIntelligenceProfile | None:
+async def get_job_intelligence(
+    db: AsyncSession, user_id, job_intelligence_id: UUID
+) -> JobIntelligenceProfile | None:
+    """Returns the user's own job intelligence profile, or None.
+
+    Always scoped to `user_id`: a profile id belonging to another user
+    behaves exactly like a missing one.
+    """
     result = await db.execute(
-        select(JobIntelligenceProfileRow).where(JobIntelligenceProfileRow.id == job_intelligence_id)
+        select(JobIntelligenceProfileRow)
+        .where(JobIntelligenceProfileRow.id == job_intelligence_id)
+        .where(JobIntelligenceProfileRow.user_id == user_id)
     )
     row = result.scalar_one_or_none()
     if row is None:

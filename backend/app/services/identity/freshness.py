@@ -26,7 +26,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import JobDescription, Project, Resume
+from app.models.facts import Project, Resume
+from app.models.job_intelligence import GapAnalysisResultRow
 from app.models.inference import ProfileSnapshot, ProjectClaimAuditReview
 
 # (source_key -> staleness_ceiling_days) — past this many days since the
@@ -100,12 +101,11 @@ async def _latest_claim_audit_at(db: AsyncSession, user_id) -> datetime | None:
     return result.scalar_one_or_none()
 
 
-async def _latest_job_description_at(db: AsyncSession, user_id) -> datetime | None:
+async def _latest_job_analysis_at(db: AsyncSession, user_id) -> datetime | None:
     result = await db.execute(
-        select(JobDescription.created_at)
-        .where(JobDescription.user_id == user_id)
-        .where(JobDescription.analysis_result.isnot(None))
-        .order_by(JobDescription.created_at.desc())
+        select(GapAnalysisResultRow.created_at)
+        .where(GapAnalysisResultRow.user_id == user_id)
+        .order_by(GapAnalysisResultRow.created_at.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -116,7 +116,7 @@ _FETCHERS = {
     "github": _latest_github_sync_at,
     "leetcode": _latest_leetcode_sync_at,
     "claim_audit": _latest_claim_audit_at,
-    "job_descriptions": _latest_job_description_at,
+    "job_descriptions": _latest_job_analysis_at,
 }
 
 

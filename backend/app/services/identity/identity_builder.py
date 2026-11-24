@@ -30,7 +30,8 @@ import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import Education, Experience, JobDescription, Project, Resume, User
+from app.models.facts import Education, Experience, Project, Resume, User
+from app.models.job_intelligence import GapAnalysisResultRow, JobIntelligenceProfileRow
 from app.models.goals import Goal
 from app.models.inference import (
     ResumeAnalysis,
@@ -175,21 +176,27 @@ async def _get_active_goals(db: AsyncSession, user_id) -> list[dict]:
 # --- Recent job matches ------------------------------------------------------
 async def _get_recent_job_matches(db: AsyncSession, user_id, limit: int = MAX_RECENT_JOB_MATCHES) -> list[dict]:
     result = await db.execute(
-        select(JobDescription)
-        .where(JobDescription.user_id == user_id)
-        .where(JobDescription.analysis_result.isnot(None))
-        .order_by(JobDescription.created_at.desc())
-        .limit(limit)
+        select(GapAnalysisResultRow, JobIntelligenceProfileRow)
+        .join(JobIntelligenceProfileRow, JobIntelligenceProfileRow.id == GapAnalysisResultRow.job_intelligence_id)
+        .where(GapAnalysisResultRow.user_id == user_id)
+        .order_by(GapAnalysisResultRow.created_at.desc())
     )
     out = []
-    for jd in result.scalars().all():
-        overall = (jd.analysis_result or {}).get("overall_match", {})
+    seen_jobs: set = set()
+    for gap, job in result.all():
+        if job.id in seen_jobs:
+            continue  # one entry per job: its newest comparison
+        seen_jobs.add(job.id)
+        profile = job.profile_json or {}
+        overall = gap.overall_match_json or {}
         out.append({
-            "role": jd.role,
-            "company": jd.company,
+            "role": profile.get("role"),
+            "company": profile.get("company"),
             "match_percentage": overall.get("percentage"),
             "match_label": overall.get("label"),
         })
+        if len(out) >= limit:
+            break
     return out
 
 # --- Profile facts (Phase 3 — Polaris Identity) --------------------------------

@@ -65,14 +65,6 @@ Use ONLY these five exact role name strings, one entry each: "Backend Engineer",
 "Full Stack Engineer", "AI/ML Engineer", "DevOps / Platform"."""
 
 
-class RoleFitError(Exception):
-    """Raised when the role-fit LLM call fails or returns something we
-    can't validate. There is deliberately NO deterministic fallback
-    formula here (see module docstring) — the fallback below is an
-    honestly-labeled "insufficient data" response, not a competing score.
-    """
-
-
 def _fallback_role_fit(reason: str) -> list[RoleFitResult]:
     return [RoleFitResult(role=r, rating=1, rationale=reason) for r in VALID_ROLES]
 

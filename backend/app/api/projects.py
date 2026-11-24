@@ -87,15 +87,15 @@ async def get_projects_insights(
 
 @router.get("/ranking", response_model=PortfolioComparisonResponse)
 async def get_goal_aware_ranking(
-    job_description_id: UUID | None = None,
+    job_intelligence_id: UUID | None = None,
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     """Full goal/JD-aware ranking across the entire portfolio — not just
     a pairwise top-2 comparison. Scores against a specific target job when
-    job_description_id is given, otherwise the user's most recently
+    job_intelligence_id is given, otherwise the user's most recently
     analyzed job.
     """
-    return await build_goal_aware_ranking(db, current_user.id, job_description_id)
+    return await build_goal_aware_ranking(db, current_user.id, job_intelligence_id)
 
 
 @router.get("/portfolio-narrative", response_model=PortfolioNarrativeReport)
@@ -127,7 +127,7 @@ async def get_project_claim_audit(
     module review.
     """
     if not regenerate:
-        cached = await get_cached_claim_audit_report(db, project_id)
+        cached = await get_cached_claim_audit_report(db, current_user.id, project_id)
         if cached is not None:
             return cached
 
@@ -195,7 +195,7 @@ async def get_project_interview_questions(
     db: AsyncSession = Depends(get_db),
 ):
     if not regenerate:
-        cached = await get_cached_interview_questions(db, project_id)
+        cached = await get_cached_interview_questions(db, current_user.id, project_id)
         if cached is not None:
             return cached
 

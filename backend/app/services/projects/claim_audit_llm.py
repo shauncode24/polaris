@@ -30,14 +30,16 @@ def _fallback_narrative(facts: ClaimAuditFacts) -> ClaimAuditNarrative:
     )
 
 
-async def get_cached_claim_audit_report(db: AsyncSession, project_id) -> ClaimAuditReport | None:
+async def get_cached_claim_audit_report(db: AsyncSession, user_id, project_id) -> ClaimAuditReport | None:
     """Returns the last persisted claim audit for this project, or None
     if it's never been run. Callers should check this before calling
     generate_claim_audit_narrative() again, unless the project's stack/
     description or its matched GitHub facts have actually changed.
     """
     result = await db.execute(
-        select(ProjectClaimAuditReview).where(ProjectClaimAuditReview.project_id == project_id)
+        select(ProjectClaimAuditReview)
+        .where(ProjectClaimAuditReview.user_id == user_id)
+        .where(ProjectClaimAuditReview.project_id == project_id)
     )
     row = result.scalar_one_or_none()
     if row is None:

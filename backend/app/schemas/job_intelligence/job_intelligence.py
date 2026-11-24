@@ -215,3 +215,7 @@ class JobIntelligenceSummary(BaseModel):
     seniority_level: str = "unspecified"
     extraction_quality_label: str = "Low"
     created_at: str | None = None
+    # Latest comparison against the user's evidence; null until the job has
+    # been run through the skill-gap analysis.
+    overall_match_percentage: float | None = None
+    overall_match_label: str | None = None

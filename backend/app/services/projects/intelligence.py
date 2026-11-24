@@ -55,13 +55,17 @@ async def build_project_context(db: AsyncSession, user_id, project_id) -> dict |
     }
 
 
-async def _build_target_job_intelligence(db: AsyncSession, job_intelligence_id: str | None) -> dict | None:
+async def _build_target_job_intelligence(db: AsyncSession, user_id, job_intelligence_id: str | None) -> dict | None:
     """NEW — optional grounding in a real Job Intelligence profile
     (design doc §6.2). Only exposes the fields the framing prompt can
     actually act on."""
     if not job_intelligence_id:
         return None
-    profile = await get_job_intelligence(db, UUID(job_intelligence_id))
+    try:
+        parsed_id = UUID(job_intelligence_id)
+    except ValueError:
+        return None
+    profile = await get_job_intelligence(db, user_id, parsed_id)
     if profile is None:
         return None
     return {
@@ -75,22 +79,6 @@ async def _build_target_job_intelligence(db: AsyncSession, job_intelligence_id: 
 
 def _normalize_comparison_target(comparison_target: str | None) -> str:
     return (comparison_target or "").strip()
-
-
-async def get_cached_project_intelligence(
-    db: AsyncSession, project_id, framing: str, comparison_target: str | None
-) -> ProjectIntelligenceReport | None:
-    normalized_target = _normalize_comparison_target(comparison_target)
-    result = await db.execute(
-        select(ProjectIntelligenceReview)
-        .where(ProjectIntelligenceReview.project_id == project_id)
-        .where(ProjectIntelligenceReview.framing == framing)
-        .where(ProjectIntelligenceReview.comparison_target == normalized_target)
-    )
-    row = result.scalar_one_or_none()
-    if row is None:
-        return None
-    return ProjectIntelligenceReport.model_validate(row.report_json)
 
 
 async def _persist_project_intelligence(
@@ -130,7 +118,7 @@ async def generate_project_intelligence(
     if project_context is None:
         raise ValueError("Project not found.")
 
-    target_job_intelligence = await _build_target_job_intelligence(db, job_intelligence_id)
+    target_job_intelligence = await _build_target_job_intelligence(db, user_id, job_intelligence_id)
     payload = {
         **project_context, "framing": framing, "comparison_target": comparison_target,
         "target_job_intelligence": target_job_intelligence,

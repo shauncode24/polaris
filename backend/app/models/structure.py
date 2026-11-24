@@ -49,18 +49,6 @@ class ProjectCapability(Base):
     )
 
 
-class CapabilityRequirement(Base):
-    __tablename__ = "capability_requirements"
-
-    job_description_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("job_descriptions.id"), primary_key=True
-    )
-    capability_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("capabilities.id"), primary_key=True
-    )
-    importance: Mapped[float | None] = mapped_column(Float)
-
-
 class SkillAlias(Base):
     """A cache of raw-string -> canonical-skill classification decisions.
 

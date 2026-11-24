@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Sidebar from '../components/layout/Sidebar'
 import BreadcrumbBar from '../components/layout/BreadcrumbBar'
-import { listJobAnalyses } from '../api/jobs'
+import { listParsedJobs } from '../api/skillGap'
 import {
   askInterviewQuestion,
   correctInterviewResponse,
@@ -60,7 +60,7 @@ function InterviewPrepPage() {
 
   useEffect(() => {
     let cancelled = false
-    listJobAnalyses(token)
+    listParsedJobs(token)
       .then((items) => {
         if (cancelled) return
         setJobs(items)

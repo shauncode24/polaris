@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useProfileData } from '../contexts/ProfileDataContext'
-import { listJobAnalyses } from '../api/jobs'
+import { listParsedJobs } from '../api/skillGap'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import Button from '../components/common/Button'
@@ -36,7 +36,7 @@ function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     setJobsError(false)
-    listJobAnalyses(token)
+    listParsedJobs(token)
       .then((items) => { if (!cancelled) setJobAnalyses(items) })
       .catch((err) => {
         if (!cancelled) {
@@ -60,7 +60,7 @@ function DashboardPage() {
 
   // Heuristic readiness: latest analyzed job's overall match %, until a
   // real /readiness endpoint exists.
-  const latestAnalysis = jobAnalyses[0]
+  const latestAnalysis = jobAnalyses.find((j) => j.overall_match_percentage != null)
   const readiness = latestAnalysis?.overall_match_percentage
 
   const resumeProjects = (results.github?.repositories || [])

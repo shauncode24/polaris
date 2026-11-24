@@ -9,7 +9,7 @@ from sqlalchemy import select
 from app.core.database import get_db, AsyncSessionLocal
 from app.models.goals import Goal
 from app.models.inference import CareerPlan
-from app.models.facts import JobDescription
+from app.models.job_intelligence import JobIntelligenceProfileRow
 from app.schemas.career_planner.career_plan import (
     CareerPlanResponse, GoalCreateRequest, GoalUpdateRequest, GoalResponse, TopicSignal, TargetJobSummary,
 )
@@ -36,7 +36,7 @@ def _to_goal_response(goal: Goal) -> GoalResponse:
     return GoalResponse(
         id=str(goal.id), title=goal.title, deadline=goal.deadline,
         priority=goal.priority, status_pct=goal.status_pct, created_at=goal.created_at,
-        job_description_id=str(goal.job_description_id) if goal.job_description_id else None,
+        job_intelligence_id=str(goal.job_intelligence_id) if goal.job_intelligence_id else None,
     )
 
 
@@ -44,23 +44,25 @@ def _to_goal_response(goal: Goal) -> GoalResponse:
 async def create_goal(payload: GoalCreateRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
     user = current_user
 
-    job_description_id = None
-    if payload.job_description_id:
+    job_intelligence_id = None
+    if payload.job_intelligence_id:
         try:
-            candidate_id = UUIDType(payload.job_description_id)
+            candidate_id = UUIDType(payload.job_intelligence_id)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid job_description_id.")
-        jd_result = await db.execute(
-            select(JobDescription).where(JobDescription.id == candidate_id, JobDescription.user_id == user.id)
+            raise HTTPException(status_code=400, detail="Invalid job_intelligence_id.")
+        job_result = await db.execute(
+            select(JobIntelligenceProfileRow.id).where(
+                JobIntelligenceProfileRow.id == candidate_id,
+                JobIntelligenceProfileRow.user_id == user.id,
+            )
         )
-        jd = jd_result.scalar_one_or_none()
-        if jd is None:
+        if job_result.scalar_one_or_none() is None:
             raise HTTPException(status_code=404, detail="Analyzed job not found.")
-        job_description_id = candidate_id
+        job_intelligence_id = candidate_id
 
     goal = Goal(
         user_id=user.id,
-        job_description_id=job_description_id,
+        job_intelligence_id=job_intelligence_id,
         title=payload.title,
         deadline=payload.deadline,
         priority=payload.priority,

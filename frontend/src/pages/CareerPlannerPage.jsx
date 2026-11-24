@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import Sidebar from '../components/layout/Sidebar'
 import BreadcrumbBar from '../components/layout/BreadcrumbBar'
 import Button from '../components/common/Button'
-import { listJobAnalyses } from '../api/jobs'
+import { listParsedJobs } from '../api/skillGap'
 import { createGoal, listGoals, updateGoal, deleteGoal, generatePlan } from '../api/career'
 import GoalSetupPanel from '../components/career/GoalSetupPanel'
 import PlanSummaryCard from '../components/career/PlanSummaryCard'
@@ -34,7 +34,7 @@ function CareerPlannerPage() {
 
   useEffect(() => {
     let cancelled = false
-    listJobAnalyses(token)
+    listParsedJobs(token)
       .then((items) => { if (!cancelled) setJobs(items) })
       .catch(() => {})
       .finally(() => { if (!cancelled) setJobsLoading(false) })
@@ -77,11 +77,11 @@ function CareerPlannerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  async function handleCreateAndGenerate({ title, deadline, priority, jobDescriptionId }) {
+  async function handleCreateAndGenerate({ title, deadline, priority, jobIntelligenceId }) {
     setGenerating(true)
     setError('')
     try {
-      const goal = await createGoal(token, { title, deadline, priority, jobDescriptionId })
+      const goal = await createGoal(token, { title, deadline, priority, jobIntelligenceId })
       const nextGoals = [goal, ...goals]
       setGoals(nextGoals)
       await loadPlanForGoal(goal, nextGoals)

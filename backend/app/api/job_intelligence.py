@@ -1,4 +1,3 @@
-from io import BytesIO
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -19,7 +18,8 @@ from app.services.job_intelligence.builder import (
     build_job_intelligence,
     get_job_intelligence,
 )
-from app.services.resume.pdf_parser import extract_text_from_pdf
+from app.services.job_intelligence.gap_results import get_latest_gap_results_by_job
+from app.services.resume.pdf_parser import PdfParseError, extract_text_from_pdf_bytes
 from app.services.target_profile.builder import build_target_profile
 
 router = APIRouter(prefix="/job-intelligence", tags=["job-intelligence"])
@@ -83,7 +83,10 @@ async def analyze_job_intelligence_pdf(
     if not raw_bytes.lstrip().startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="Uploaded file does not appear to be a valid PDF.")
 
-    raw_text = extract_text_from_pdf(BytesIO(raw_bytes))
+    try:
+        raw_text = await extract_text_from_pdf_bytes(raw_bytes)
+    except PdfParseError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in this PDF.")
     if len(raw_text) > settings.max_paste_text_chars:
@@ -102,7 +105,7 @@ async def get_job_intelligence_by_id(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    job_profile = await get_job_intelligence(db, job_intelligence_id)
+    job_profile = await get_job_intelligence(db, current_user.id, job_intelligence_id)
     if job_profile is None:
         raise HTTPException(status_code=404, detail="Job intelligence profile not found")
     company_profile = await get_company_intelligence_by_source_hash(
@@ -121,11 +124,16 @@ async def list_job_intelligence(
         .where(JobIntelligenceProfileRow.user_id == current_user.id)
         .order_by(JobIntelligenceProfileRow.created_at.desc())
     )
+    rows = list(result.scalars().all())
+    latest_gap = await get_latest_gap_results_by_job(db, current_user.id)
+
     summaries = []
-    for row in result.scalars().all():
+    for row in rows:
         pj = row.profile_json or {}
         seniority = pj.get("seniority_signal") or {}
         quality = pj.get("extraction_quality") or {}
+        gap = latest_gap.get(row.id)
+        overall = (gap.overall_match_json if gap is not None else None) or {}
         summaries.append(JobIntelligenceSummary(
             id=str(row.id),
             role=pj.get("role"),
@@ -133,5 +141,7 @@ async def list_job_intelligence(
             seniority_level=seniority.get("level", "unspecified"),
             extraction_quality_label=quality.get("label", "Low"),
             created_at=row.created_at.isoformat(),
+            overall_match_percentage=overall.get("percentage"),
+            overall_match_label=overall.get("label"),
         ))
     return summaries

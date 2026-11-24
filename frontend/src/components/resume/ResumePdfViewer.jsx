@@ -1,19 +1,44 @@
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { getResumeDownloadUrl } from '../../api/resume'
+import { fetchResumePdf } from '../../api/resume'
 import CollapsibleSection from '../common/CollapsibleSection'
 import './ResumePdfViewer.css'
 
 export default function ResumePdfViewer({ hasPdf }) {
   const { token } = useAuth()
+  const [pdfUrl, setPdfUrl] = useState(null)
+  const [loading, setLoading] = useState(false)
 
-  // Build a URL that includes the auth token as a query param so the
-  // <embed> tag (which can't set custom headers) can still authenticate.
-  // The backend reads ?token=... as a fallback on this endpoint.
-  const pdfUrl = hasPdf
-    ? `${getResumeDownloadUrl()}?token=${encodeURIComponent(token || '')}`
-    : null
+  // An <embed> can't send an Authorization header, so fetch the PDF with the
+  // header and show it from a temporary object URL instead of putting the
+  // token in the URL.
+  useEffect(() => {
+    if (!hasPdf) {
+      setPdfUrl(null)
+      return undefined
+    }
+    let cancelled = false
+    let objectUrl = null
+    setLoading(true)
+    fetchResumePdf(token)
+      .then((blob) => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setPdfUrl(objectUrl)
+      })
+      .catch(() => {
+        if (!cancelled) setPdfUrl(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [hasPdf, token])
 
-  const actions = hasPdf ? (
+  const actions = pdfUrl ? (
     <div className="rpv__actions">
       <a
         href={pdfUrl}
@@ -36,12 +61,16 @@ export default function ResumePdfViewer({ hasPdf }) {
         {actions}
       </div>
       <div className="rpv__embed-wrap">
-        {hasPdf ? (
+        {pdfUrl ? (
           <embed
             src={pdfUrl}
             type="application/pdf"
             className="rpv__embed"
           />
+        ) : loading ? (
+          <div className="rpv__no-pdf">
+            <p>Loading preview…</p>
+          </div>
         ) : (
           <div className="rpv__no-pdf">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

@@ -35,14 +35,6 @@ from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, 
 logger = logging.getLogger(__name__)
 
 
-class GithubReviewError(Exception):
-    """Raised when the portfolio-review LLM call fails or returns
-    something we can't validate. Same graceful-degradation pattern as
-    ReviewGenerationError in resume/reviewer.py — callers fall back to a
-    deterministic summary instead of crashing the whole endpoint.
-    """
-
-
 def _fallback_report(knowledge: dict) -> GithubPortfolioReviewLLMOutput:
     repos = knowledge.get("repositories", [])
     top = repos[:3]

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,6 +23,7 @@ class SkillEvidence(Base):
     source_type: Mapped[str] = mapped_column(String(50))
     source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     weight: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ProfileSnapshot(Base):
@@ -33,17 +34,6 @@ class ProfileSnapshot(Base):
     taken_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     skills_json: Mapped[dict] = mapped_column(JSONB)
     note: Mapped[str | None] = mapped_column(Text)
-
-
-class ReadinessScore(Base):
-    __tablename__ = "readiness_scores"
-
-    id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
-    goal_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("goals.id"))
-    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    score: Mapped[float] = mapped_column(Float)
-    basis: Mapped[str | None] = mapped_column(Text)
 
 
 class ResumeReview(Base):
@@ -150,14 +140,14 @@ class ResumeCoherenceReview(Base):
 class ResumeTailoringReview(Base):
     __tablename__ = "resume_tailoring_reviews"
     __table_args__ = (
-        UniqueConstraint("resume_id", "job_description_id", name="uq_tailoring_resume_jd"),
+        UniqueConstraint("resume_id", "job_intelligence_id", name="uq_tailoring_resume_job"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     resume_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"), index=True)
-    job_description_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("job_descriptions.id"), index=True
+    job_intelligence_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_intelligence_profiles.id"), index=True
     )
     report_json: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
