@@ -2,7 +2,7 @@
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, Boolean
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, Boolean, Index, false as sa_false, text, true as sa_true
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,9 @@ class User(Base):
     github_username: Mapped[str | None] = mapped_column(String(255))
     github_token: Mapped[str | None] = mapped_column(String(512))
     leetcode_username: Mapped[str | None] = mapped_column(String(255))
+    # Bumped whenever the user's evidence changes (upload, sync, edit, link).
+    # Cached AI reports older than this are out of date.
+    evidence_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Experience(Base):
@@ -50,11 +53,30 @@ class Experience(Base):
     # without a data backfill. REQUIRES a new Alembic migration to add
     # this column to the real database — not generated in this pass.
     source: Mapped[str] = mapped_column(String(20), default="resume")
+    # User review of this row. "auto" = produced by extraction/sync and still
+    # overwritable; "confirmed" or "edited" = the user has taken ownership, so
+    # re-uploads and syncs must not overwrite it. Hidden rows stay stored but
+    # are excluded from everything that reads the evidence record.
+    review_state: Mapped[str] = mapped_column(String(20), default="auto", server_default="auto")
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    # What this row IS, fixed when it was first created and never changed by
+    # edits (normalised role@company, project name, ...). Lets a re-upload find
+    # the earlier row the user reviewed even after they renamed it. Null on
+    # rows from before this existed; readers fall back to the current name.
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), index=True)
     created_at: Mapped[datetime] = created_at_col()
 
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        # A GitHub-sourced project is one row per repo. Resume-sourced rows
+        # are append-only per upload, so the rule only covers source='github'.
+        Index(
+            "uq_project_user_github_repo", "user_id", "github_repo_name",
+            unique=True, postgresql_where=text("source = 'github'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
@@ -70,6 +92,17 @@ class Project(Base):
     competency_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     # Phase 4 (provenance) — same rule as Experience.source above.
     source: Mapped[str] = mapped_column(String(20), default="resume")
+    # User review of this row. "auto" = produced by extraction/sync and still
+    # overwritable; "confirmed" or "edited" = the user has taken ownership, so
+    # re-uploads and syncs must not overwrite it. Hidden rows stay stored but
+    # are excluded from everything that reads the evidence record.
+    review_state: Mapped[str] = mapped_column(String(20), default="auto", server_default="auto")
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    # What this row IS, fixed when it was first created and never changed by
+    # edits (normalised role@company, project name, ...). Lets a re-upload find
+    # the earlier row the user reviewed even after they renamed it. Null on
+    # rows from before this existed; readers fall back to the current name.
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), index=True)
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
@@ -93,6 +126,17 @@ class Education(Base):
     details: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     # Phase 4 (provenance) — same rule as Experience.source above.
     source: Mapped[str] = mapped_column(String(20), default="resume")
+    # User review of this row. "auto" = produced by extraction/sync and still
+    # overwritable; "confirmed" or "edited" = the user has taken ownership, so
+    # re-uploads and syncs must not overwrite it. Hidden rows stay stored but
+    # are excluded from everything that reads the evidence record.
+    review_state: Mapped[str] = mapped_column(String(20), default="auto", server_default="auto")
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
+    # What this row IS, fixed when it was first created and never changed by
+    # edits (normalised role@company, project name, ...). Lets a re-upload find
+    # the earlier row the user reviewed even after they renamed it. Null on
+    # rows from before this existed; readers fall back to the current name.
+    dedupe_key: Mapped[str | None] = mapped_column(String(255), index=True)
     created_at: Mapped[datetime] = created_at_col()
 
 
@@ -161,3 +205,15 @@ class Resume(Base):
     raw_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     filename: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = created_at_col()
+
+
+class UserSkillOverride(Base):
+    """A user's decision about one skill in their evidence record. Hiding a
+    skill removes it from the confidence map every other feature reads.
+    """
+    __tablename__ = "user_skill_overrides"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    skill_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("skills.id"), primary_key=True)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=True, server_default=sa_true())
+    updated_at: Mapped[datetime] = created_at_col()

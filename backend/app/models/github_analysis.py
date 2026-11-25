@@ -22,6 +22,8 @@ class GithubProjectAnalysis(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     repo_name: Mapped[str] = mapped_column(String(255))
 
+    description: Mapped[str | None] = mapped_column(Text)
+    html_url: Mapped[str | None] = mapped_column(String(500))
     category: Mapped[str] = mapped_column(String(50))                    # "Full Stack" | "Backend" | "Frontend" | "Library/Other"
     primary_language: Mapped[str | None] = mapped_column(String(50))
     technologies: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
