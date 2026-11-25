@@ -22,7 +22,7 @@ was the root cause of the two flows disagreeing on the same project name.
 from app.services.projects.linking import normalize_name as _slugify
 
 
-def _repo_name_from_url(url: str | None) -> str | None:
+def repo_name_from_url(url: str | None) -> str | None:
     if not url:
         return None
     cleaned = url.rstrip("/")
@@ -41,7 +41,7 @@ def match_project_to_repo(project_name: str, project_repo_url: str | None, repo_
         return None
 
     # 1. repo_url-derived name — most reliable signal we have.
-    url_repo_name = _repo_name_from_url(project_repo_url)
+    url_repo_name = repo_name_from_url(project_repo_url)
     if url_repo_name:
         url_slug = _slugify(url_repo_name)
         for repo_name in repo_names:

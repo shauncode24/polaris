@@ -12,7 +12,7 @@ from app.models.linkedin import LinkedInProfile
 from app.prompts.linkedin.extraction import LINKEDIN_EXTRACTION_SYSTEM_PROMPT
 from app.schemas.linkedin.linkedin import ExtractedLinkedInProfile, LinkedInIngestResult
 from app.services.projects.linking import normalize_name
-from app.services.resume.confidence import WEIGHTS
+from app.services.evidence.scoring import WEIGHTS
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_skill
 

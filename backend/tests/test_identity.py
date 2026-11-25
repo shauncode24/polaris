@@ -27,7 +27,7 @@ import pytest
 # 1. confidence_reconciliation
 # ---------------------------------------------------------------------------
 
-from app.services.identity.confidence_reconciliation import (
+from app.services.evidence.reconciliation import (
     reconcile_skill_confidence,
     _skill_in_unsupported_claims,
     TIMELINE_NOTE_MULTIPLIER,
@@ -400,7 +400,7 @@ class TestComputeEvidenceHash:
 # 5. career_planner alignment — return shape from get_reconciled_skill_confidences
 # ---------------------------------------------------------------------------
 
-from app.services.identity.reconciled_confidence import get_reconciled_skill_confidences
+from app.services.evidence.confidence import get_reconciled_skill_confidences
 
 
 class TestReconciledConfidenceReturnShape:
@@ -474,7 +474,7 @@ class TestBuildEvidenceProvenance:
 
     def test_project_provenance(self):
         import asyncio
-        from app.services.evidence import build_evidence_details
+        from app.services.evidence.confidence import build_evidence_details
         from app.models.inference import SkillEvidence
         from app.models.facts import Project
         import uuid
@@ -502,7 +502,7 @@ class TestBuildEvidenceProvenance:
 
     def test_leetcode_provenance(self):
         import asyncio
-        from app.services.evidence import build_evidence_details
+        from app.services.evidence.confidence import build_evidence_details
         from app.models.inference import SkillEvidence
 
         ev = MagicMock(spec=SkillEvidence)
@@ -519,7 +519,7 @@ class TestBuildEvidenceProvenance:
 
     def test_certificate_provenance(self):
         import asyncio
-        from app.services.evidence import build_evidence_details
+        from app.services.evidence.confidence import build_evidence_details
         from app.models.inference import SkillEvidence
 
         ev = MagicMock(spec=SkillEvidence)
@@ -537,7 +537,7 @@ class TestBuildEvidenceProvenance:
     def test_deduplication(self):
         """The same project appearing twice should only produce one detail string."""
         import asyncio
-        from app.services.evidence import build_evidence_details
+        from app.services.evidence.confidence import build_evidence_details
         from app.models.inference import SkillEvidence
         from app.models.facts import Project
         import uuid
@@ -580,7 +580,7 @@ class TestUserIsolationDesign:
     def test_get_all_skill_confidences_requires_user_id(self):
         """get_all_skill_confidences must not have a default for user_id."""
         import inspect
-        from app.services.evidence import get_all_skill_confidences
+        from app.services.evidence.confidence import get_all_skill_confidences
         sig = inspect.signature(get_all_skill_confidences)
         params = sig.parameters
         # user_id is the second positional parameter, after db
@@ -590,7 +590,7 @@ class TestUserIsolationDesign:
 
     def test_get_reconciled_skill_confidences_requires_user_id(self):
         import inspect
-        from app.services.identity.reconciled_confidence import get_reconciled_skill_confidences
+        from app.services.evidence.confidence import get_reconciled_skill_confidences
         sig = inspect.signature(get_reconciled_skill_confidences)
         assert "user_id" in sig.parameters
 
@@ -645,7 +645,7 @@ class TestRegressionExistingPaths:
         Simulating one here confirms that if somehow a low-risk entry reaches
         the reconciler, the CLAIM_RISK_MULTIPLIER for 'low' is 1.0 (no discount).
         """
-        from app.services.identity.confidence_reconciliation import reconcile_skill_confidence
+        from app.services.evidence.reconciliation import reconcile_skill_confidence
         skills = [{"skill": "python", "confidence": 0.80, "sources": []}]
         # risk_level="low" — multiplier should be 1.0 (no-op)
         claim_risk = [{"project": "A", "risk_level": "low", "unsupported_claims": ["python"]}]

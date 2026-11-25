@@ -45,7 +45,8 @@ from app.services.interview.blueprints import get_blueprint_competency_hints, ge
 from app.services.interview.competency_tagging import tag_or_backfill_items
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.identity.identity_context import build_identity_context_for_interview
-from app.services.identity.reconciled_confidence import get_reconciled_skill_confidences
+from app.services.evidence.confidence import get_reconciled_skill_confidences
+from app.services.evidence.review import dedupe_visible
 from app.services.resume.skill_classifier import resolve_skills
 
 from app.services.projects.linking import normalize_name
@@ -76,14 +77,7 @@ async def _load_projects_with_tags(db: AsyncSession, user_id) -> list[Project]:
     result = await db.execute(
         select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
     )
-    all_p = result.scalars().all()
-    seen: set[str] = set()
-    projects: list[Project] = []
-    for p in all_p:
-        norm = normalize_name(p.name)
-        if norm not in seen:
-            seen.add(norm)
-            projects.append(p)
+    projects = dedupe_visible("projects", list(result.scalars().all()))
 
     items = [
         {"key": str(p.id), "text": _project_text(p), "existing_tags": p.competency_tags}
@@ -102,14 +96,7 @@ async def _load_experiences_with_tags(db: AsyncSession, user_id) -> list[Experie
         .where(Experience.user_id == user_id)
         .order_by(Experience.start_date.desc().nullsfirst(), Experience.created_at.desc())
     )
-    all_e = result.scalars().all()
-    seen: set[str] = set()
-    experiences: list[Experience] = []
-    for e in all_e:
-        key = f"{normalize_name(e.role)}@{normalize_name(e.company)}"
-        if key not in seen:
-            seen.add(key)
-            experiences.append(e)
+    experiences = dedupe_visible("experiences", list(result.scalars().all()))
 
     items = [
         {"key": str(e.id), "text": _experience_text(e), "existing_tags": e.competency_tags}
@@ -177,23 +164,19 @@ async def _get_all_education(db: AsyncSession, user_id) -> list[dict]:
         .where(Education.user_id == user_id)
         .order_by(Education.end_date.desc().nullsfirst(), Education.created_at.desc())
     )
-    all_edu = result.scalars().all()
-    seen = set()
-    education = []
-    for e in all_edu:
-        key = f"{normalize_name(e.institution)}@{normalize_name(e.degree or '')}"
-        if key not in seen:
-            seen.add(key)
-            education.append({
-                "type": "education",
-                "institution": e.institution,
-                "degree": e.degree,
-                "field_of_study": e.field_of_study,
-                "start_date": e.start_date.isoformat() if e.start_date else None,
-                "end_date": e.end_date.isoformat() if e.end_date else None,
-                "is_current": e.is_current,
-                "details": e.details or [],
-            })
+    education = [
+        {
+            "type": "education",
+            "institution": e.institution,
+            "degree": e.degree,
+            "field_of_study": e.field_of_study,
+            "start_date": e.start_date.isoformat() if e.start_date else None,
+            "end_date": e.end_date.isoformat() if e.end_date else None,
+            "is_current": e.is_current,
+            "details": e.details or [],
+        }
+        for e in dedupe_visible("education", list(result.scalars().all()))
+    ]
     return education[:MAX_EDUCATION_IN_CONTEXT]
 
 

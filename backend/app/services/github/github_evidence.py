@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import SkillEvidence
-from app.services.resume.confidence import WEIGHTS
+from app.services.evidence.scoring import WEIGHTS
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_skill
 

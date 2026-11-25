@@ -2,7 +2,7 @@
 import re
 
 from app.main import app
-from tests.authorization_cases import CASES
+from tests.authorization_cases import CASES, EXEMPT
 
 
 def _normalise(path: str) -> str:
@@ -20,7 +20,7 @@ def test_every_parameterised_route_has_an_authorization_case():
         if "{" not in path:
             continue
         for method in methods - {"HEAD", "OPTIONS"}:
-            if (method, _normalise(path)) not in covered:
+            if (method, _normalise(path)) not in covered and (method, _normalise(path)) not in EXEMPT:
                 uncovered.append(f"{method} {path}")
 
     assert not uncovered, (

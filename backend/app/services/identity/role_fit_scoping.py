@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
-from app.services.evidence import build_evidence_details
-from app.services.resume.confidence import compute_decayed_skill_confidence
+from app.services.evidence.confidence import build_evidence_details
+from app.services.evidence.scoring import compute_decayed_skill_confidence
 
 RESUME_SOURCE_TYPES = {"project", "experience"}
 GITHUB_SOURCE_TYPES = {"github_repo"}

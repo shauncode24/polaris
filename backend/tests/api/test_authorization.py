@@ -16,6 +16,7 @@ def _fill(value, ids):
         return value.format(
             job_id=ids["job_id"], project_id=ids["project_id"], goal_id=ids["goal_id"],
             session_id=ids["session_id"], response_id=ids["response_id"], identity_id=ids["identity_id"],
+            experience_id=ids["experience_id"], education_id=ids["education_id"],
         )
     if isinstance(value, dict):
         return {k: _fill(v, ids) for k, v in value.items()}

@@ -25,8 +25,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
+from app.services.evidence.review import dedupe_visible
 from app.models.facts import Project
 from app.models.github_analysis import GithubProjectAnalysis
+from app.services.evidence.state import evidence_cutoff
 from app.models.inference import PortfolioNarrativeReview, ProjectClaimAuditReview
 from app.prompts.projects.portfolio_narrative import PORTFOLIO_NARRATIVE_SYSTEM_PROMPT
 from app.schemas.projects.project_intelligence import PortfolioNarrativeLLMOutput, PortfolioNarrativeReport
@@ -83,14 +85,9 @@ async def _build_portfolio_facts(db: AsyncSession, user_id) -> dict | None:
 
     # --- Projects-module-only facts, never visible to github_reviewer.py ---
     proj_result = await db.execute(select(Project).where(Project.user_id == user_id))
-    all_projects = list(proj_result.scalars().all())
-    seen_names: set[str] = set()
-    projects: list[Project] = []
-    for p in all_projects:
-        norm = normalize_name(p.name)
-        if norm not in seen_names:
-            seen_names.add(norm)
-            projects.append(p)
+    projects = dedupe_visible(
+        "projects", sorted(proj_result.scalars().all(), key=lambda p: p.created_at, reverse=True)
+    )
 
     resume_linked = sum(1 for p in projects if p.resume_id is not None)
     resume_linked_pct = round((resume_linked / len(projects)) * 100) if projects else None
@@ -130,12 +127,11 @@ async def get_latest_portfolio_narrative(db: AsyncSession, user_id) -> Portfolio
     same pattern as GithubPortfolioReview/LeetcodePortfolioReview. None
     if a narrative has never been generated for this user.
     """
-    result = await db.execute(
-        select(PortfolioNarrativeReview)
-        .where(PortfolioNarrativeReview.user_id == user_id)
-        .order_by(PortfolioNarrativeReview.created_at.desc())
-        .limit(1)
-    )
+    stmt = select(PortfolioNarrativeReview).where(PortfolioNarrativeReview.user_id == user_id)
+    cutoff = await evidence_cutoff(db, user_id)
+    if cutoff is not None:  # a narrative built before the evidence last changed is out of date
+        stmt = stmt.where(PortfolioNarrativeReview.created_at >= cutoff)
+    result = await db.execute(stmt.order_by(PortfolioNarrativeReview.created_at.desc()).limit(1))
     row = result.scalar_one_or_none()
     if row is None:
         return None

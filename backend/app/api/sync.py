@@ -20,7 +20,9 @@ from app.services.leetcode.engineering_snapshot import (
     get_engineering_snapshot_history,
     compute_engineering_snapshot,
 )
+from app.services.evidence.state import touch_evidence
 from app.services.identity.identity_refresh import trigger_identity_refresh
+from app.services.projects.reconcile import reconcile_projects
 
 from app.models.inference import ProfileSnapshot, LeetcodePortfolioReview
 
@@ -60,6 +62,8 @@ async def trigger_github_sync(
     except GithubSyncError as e:
         return JSONResponse(status_code=502, content={"status": "error", "reason": str(e)})
 
+    await reconcile_projects(db, current_user.id)
+    await touch_evidence(db, current_user.id)
     await persist_engineering_snapshot(db, current_user.id, "github sync")
     # Freshness fix — same trigger point as the proven
     # LeetcodeEngineeringSnapshot pattern above.
@@ -90,6 +94,7 @@ async def trigger_leetcode_sync(
             content={"status": "degraded", "reason": str(e), "fallback_form_required": True},
         )
 
+    await touch_evidence(db, current_user.id)
     await persist_engineering_snapshot(db, current_user.id, "leetcode sync")
     await trigger_identity_refresh(db, current_user.id, "leetcode sync")
 
@@ -103,6 +108,7 @@ async def submit_leetcode_manual(
     db: AsyncSession = Depends(get_db),
 ):
     result = await sync_leetcode_manual(db, current_user, payload.tag_counts)
+    await touch_evidence(db, current_user.id)
     await persist_engineering_snapshot(db, current_user.id, "leetcode manual submission")
     await trigger_identity_refresh(db, current_user.id, "leetcode manual submission")
     return result

@@ -33,7 +33,10 @@ from app.services.resume.tailoring_llm import generate_tailoring_report, get_cac
 from app.services.resume.evolution import build_evolution_report
 
 from app.services.identity.identity_refresh import trigger_identity_refresh
+from app.services.evidence.review import carry_over_reviews
+from app.services.evidence.state import touch_evidence
 from app.services.job_intelligence.builder import get_job_intelligence
+from app.services.projects.reconcile import reconcile_projects
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 
@@ -111,6 +114,13 @@ async def upload_resume(
         result = await ingest_resume(raw_text, db, current_user, filename=file.filename, pdf_bytes=pdf_bytes)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Decisions the user already made about these items on earlier uploads
+    # (hidden, confirmed, edited) apply to the new rows; then projects are
+    # lined up with the user's GitHub repos.
+    await carry_over_reviews(db, current_user.id, UUID(result["resume_id"]))
+    await reconcile_projects(db, current_user.id)
+    await touch_evidence(db, current_user.id)
 
     # Freshness fix: keep Engineering Identity current the instant new
     # resume data lands, instead of only on a manual POST /identity/refresh.
@@ -397,7 +407,7 @@ async def get_resume_coherence(
         raise HTTPException(status_code=400, detail="No uploaded resume found — upload a resume first.")
 
     if not regenerate:
-        cached = await get_cached_coherence_report(db, resume.id, target_role)
+        cached = await get_cached_coherence_report(db, current_user.id, resume.id, target_role)
         if cached is not None:
             return cached
 

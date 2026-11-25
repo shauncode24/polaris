@@ -6,6 +6,7 @@ from app.services.projects.repo_linking import build_repo_lookup
 from app.services.projects.claim_audit import audit_project_claims
 from app.services.projects.linking import normalize_name  # <-- NEW IMPORT
 
+from app.services.evidence.review import dedupe_visible
 from app.models.facts import GithubSnapshot, Project
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.structure import Capability, ProjectCapability, ProjectSkill, Skill
@@ -38,22 +39,9 @@ async def build_projects_overview(db: AsyncSession, user_id) -> ProjectsOverview
     )
     all_projects = list(projects_result.scalars().all())
 
-    # --- FIX: dedupe by normalized project name, same pattern already
-    # used by profile.py's get_profile_data() and
-    # career_planner/context_builder.py's _get_projects(). Without this,
-    # every resume re-upload creates a brand-new Project row for the same
-    # conceptual project (ingestion.py never checks for an existing one —
-    # that's correct for an append-only facts table), and this page was
-    # rendering every single one of them as a separate card. Since the
-    # query above orders by created_at desc, keeping the FIRST occurrence
-    # of each normalized name keeps the most recently uploaded version.
-    seen_names: set[str] = set()
-    projects: list[Project] = []
-    for p in all_projects:
-        norm = normalize_name(p.name)
-        if norm not in seen_names:
-            seen_names.add(norm)
-            projects.append(p)
+    # Every resume re-upload creates new Project rows (the facts table is
+    # append-only), so keep the newest row per project and drop hidden ones.
+    projects = dedupe_visible("projects", all_projects)
 
     if not projects:
         return ProjectsOverviewResponse(stats=ProjectsStats(), projects=[])

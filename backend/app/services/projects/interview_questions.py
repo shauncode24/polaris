@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
+from app.services.evidence.state import evidence_cutoff
 from app.models.inference import ProjectInterviewQuestionsReview
 from app.prompts.projects.project_interview_questions import PROJECT_INTERVIEW_QUESTIONS_SYSTEM_PROMPT
 from app.schemas.projects.project_intelligence import (
@@ -41,11 +42,15 @@ def _fallback_questions(project_context: dict) -> list[InterviewQuestionItem]:
 
 
 async def get_cached_interview_questions(db: AsyncSession, user_id, project_id) -> InterviewQuestionsReport | None:
-    result = await db.execute(
+    stmt = (
         select(ProjectInterviewQuestionsReview)
         .where(ProjectInterviewQuestionsReview.user_id == user_id)
         .where(ProjectInterviewQuestionsReview.project_id == project_id)
     )
+    cutoff = await evidence_cutoff(db, user_id)
+    if cutoff is not None:  # a report built before the evidence last changed is out of date
+        stmt = stmt.where(ProjectInterviewQuestionsReview.created_at >= cutoff)
+    result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     if row is None:
         return None

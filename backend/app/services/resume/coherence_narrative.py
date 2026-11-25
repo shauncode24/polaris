@@ -24,7 +24,8 @@ from app.models.facts import Experience, Project
 from app.models.inference import ResumeCoherenceReview, ProjectClaimAuditReview
 from app.prompts.resume.resume_coherence import COHERENCE_SYSTEM_PROMPT
 from app.schemas.resume.resume_coherence import CoherenceFacts, CoherenceLLMOutput, CoherenceReport
-from app.services.evidence import get_all_skill_confidences
+from app.services.evidence.confidence import get_all_skill_confidences
+from app.services.evidence.state import evidence_cutoff
 from app.services.resume.analysis.bullet_strength import compute_bullet_strength
 from app.services.resume.analysis.coherence import compute_narrative_facts
 from app.services.resume.analysis.dilution import detect_dilution
@@ -40,7 +41,7 @@ def _normalize_target_role(target_role: str | None) -> str:
 
 
 async def get_cached_coherence_report(
-    db: AsyncSession, resume_id, target_role: str | None
+    db: AsyncSession, user_id, resume_id, target_role: str | None
 ) -> CoherenceReport | None:
     """Returns the last persisted coherence report for this exact
     (resume, target_role) pair, or None if it's never been run. The API
@@ -48,11 +49,16 @@ async def get_cached_coherence_report(
     re-opening the Resume page doesn't trigger a fresh LLM call.
     """
     normalized_role = _normalize_target_role(target_role)
-    result = await db.execute(
+    stmt = (
         select(ResumeCoherenceReview)
+        .where(ResumeCoherenceReview.user_id == user_id)
         .where(ResumeCoherenceReview.resume_id == resume_id)
         .where(ResumeCoherenceReview.target_role == normalized_role)
     )
+    cutoff = await evidence_cutoff(db, user_id)
+    if cutoff is not None:  # a report built before the evidence last changed is out of date
+        stmt = stmt.where(ResumeCoherenceReview.created_at >= cutoff)
+    result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     if row is None:
         return None

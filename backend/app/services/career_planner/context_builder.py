@@ -11,7 +11,8 @@ from app.services.career_planner.curriculum import get_curriculum_topics, get_re
 from app.services.career_planner.topic_signals import build_topic_signals
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.job_intelligence.gap_results import get_latest_gap_result
-from app.services.identity.reconciled_confidence import get_reconciled_skill_confidences
+from app.services.evidence.confidence import get_reconciled_skill_confidences
+from app.services.evidence.review import dedupe_visible
 
 MAX_PLAN_DAYS = 14
 DEFAULT_PLAN_DAYS = 5
@@ -115,14 +116,10 @@ async def _get_projects(db: AsyncSession, user_id) -> list[dict]:
     result = await db.execute(
         select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
     )
-    all_p = result.scalars().all()
-    seen = set()
-    projects = []
-    for p in all_p:
-        norm = normalize_name(p.name)
-        if norm not in seen:
-            seen.add(norm)
-            projects.append({"name": p.name, "description": p.description, "stack": p.stack or []})
+    projects = [
+        {"name": p.name, "description": p.description, "stack": p.stack or []}
+        for p in dedupe_visible("projects", list(result.scalars().all()))
+    ]
     return projects[:MAX_PROJECTS_IN_PROMPT]
 
 

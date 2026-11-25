@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import LeetcodeSnapshot
 from app.models.inference import ProfileSnapshot, SkillEvidence, LeetcodePortfolioReview
-from app.services.resume.confidence import WEIGHTS
+from app.services.evidence.scoring import WEIGHTS
 from app.services.leetcode.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
 from app.services.leetcode.leetcode_insights import build_leetcode_insights, build_plan_adherence
 from app.services.leetcode.leetcode_recency import compute_tag_last_progress, compute_topic_recency, days_since

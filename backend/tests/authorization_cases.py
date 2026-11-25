@@ -43,4 +43,15 @@ CASES = [
     Case("POST", "/goals/{goal_id}/plan"),
     Case("POST", "/goals", json={"title": "t", "job_intelligence_id": "{job_id}"}),
     Case("POST", "/identity/{identity_id}/invalidate", json={"reason": "x"}),
+    Case("PATCH", "/profile/projects/{project_id}", json={"action": "hide"}),
+    Case("PATCH", "/profile/experiences/{experience_id}", json={"action": "hide"}),
+    Case("PATCH", "/profile/education/{education_id}", json={"action": "hide"}),
 ]
+
+# Routes with a path parameter that is not a reference to another user's data.
+EXEMPT = {
+    ("PUT", "/profile/skills/{}/visibility"): (
+        "skills are shared reference data; the override is always stored for the caller, "
+        "which tests/api/test_evidence.py checks"
+    ),
+}

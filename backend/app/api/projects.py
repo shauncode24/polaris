@@ -30,6 +30,7 @@ from app.services.projects.portfolio_narrative import generate_portfolio_narrati
 from app.services.projects.recommendations import build_project_recommendations
 from app.services.projects.linking import suggest_repo_links, link_project, unlink_project
 
+from app.services.evidence.state import touch_evidence
 from app.services.identity.identity_refresh import trigger_identity_refresh
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -238,6 +239,8 @@ async def confirm_project_link(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    await touch_evidence(db, current_user.id)
+
     # Freshness fix — confirming a repo link can newly enable (or change
     # the target of) a Claim Audit finding for this project, which
     # claim_risk_details/top_skills reconciliation depends on.
@@ -255,6 +258,8 @@ async def remove_project_link(
     project = await unlink_project(db, current_user.id, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    await touch_evidence(db, current_user.id)
 
     # Freshness fix — removing a repo link can retire a previously-real
     # claim-risk finding for this project.

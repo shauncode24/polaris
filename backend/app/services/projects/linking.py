@@ -110,11 +110,16 @@ async def link_project(db: AsyncSession, user_id, project_id, repo_name: str) ->
         select(Project).where(Project.id == project_id, Project.user_id == user_id)
     )
     project = result.scalar_one_or_none()
-    if project is None:
+    if project is None or project.source == "github":
+        # A GitHub-sourced project already *is* its repo; there is nothing to link.
         return None
     project.github_repo_name = repo_name
     project.repo_link_status = "confirmed"
+    project.source = "both"
     await db.commit()
+    # Merges away the GitHub-only project for this repo, if there was one.
+    from app.services.projects.reconcile import reconcile_projects
+    await reconcile_projects(db, user_id)
     await db.refresh(project)
     return project
 
@@ -124,10 +129,16 @@ async def unlink_project(db: AsyncSession, user_id, project_id) -> Project | Non
         select(Project).where(Project.id == project_id, Project.user_id == user_id)
     )
     project = result.scalar_one_or_none()
-    if project is None:
+    if project is None or project.source == "github":
         return None
     project.github_repo_name = None
-    project.repo_link_status = "unmatched"
+    # "rejected" records that the user removed this link on purpose, so the
+    # automatic exact-match linking never re-creates it.
+    project.repo_link_status = "rejected"
+    project.source = "resume"
     await db.commit()
+    # Gives the repo back its own GitHub-only project.
+    from app.services.projects.reconcile import reconcile_projects
+    await reconcile_projects(db, user_id)
     await db.refresh(project)
     return project

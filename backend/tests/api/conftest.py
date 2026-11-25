@@ -23,7 +23,7 @@ from app.core.database import get_db  # noqa: E402
 from app.core.security import create_access_token  # noqa: E402
 from app.core.settings import settings  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models.facts import Project, Resume, User  # noqa: E402
+from app.models.facts import Education, Experience, Project, Resume, User  # noqa: E402
 from app.models.goals import Goal  # noqa: E402
 from app.models.inference import (  # noqa: E402
     EngineeringIdentity,
@@ -70,7 +70,12 @@ async def _seed() -> dict:
             user_id=alice.id, source_text_hash="hash-alice", created_at=now,
             profile_json={"role": "Backend Engineer", "company": "Acme"},
         )
-        db.add_all([resume, project, job])
+        experience = Experience(
+            user_id=alice.id, resume_id=resume.id, role="Engineer", company="Acme",
+            stack=["python"], bullets=["Built things"],
+        )
+        education = Education(user_id=alice.id, resume_id=resume.id, institution="State University", degree="BSc")
+        db.add_all([resume, project, job, experience, education])
         await db.flush()
 
         gap = GapAnalysisResultRow(
@@ -114,6 +119,7 @@ async def _seed() -> dict:
         ids = {
             "alice_id": alice.id, "bob_id": bob.id,
             "project_id": project.id, "job_id": job.id, "goal_id": goal.id,
+            "experience_id": experience.id, "education_id": education.id,
             "session_id": session_id, "response_id": response.id, "identity_id": identity.id,
         }
     await engine.dispose()

@@ -48,10 +48,16 @@ from app.schemas.identity.engineering_identity import (
     ProfileExperienceEntry,
     ProfileProjectEntry,
 )
-from app.services.evidence import build_evidence_details, get_all_skill_confidences
+from app.services.evidence.confidence import (
+    build_evidence_details,
+    get_all_skill_confidences,
+    get_claim_risk_details,
+    get_reconciled_skill_confidences,
+)
+from app.services.evidence.review import dedupe_visible
+from app.services.evidence.scoring import compute_corroboration_count
 from app.services.projects.linking import normalize_name
 from app.services.github.github_knowledge import build_github_knowledge_object
-# from app.services.identity.confidence_reconciliation import reconcile_skill_confidence
 from app.services.identity.freshness import compute_evidence_coverage, compute_source_freshness
 from app.services.identity.role_fit import get_role_fit
 from app.services.identity.role_fit_scoping import build_scoped_skill_evidence
@@ -59,13 +65,7 @@ from app.services.leetcode.engineering_snapshot import compute_engineering_snaps
 from app.services.leetcode.leetcode_knowledge import build_leetcode_knowledge_object
 from app.services.projects.portfolio_narrative import get_latest_portfolio_narrative
 from app.services.resume.analysis.coverage import analyze_cross_source_coverage
-from app.services.resume.confidence import compute_corroboration_count
 from app.services.resume.analysis.role_fit import ROLE_ARCHETYPES  # kept only as a valid-role reference
-# New imports for reconciled confidence
-from app.services.identity.reconciled_confidence import (
-    get_claim_risk_details,
-    get_reconciled_skill_confidences,
-)
 
 MAX_TOP_SKILLS = 10
 MAX_TECH_DEPTH_HIGHLIGHTS = 6
@@ -234,20 +234,17 @@ async def build_profile_facts(db: AsyncSession, user_id) -> PolarisProfileFacts:
         .where(Experience.user_id == user_id)
         .order_by(Experience.start_date.desc().nullsfirst(), Experience.created_at.desc())
     )
-    seen_exps: set[str] = set()
-    experiences: list[ProfileExperienceEntry] = []
-    for e in exp_result.scalars().all():
-        key = f"{normalize_name(e.role)}@{normalize_name(e.company)}"
-        if key not in seen_exps:
-            seen_exps.add(key)
-            experiences.append(ProfileExperienceEntry(
-                role=e.role,
-                company=e.company,
-                start_date=e.start_date.isoformat() if e.start_date else None,
-                end_date=e.end_date.isoformat() if e.end_date else None,
-                stack=e.stack or [],
-                bullets=e.bullets or [],
-            ))
+    experiences: list[ProfileExperienceEntry] = [
+        ProfileExperienceEntry(
+            role=e.role,
+            company=e.company,
+            start_date=e.start_date.isoformat() if e.start_date else None,
+            end_date=e.end_date.isoformat() if e.end_date else None,
+            stack=e.stack or [],
+            bullets=e.bullets or [],
+        )
+        for e in dedupe_visible("experiences", list(exp_result.scalars().all()))
+    ]
 
     # Education — deduplicated by institution+degree (same rule as profile.py)
     edu_result = await db.execute(
@@ -255,19 +252,16 @@ async def build_profile_facts(db: AsyncSession, user_id) -> PolarisProfileFacts:
         .where(Education.user_id == user_id)
         .order_by(Education.end_date.desc().nullsfirst(), Education.created_at.desc())
     )
-    seen_edus: set[str] = set()
-    education: list[ProfileEducationEntry] = []
-    for e in edu_result.scalars().all():
-        key = f"{normalize_name(e.institution)}@{normalize_name(e.degree or '')}"
-        if key not in seen_edus:
-            seen_edus.add(key)
-            education.append(ProfileEducationEntry(
-                institution=e.institution,
-                degree=e.degree,
-                field_of_study=e.field_of_study,
-                end_date=e.end_date.isoformat() if e.end_date else None,
-                is_current=e.is_current,
-            ))
+    education: list[ProfileEducationEntry] = [
+        ProfileEducationEntry(
+            institution=e.institution,
+            degree=e.degree,
+            field_of_study=e.field_of_study,
+            end_date=e.end_date.isoformat() if e.end_date else None,
+            is_current=e.is_current,
+        )
+        for e in dedupe_visible("education", list(edu_result.scalars().all()))
+    ]
 
     # Projects — deduplicated by name (same rule as profile.py, projects/overview.py)
     proj_result = await db.execute(
@@ -275,18 +269,15 @@ async def build_profile_facts(db: AsyncSession, user_id) -> PolarisProfileFacts:
         .where(Project.user_id == user_id)
         .order_by(Project.created_at.desc())
     )
-    seen_projs: set[str] = set()
-    projects: list[ProfileProjectEntry] = []
-    for p in proj_result.scalars().all():
-        key = normalize_name(p.name)
-        if key not in seen_projs:
-            seen_projs.add(key)
-            projects.append(ProfileProjectEntry(
-                name=p.name,
-                description=p.description,
-                stack=p.stack or [],
-                repo_link_status=p.repo_link_status,
-            ))
+    projects: list[ProfileProjectEntry] = [
+        ProfileProjectEntry(
+            name=p.name,
+            description=p.description,
+            stack=p.stack or [],
+            repo_link_status=p.repo_link_status,
+        )
+        for p in dedupe_visible("projects", list(proj_result.scalars().all()))
+    ]
 
     return PolarisProfileFacts(
         experiences=experiences,

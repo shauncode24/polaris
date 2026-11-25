@@ -63,9 +63,9 @@ from app.services.identity.identity_synthesizer import (
     _slim_top_skills,
     get_latest_engineering_identity,
 )
-from app.services.identity.reconciled_confidence import get_reconciled_skill_confidences
+from app.services.evidence.confidence import get_reconciled_skill_confidences
 from app.services.projects.linking import normalize_name
-from app.services.resume.confidence_thresholds import medium_floor
+from app.services.evidence.scoring import medium_floor
 
 MAX_COMPANY_READINESS_IN_CONTEXT = 3
 # Each remaining coverage_gaps list (github_gaps/leetcode_gaps/

@@ -311,6 +311,8 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
             insert_vals = {
                 "user_id": user.id,
                 "repo_name": repo_name,
+                "description": repo.get("description"),
+                "html_url": repo.get("html_url"),
                 "category": analysis["category"],
                 "primary_language": analysis["primary_language"],
                 "technologies": analysis["technologies"],

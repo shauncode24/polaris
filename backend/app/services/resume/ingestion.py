@@ -12,7 +12,7 @@ from app.models.inference import SkillEvidence, ProfileSnapshot
 
 from app.services.resume.extraction import extract_resume_data
 from app.services.resume.skill_classifier import resolve_skills
-from app.services.resume.confidence import WEIGHTS, STACK_ONLY_MULTIPLIER, compute_skill_confidence
+from app.services.evidence.scoring import WEIGHTS, STACK_ONLY_MULTIPLIER, compute_skill_confidence
 from app.services.resume.review import flag_for_review, REVIEW_THRESHOLD
 
 

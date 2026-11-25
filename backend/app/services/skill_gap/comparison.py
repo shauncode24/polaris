@@ -16,8 +16,8 @@ from app.models.inference import SkillEvidence
 from app.models.structure import Skill
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 from app.schemas.skill_gap.skill_gap import HaveSkill, MissingSkill, PartialSkill, SkillGapReport
-from app.services.evidence import build_evidence_details
-from app.services.resume.confidence import compute_decayed_skill_confidence
+from app.services.evidence.confidence import build_evidence_details
+from app.services.evidence.scoring import compute_decayed_skill_confidence
 from app.services.resume.review import classify_match
 from app.services.skill_gap.effort_estimation import estimate_weeks
 from app.services.skill_gap.prioritization import PrioritizationError, prioritize_missing_skills

@@ -1,4 +1,4 @@
-from app.services.resume.confidence_thresholds import gap_label_for_confidence, medium_floor
+from app.services.evidence.scoring import gap_label_for_confidence, medium_floor
 
 # Was a hardcoded 0.3 — now derived from the ONE canonical confidence
 # table (confidence_thresholds.py), so this can never silently drift

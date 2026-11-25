@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import chat_completion, MODEL
+from app.services.evidence.state import evidence_cutoff
 from app.models.inference import ProjectClaimAuditReview
 from app.prompts.projects.project_claim_audit import CLAIM_AUDIT_SYSTEM_PROMPT
 from app.schemas.projects.project_intelligence import ClaimAuditFacts, ClaimAuditNarrative, ClaimAuditReport
@@ -36,11 +37,15 @@ async def get_cached_claim_audit_report(db: AsyncSession, user_id, project_id) -
     generate_claim_audit_narrative() again, unless the project's stack/
     description or its matched GitHub facts have actually changed.
     """
-    result = await db.execute(
+    stmt = (
         select(ProjectClaimAuditReview)
         .where(ProjectClaimAuditReview.user_id == user_id)
         .where(ProjectClaimAuditReview.project_id == project_id)
     )
+    cutoff = await evidence_cutoff(db, user_id)
+    if cutoff is not None:  # a report built before the evidence last changed is out of date
+        stmt = stmt.where(ProjectClaimAuditReview.created_at >= cutoff)
+    result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     if row is None:
         return None

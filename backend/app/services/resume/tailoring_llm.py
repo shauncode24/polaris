@@ -11,7 +11,8 @@ from app.models.facts import Experience, Project
 from app.models.inference import ResumeTailoringReview, ProjectClaimAuditReview
 from app.prompts.resume.resume_tailoring import TAILORING_SYSTEM_PROMPT
 from app.schemas.resume.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
-from app.services.evidence import get_all_skill_confidences
+from app.services.evidence.confidence import get_all_skill_confidences
+from app.services.evidence.state import evidence_cutoff
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.job_intelligence.requirements import requirements_from_profile
 from app.services.resume.coherence_narrative import build_bullets_with_strength
@@ -56,12 +57,16 @@ async def get_cached_tailoring_report(
     calling generate_tailoring_report() again unless the resume or the
     target JD actually changed.
     """
-    result = await db.execute(
+    stmt = (
         select(ResumeTailoringReview)
         .where(ResumeTailoringReview.user_id == user_id)
         .where(ResumeTailoringReview.resume_id == resume_id)
         .where(ResumeTailoringReview.job_intelligence_id == job_intelligence_id)
     )
+    cutoff = await evidence_cutoff(db, user_id)
+    if cutoff is not None:  # a report built before the evidence last changed is out of date
+        stmt = stmt.where(ResumeTailoringReview.created_at >= cutoff)
+    result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     if row is None:
         return None
