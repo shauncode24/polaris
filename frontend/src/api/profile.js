@@ -63,4 +63,22 @@ export function runLeetcodePortfolioReview(token) {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)
-}
+}
+
+// Confirm, edit, hide or restore one project / experience / education entry.
+// kind: 'projects' | 'experiences' | 'education'; action: 'confirm' | 'edit' | 'hide' | 'unhide'.
+export function reviewEvidenceItem(token, kind, itemId, action, fields = null) {
+  return fetch(`${API_BASE_URL}/profile/${kind}/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({ action, fields }),
+  }).then(handle)
+}
+
+export function setSkillVisibility(token, skill, hidden) {
+  return fetch(`${API_BASE_URL}/profile/skills/${encodeURIComponent(skill)}/visibility`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({ hidden }),
+  }).then(handle)
+}

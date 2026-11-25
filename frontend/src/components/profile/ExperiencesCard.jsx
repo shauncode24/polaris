@@ -1,69 +1,67 @@
-import { useState } from 'react'
 import Card from '../common/Card'
-import { IconTrash } from '../icons/OnboardingIcons'
-import { IconWorkflow } from '../icons/Icons'
+import {
+  EditForm, HiddenItems, ReviewActions, ReviewBadge, SourceBadges,
+} from './evidence/ReviewControls'
+import { useReviewActions } from './evidence/useReviewActions'
 import './ProfileSectionCard.css'
+import './evidence/EvidenceReview.css'
 
-function ExperienceItem({ exp, onDelete }) {
-  const [expanded, setExpanded] = useState(false)
-  const skills = exp.skills_used || []
-  const sources = exp.sources || ['resume']
+const EDIT_FIELDS = [
+  { name: 'role', label: 'Role', kind: 'text' },
+  { name: 'company', label: 'Company', kind: 'text' },
+  { name: 'stack', label: 'Technologies (comma separated)', kind: 'comma' },
+  { name: 'bullets', label: 'Highlights (one per line)', kind: 'lines' },
+]
+
+function ExperienceItem({ exp, ctl }) {
+  const editing = ctl.editingId === exp.id
+  const busy = ctl.busyId === exp.id
 
   return (
     <div className="psc__item">
-      <div className="psc__item-header">
-        <div>
-          <div className="psc__item-title">{exp.title || 'Role'}</div>
-          <div className="psc__item-sub">
-            {exp.company || 'Company'}
-            {(exp.start_year || exp.end_year) && ` · ${exp.start_year || ''}${exp.end_year ? ` — ${exp.end_year}` : ' — Present'}`}
-          </div>
-          <div className="psc__pills">
-            {skills.slice(0, 4).map((s) => (
-              <span key={s} className="psc__pill">{s}</span>
-            ))}
-            {sources.map((s) => (
-              <span key={s} className="psc__pill">{s}</span>
-            ))}
-          </div>
-        </div>
-        <div className="psc__item-actions">
-          <button type="button" className="psc__item-action-btn">Edit</button>
-          <button
-            type="button"
-            className="psc__item-action-btn psc__item-action-btn--danger"
-            onClick={() => onDelete(exp.id)}
-            aria-label="Delete experience"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              <path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
-            </svg>
-          </button>
-        </div>
+      <div className="psc__item-title">{exp.title || 'Role'}</div>
+      <div className="psc__item-sub">
+        {exp.company || 'Company'}
+        {(exp.start_year || exp.end_year) && ` · ${exp.start_year || ''}${exp.end_year ? ` — ${exp.end_year}` : ' — Present'}`}
+      </div>
+      <div className="evr__meta">
+        <SourceBadges sources={exp.sources} />
+        <ReviewBadge item={exp} />
       </div>
 
-      <button
-        type="button"
-        className="psc__expand-btn"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        View evidence {expanded ? '▲' : '▾'}
-      </button>
-
-      {expanded && exp.description && (
-        <p className="psc__item-desc" style={{ marginTop: 8 }}>{exp.description}</p>
+      {editing ? (
+        <EditForm
+          fields={EDIT_FIELDS}
+          initial={{ role: exp.title, company: exp.company, stack: exp.skills_used, bullets: exp.bullets }}
+          saving={busy}
+          error={ctl.error}
+          onSave={(fields) => ctl.run(exp.id, 'edit', fields)}
+          onCancel={() => { ctl.setEditingId(null); ctl.setError('') }}
+        />
+      ) : (
+        <>
+          <div className="psc__pills">
+            {(exp.skills_used || []).slice(0, 6).map((s) => <span key={s} className="psc__pill">{s}</span>)}
+          </div>
+          {exp.description && <p className="psc__item-desc" style={{ marginTop: 8 }}>{exp.description}</p>}
+          <ReviewActions
+            item={exp}
+            busy={busy}
+            onConfirm={() => ctl.run(exp.id, 'confirm')}
+            onEdit={() => { ctl.setError(''); ctl.setEditingId(exp.id) }}
+            onHide={() => ctl.run(exp.id, 'hide')}
+            onRestore={() => ctl.run(exp.id, 'unhide')}
+          />
+        </>
       )}
     </div>
   )
 }
 
-function ExperiencesCard({ results, loading }) {
-  const experiences = results?.resume?.experiences || []
-
-  function handleDelete(id) {
-    // Local only for now – no backend DELETE endpoint wired
-  }
+function ExperiencesCard({ experiences = [], loading, onReview }) {
+  const ctl = useReviewActions('experiences', onReview)
+  const visible = experiences.filter((e) => !e.is_hidden)
+  const hidden = experiences.filter((e) => e.is_hidden)
 
   return (
     <Card className="psc">
@@ -75,32 +73,29 @@ function ExperiencesCard({ results, loading }) {
             </svg>
           </span>
           <h3 className="psc__title">Experiences</h3>
-          {experiences.length > 0 && (
-            <span className="psc__count">{experiences.length}</span>
-          )}
+          {visible.length > 0 && <span className="psc__count">{visible.length}</span>}
         </div>
-        <button type="button" className="psc__add-btn">
-          <span>+</span> Add experience manually
-        </button>
       </div>
 
+      {ctl.error && ctl.editingId === null && <p className="psc__error">{ctl.error}</p>}
+
       {loading ? (
+        <div className="psc__empty"><span className="psc__empty-text">Loading…</span></div>
+      ) : visible.length === 0 ? (
         <div className="psc__empty">
-          <span className="psc__empty-text">Loading…</span>
-        </div>
-      ) : experiences.length === 0 ? (
-        <div className="psc__empty">
-          <span className="psc__empty-text">No experiences yet — upload a resume to get started.</span>
+          <span className="psc__empty-text">No experiences yet — upload a resume or import LinkedIn to get started.</span>
         </div>
       ) : (
-        experiences.map((exp, i) => (
-          <ExperienceItem
-            key={exp.id || i}
-            exp={exp}
-            onDelete={handleDelete}
-          />
-        ))
+        visible.map((exp) => <ExperienceItem key={exp.id} exp={exp} ctl={ctl} />)
       )}
+
+      <HiddenItems
+        label="experience"
+        items={hidden}
+        nameOf={(e) => `${e.title} at ${e.company}`}
+        busyId={ctl.busyId}
+        onRestore={(e) => ctl.run(e.id, 'unhide')}
+      />
     </Card>
   )
 }

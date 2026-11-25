@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useProfileData } from '../contexts/ProfileDataContext'
-import { uploadResume, getProfileData } from '../api/profile'
+import { uploadResume, getProfileData, reviewEvidenceItem, setSkillVisibility } from '../api/profile'
+import { confirmProjectLink, unlinkProject } from '../api/projects'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ProfileCompletenessBar from '../components/profile/ProfileCompletenessBar'
@@ -14,6 +15,7 @@ import EducationCard from '../components/profile/EducationCard'
 import CertificatesCard from '../components/profile/CertificatesCard'
 import GitHubSyncCard from '../components/profile/GitHubSyncCard'
 import LeetCodeSyncCard from '../components/profile/LeetCodeSyncCard'
+import LinkedInImportPanel from '../components/profile/LinkedInImportPanel'
 import NotesCard from '../components/profile/NotesCard'
 import './ProfilePage.css'
 
@@ -22,31 +24,51 @@ function ProfilePage() {
   const { results, setResult } = useProfileData()
   const reuploadRef = useRef(null)
 
-  // Detailed profile data fetched from the backend
-  const [profileData, setProfileData] = useState(null)
+  // The evidence record as the server holds it: what Polaris knows about
+  // the user and where each item came from. Every card below reads this, not
+  // browser-local state, so it is the same on every device and after every sync.
+  const [evidence, setEvidence] = useState(null)
   const [profileLoading, setProfileLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+
+  const refreshEvidence = useCallback(async () => {
+    try {
+      setEvidence(await getProfileData(token))
+      setLoadError('')
+    } catch (err) {
+      setLoadError(err.message || 'Could not load your profile.')
+    }
+  }, [token])
 
   useEffect(() => {
     let cancelled = false
     setProfileLoading(true)
-    getProfileData(token)
-      .then((data) => { if (!cancelled) setProfileData(data) })
-      .catch(() => { if (!cancelled) setProfileData(null) })
-      .finally(() => { if (!cancelled) setProfileLoading(false) })
+    refreshEvidence().finally(() => { if (!cancelled) setProfileLoading(false) })
     return () => { cancelled = true }
-  }, [token])
+  }, [refreshEvidence])
 
-  // Merge backend data into a unified results object the cards can consume
-  const enrichedResults = {
-    ...results,
-    resume: results.resume
-      ? {
-          ...results.resume,
-          experiences: profileData?.experiences || [],
-          projects: profileData?.projects || [],
-          education: profileData?.education || [],
-        }
-      : results.resume,
+  // Confirm / edit / hide one item, then swap the server's version into the page.
+  async function handleReview(kind, id, action, fields) {
+    const updated = await reviewEvidenceItem(token, kind, id, action, fields)
+    setEvidence((current) => ({
+      ...current,
+      [kind]: current[kind].map((item) => (item.id === id ? updated : item)),
+    }))
+  }
+
+  async function handleSkillVisibility(skill, hidden) {
+    await setSkillVisibility(token, skill, hidden)
+    await refreshEvidence()  // hiding or restoring changes confidence readings, so reload them
+  }
+
+  async function handleLinkProject(projectId, repoName) {
+    await confirmProjectLink(token, projectId, repoName)
+    await refreshEvidence()
+  }
+
+  async function handleDismissLink(projectId) {
+    await unlinkProject(token, projectId)
+    await refreshEvidence()
   }
 
   // Format last sync time
@@ -57,9 +79,7 @@ function ProfilePage() {
     try {
       const data = await uploadResume(file, token)
       setResult('resume', { ...data, filename: file.name })
-      // Refresh profile data after upload
-      const freshData = await getProfileData(token)
-      setProfileData(freshData)
+      await refreshEvidence()
     } catch {
       // Errors handled within ResumeCard
     }
@@ -122,30 +142,53 @@ function ProfilePage() {
                 result={results.resume}
                 onSuccess={(data) => {
                   setResult('resume', data)
-                  // Refresh detail data after successful upload
-                  getProfileData(token).then(setProfileData).catch(() => {})
+                  refreshEvidence()
                 }}
               />
-              <ExperiencesCard results={enrichedResults} loading={profileLoading} />
-              <ProjectsCard results={enrichedResults} loading={profileLoading} />
-              <EducationCard results={enrichedResults} loading={profileLoading} />
+              {loadError && <p className="psc__error">{loadError}</p>}
+              <ExperiencesCard
+                experiences={evidence?.experiences}
+                loading={profileLoading}
+                onReview={handleReview}
+              />
+              <ProjectsCard
+                projects={evidence?.projects}
+                pendingLinks={evidence?.pending_repo_links}
+                loading={profileLoading}
+                onReview={handleReview}
+                onLink={handleLinkProject}
+                onDismissLink={handleDismissLink}
+              />
+              <EducationCard
+                education={evidence?.education}
+                loading={profileLoading}
+                onReview={handleReview}
+              />
             </div>
 
             {/* Right column */}
             <div className="profile-col profile-col--right">
-              <SkillsEvidenceCard results={enrichedResults} />
+              <SkillsEvidenceCard
+                skills={evidence?.skills}
+                loading={profileLoading}
+                onSetVisibility={handleSkillVisibility}
+              />
               <CertificatesCard
                 certificates={results.certificates || []}
                 onChange={(certs) => setResult('certificates', certs)}
               />
               <GitHubSyncCard
                 result={results.github}
-                onSuccess={(data) => setResult('github', data)}
+                onSuccess={(data) => {
+                  setResult('github', data)
+                  refreshEvidence()  // the sync adds GitHub-only projects
+                }}
               />
               <LeetCodeSyncCard
                 result={results.leetcode}
                 onSuccess={(data) => setResult('leetcode', data)}
               />
+              <LinkedInImportPanel onImported={refreshEvidence} />
               <NotesCard />
             </div>
           </div>

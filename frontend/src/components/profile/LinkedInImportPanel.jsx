@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { ingestLinkedInProfile } from '../../api/linkedin'
+import { getLinkedInWorkspace, ingestLinkedInProfile } from '../../api/linkedin'
 import './LinkedInImportPanel.css'
 
 function LinkedInImportPanel({ onImported }) {
@@ -9,6 +9,13 @@ function LinkedInImportPanel({ onImported }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [workspace, setWorkspace] = useState(null)
+
+  const loadWorkspace = useCallback(() => {
+    getLinkedInWorkspace(token).then(setWorkspace).catch(() => setWorkspace(null))
+  }, [token])
+
+  useEffect(() => { loadWorkspace() }, [loadWorkspace])
 
   async function handleSubmit() {
     if (!rawText.trim()) {
@@ -22,6 +29,7 @@ function LinkedInImportPanel({ onImported }) {
       const data = await ingestLinkedInProfile(token, rawText.trim())
       setResult(data)
       setRawText('')
+      loadWorkspace()
       onImported?.(data)
     } catch (err) {
       setError(err.message || 'Could not import your LinkedIn profile.')
@@ -39,6 +47,16 @@ function LinkedInImportPanel({ onImported }) {
           and paste them below. Polaris never scrapes LinkedIn — this only reads what you paste here.
         </p>
       </div>
+
+      {workspace?.has_data && (
+        <p className="li-import__lead">
+          Last imported {new Date(workspace.created_at).toLocaleDateString()}
+          {workspace.headline ? ` — “${workspace.headline}”` : ''}: {workspace.experience_count} experience
+          {workspace.experience_count === 1 ? '' : 's'}, {workspace.education_count} education
+          {workspace.education_count === 1 ? ' entry' : ' entries'}, {workspace.skills.length} skill
+          {workspace.skills.length === 1 ? '' : 's'}.
+        </p>
+      )}
 
       <textarea
         className="li-import__textarea"

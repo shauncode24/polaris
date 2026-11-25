@@ -1,8 +1,60 @@
 import Card from '../common/Card'
+import {
+  EditForm, HiddenItems, ReviewActions, ReviewBadge, SourceBadges,
+} from './evidence/ReviewControls'
+import { useReviewActions } from './evidence/useReviewActions'
 import './ProfileSectionCard.css'
+import './evidence/EvidenceReview.css'
 
-function EducationCard({ results, loading }) {
-  const education = results?.resume?.education || []
+const EDIT_FIELDS = [
+  { name: 'institution', label: 'Institution', kind: 'text' },
+  { name: 'degree', label: 'Degree', kind: 'text' },
+  { name: 'field_of_study', label: 'Field of study', kind: 'text' },
+]
+
+function EducationItem({ edu, ctl }) {
+  const editing = ctl.editingId === edu.id
+  const busy = ctl.busyId === edu.id
+
+  return (
+    <div className="psc__item">
+      <div className="psc__item-title">{edu.institution || 'Institution'}</div>
+      <div className="psc__item-sub">
+        {[edu.degree, edu.field_of_study].filter(Boolean).join(' · ') || 'Degree'}
+        {edu.graduation_year && <><br />{edu.graduation_year}</>}
+      </div>
+      <div className="evr__meta">
+        <SourceBadges sources={edu.sources} />
+        <ReviewBadge item={edu} />
+      </div>
+
+      {editing ? (
+        <EditForm
+          fields={EDIT_FIELDS}
+          initial={edu}
+          saving={busy}
+          error={ctl.error}
+          onSave={(fields) => ctl.run(edu.id, 'edit', fields)}
+          onCancel={() => { ctl.setEditingId(null); ctl.setError('') }}
+        />
+      ) : (
+        <ReviewActions
+          item={edu}
+          busy={busy}
+          onConfirm={() => ctl.run(edu.id, 'confirm')}
+          onEdit={() => { ctl.setError(''); ctl.setEditingId(edu.id) }}
+          onHide={() => ctl.run(edu.id, 'hide')}
+          onRestore={() => ctl.run(edu.id, 'unhide')}
+        />
+      )}
+    </div>
+  )
+}
+
+function EducationCard({ education = [], loading, onReview }) {
+  const ctl = useReviewActions('education', onReview)
+  const visible = education.filter((e) => !e.is_hidden)
+  const hidden = education.filter((e) => e.is_hidden)
 
   return (
     <Card className="psc">
@@ -15,47 +67,29 @@ function EducationCard({ results, loading }) {
             </svg>
           </span>
           <h3 className="psc__title">Education</h3>
-          {education.length > 0 && (
-            <span className="psc__count">{education.length}</span>
-          )}
+          {visible.length > 0 && <span className="psc__count">{visible.length}</span>}
         </div>
-        <button type="button" className="psc__add-btn">
-          <span>+</span> Add education manually
-        </button>
       </div>
 
+      {ctl.error && ctl.editingId === null && <p className="psc__error">{ctl.error}</p>}
+
       {loading ? (
+        <div className="psc__empty"><span className="psc__empty-text">Loading…</span></div>
+      ) : visible.length === 0 ? (
         <div className="psc__empty">
-          <span className="psc__empty-text">Loading…</span>
-        </div>
-      ) : education.length === 0 ? (
-        <div className="psc__empty">
-          <span className="psc__empty-text">No education records found — upload a resume to extract them.</span>
+          <span className="psc__empty-text">No education records found — upload a resume or import LinkedIn.</span>
         </div>
       ) : (
-        education.map((edu, i) => (
-          <div key={edu.id || i} className="psc__item">
-            <div className="psc__item-header">
-              <div>
-                <div className="psc__item-title">{edu.institution || edu.school || 'Institution'}</div>
-                <div className="psc__item-sub">
-                  {edu.degree || edu.field_of_study || 'Degree'}
-                  {edu.graduation_year && <><br />{edu.graduation_year}</>}
-                </div>
-              </div>
-              <div className="psc__item-actions">
-                <button type="button" className="psc__item-action-btn">Edit</button>
-                <button type="button" className="psc__item-action-btn psc__item-action-btn--danger" aria-label="Delete education">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                    <path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        ))
+        visible.map((edu) => <EducationItem key={edu.id} edu={edu} ctl={ctl} />)
       )}
+
+      <HiddenItems
+        label="education entry"
+        items={hidden}
+        nameOf={(e) => e.institution}
+        busyId={ctl.busyId}
+        onRestore={(e) => ctl.run(e.id, 'unhide')}
+      />
     </Card>
   )
 }
