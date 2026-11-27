@@ -2,16 +2,23 @@
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import LeetcodeSnapshot
 from app.models.inference import ProfileSnapshot, SkillEvidence, LeetcodePortfolioReview
-from app.services.evidence.scoring import WEIGHTS
+from app.services.evidence.scoring import WEIGHTS, practice_weight
 from app.services.leetcode.leetcode_client import LeetCodeSyncError, fetch_leetcode_profile
 from app.services.leetcode.leetcode_insights import build_leetcode_insights, build_plan_adherence
 from app.services.leetcode.leetcode_recency import compute_tag_last_progress, compute_topic_recency, days_since
-from app.services.leetcode.leetcode_taxonomy import topic_totals, weighted_topic_totals, TAG_TO_TOPIC, log_unmapped_tags
+from app.services.leetcode.leetcode_taxonomy import (
+    PRACTICE_TAGS,
+    TAG_TO_TOPIC,
+    log_unmapped_tags,
+    practice_by_skill,
+    topic_totals,
+    weighted_topic_totals,
+)
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.user_helpers import get_or_create_skill
 
@@ -104,6 +111,44 @@ async def _get_latest_recommended_topics(db: AsyncSession, user_id) -> tuple[lis
     return topics, review.created_at.isoformat()
 
 
+async def _record_practice(
+    db: AsyncSession, user_id, previous: dict[str, int], current: dict[str, int], total_solved: int | None
+) -> tuple[list[str], list[str], list[str]]:
+    """Keeps one evidence row per skill in PRACTICE_TAGS in step with the
+    solve counts. Evidence is re-dated only when more has been solved, so
+    practice that has stopped ages like any other evidence. Returns the skills
+    (created, reinforced, unchanged).
+    """
+    before = practice_by_skill(previous)
+    # A manual entry may list only some topics; the others keep their counts.
+    now = practice_by_skill({**previous, **current}, total_solved)
+    uncapped = practice_by_skill({**previous, **current})
+    created, reinforced, unchanged = [], [], []
+
+    for canonical, practice in now.items():
+        skill = await get_or_create_skill(db, canonical, canonical.replace("_", " ").title())
+        mine = (SkillEvidence.user_id == user_id, SkillEvidence.skill_id == skill.id,
+                SkillEvidence.source_type == "leetcode_tag")
+        row = (await db.execute(select(SkillEvidence).where(*mine).limit(1))).scalar_one_or_none()
+        weight = practice_weight(practice.problems, practice.breadth)
+
+        if weight == 0:
+            await db.execute(delete(SkillEvidence).where(*mine))
+        elif row is None:
+            db.add(SkillEvidence(
+                user_id=user_id, skill_id=skill.id, source_type="leetcode_tag", source_id=None, weight=weight,
+            ))
+            created.append(canonical)
+        else:
+            row.weight = weight
+            if uncapped[canonical].problems > before[canonical].problems:
+                row.created_at = datetime.now(timezone.utc)
+                reinforced.append(canonical)
+            else:
+                unchanged.append(canonical)
+    return created, reinforced, unchanged
+
+
 async def _persist_leetcode_data(
     db: AsyncSession,
     user,
@@ -146,6 +191,8 @@ async def _persist_leetcode_data(
 
     for tag, count in tag_counts.items():
         canonical = resolved.get(tag)
+        if canonical in PRACTICE_TAGS:  # scored from all the topics together, below
+            canonical = None
         skill_updated = False
 
         if canonical is not None:
@@ -178,6 +225,12 @@ async def _persist_leetcode_data(
 
         tags_report.append({"tag": tag, "solved": count, "skill_updated": skill_updated})
 
+    created, reinforced, unchanged = await _record_practice(
+        db, user.id, previous_tag_counts, tag_counts, (extra_stats or {}).get("total_solved"),
+    )
+    new_skills += created
+    reinforced_skills += reinforced
+    unchanged_skills += unchanged
     await db.flush()
 
     tag_last_progress = await compute_tag_last_progress(db, user.id)

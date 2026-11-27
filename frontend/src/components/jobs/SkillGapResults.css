@@ -322,3 +322,35 @@
 .sg-support__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sg-support__title { font-weight: 600; font-size: 13px; color: var(--ink); }
 .sg-support__detail { font-size: 12.5px; color: var(--text-soft); margin: 2px 0 0; }
+
+/* Strengths and risks, side by side where there is room. */
+.sg-verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.sg-verdict ul { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.sg-verdict li { display: flex; gap: 8px; font-size: 13px; }
+.sg-verdict--strengths li span { color: var(--success); }
+.sg-verdict--risks li span { color: var(--warning); }
+
+.sg-next {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.sg-next p { font-size: 13.5px; }
+.sg-next__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.sg-next__link {
+  padding: 9px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.sg-next__link:hover { border-color: var(--accent); color: var(--accent); }
+.sg-next__link--primary { border-color: var(--accent); background: var(--accent); color: var(--text-on-accent); }
+.sg-next__link--primary:hover { background: var(--accent-strong); color: var(--text-on-accent); }

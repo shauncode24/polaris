@@ -19,7 +19,7 @@ from app.services.job_intelligence.builder import (
     build_job_intelligence,
     get_job_intelligence,
 )
-from app.services.job_intelligence.gap_results import get_latest_gap_results_by_job
+from app.services.job_intelligence.gap_results import get_current_gap_results_by_job
 from app.services.job_intelligence.library import MAX_COMPARED_JOBS, compare_jobs, delete_job, set_primary
 from app.services.resume.pdf_parser import PdfParseError, extract_text_from_pdf_bytes
 from app.services.target_profile.builder import build_target_profile
@@ -181,14 +181,14 @@ async def list_job_intelligence(
         .order_by(JobIntelligenceProfileRow.is_primary.desc(), JobIntelligenceProfileRow.created_at.desc())
     )
     rows = list(result.scalars().all())
-    latest_gap = await get_latest_gap_results_by_job(db, current_user.id)
+    current_gap = await get_current_gap_results_by_job(db, current_user.id)
 
     summaries = []
     for row in rows:
         pj = row.profile_json or {}
         seniority = pj.get("seniority_signal") or {}
         quality = pj.get("extraction_quality") or {}
-        gap = latest_gap.get(row.id)
+        gap = current_gap.get(row.id)
         overall = (gap.overall_match_json if gap is not None else None) or {}
         summaries.append(JobIntelligenceSummary(
             id=str(row.id),

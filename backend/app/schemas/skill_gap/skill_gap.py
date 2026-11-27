@@ -1,15 +1,22 @@
+"""Every model of the comparison between a user's evidence and one job: what
+the comparison engine produces, what is stored, and what the Skill Gap page
+and the job library receive.
+"""
 from typing import Literal
 
 from pydantic import BaseModel
+
+from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 
 
 # How much a gap matters for this job, from how the job asks for the skill and
 # how far the evidence falls short (see services/skill_gap/severity.py).
 Severity = Literal["critical", "moderate", "minor"]
 
-# Bumped when the report gains information that older stored reports lack, so
-# they are rebuilt instead of served.
-REPORT_VERSION = 1
+# Bumped when the report changes in a way older stored reports can't satisfy,
+# so they are rebuilt instead of served.
+REPORT_VERSION = 2
 
 
 class SupportingEvidence(BaseModel):
@@ -22,43 +29,42 @@ class SupportingEvidence(BaseModel):
     url: str | None = None
 
 
-class HaveSkill(BaseModel):
+# --- one requirement --------------------------------------------------------
+
+class SkillMatch(BaseModel):
+    """What the comparison says about one of the job's requirements."""
     skill: str
-    confidence: float
-    evidence: list[str]
-    supporting: list[SupportingEvidence] = []
     explanation: str = ""
-    # NEW — only set when a real claim-risk/timeline-plausibility
-    # discount was actually applied (see
-    # services/identity/confidence_reconciliation.py). Mirrors the exact
-    # shape IdentityFacts.top_skills already exposes for the same reason
-    # — transparency about why a confidence number reads lower than the
-    # raw evidence weight alone would suggest.
+    # What the user's record shows for it. For a gap this is weak evidence
+    # that exists but is not enough to count.
+    supporting: list[SupportingEvidence] = []
+
+
+class EvidencedSkill(SkillMatch):
+    """A requirement the user has some countable evidence for."""
+    confidence: float
+    # Only set when a real claim-risk or timeline discount was applied, so the
+    # page can say why the number reads lower than the evidence alone would.
     raw_confidence: float | None = None
     confidence_flags: list[str] = []
 
 
-class PartialSkill(BaseModel):
-    skill: str
-    confidence: float
-    reason: str
-    severity: Severity = "moderate"
-    evidence: list[str] = []
-    supporting: list[SupportingEvidence] = []
-    explanation: str = ""
-    raw_confidence: float | None = None
-    confidence_flags: list[str] = []
+class HaveSkill(EvidencedSkill):
+    pass
 
 
-class MissingSkill(BaseModel):
-    skill: str
+class PartialSkill(EvidencedSkill):
     reason: str
     severity: Severity = "moderate"
-    # Weak evidence that exists but is not enough to count as having the skill.
-    supporting: list[SupportingEvidence] = []
+
+
+class MissingSkill(SkillMatch):
+    reason: str
+    severity: Severity = "moderate"
     estimated_weeks: int = 0
-    unmatched_explanation: str = ""
 
+
+# --- one job ----------------------------------------------------------------
 
 class SkillGapReport(BaseModel):
     have: list[HaveSkill] = []
@@ -67,3 +73,47 @@ class SkillGapReport(BaseModel):
     priority_order: list[str] = []
     estimated_weeks: int = 0
     evidence_version: int = 0
+
+
+class CategoryScore(BaseModel):
+    category: str
+    label: str
+    score: float
+    skill_count: int
+    matched_skills: str
+    missing_skills: list[str] = []
+
+
+class OverallMatch(BaseModel):
+    percentage: float
+    label: str
+    matched_requirements: str
+    required_matched: str
+    nice_to_have_matched: str
+
+
+class NarrativeAnalysis(BaseModel):
+    """Diagnostic narrative only — no career planning, resume advice,
+    hiring-manager roleplay, or interview prep. Those belong to other
+    modules (Career Planner, Interview). This model answers strictly:
+    how well does this profile match this role, where are the strengths,
+    and where are the gaps?
+    """
+    executive_summary: str
+    role_focus: list[str] = []
+    strengths: list[str] = []
+    risks: list[str] = []
+
+
+class SkillGapForJobResponse(BaseModel):
+    """The Skill Gap page's single response: the parsed job the user picked
+    and the whole comparison, so the page needs no second request.
+    """
+    job_intelligence: JobIntelligenceProfile
+    company_intelligence: CompanyIntelligenceProfile | None = None
+    report: SkillGapReport
+    category_breakdown: list[CategoryScore] = []
+    overall_match: OverallMatch
+    analysis: NarrativeAnalysis
+    analysis_degraded: bool = False
+    generated_at: str

@@ -51,7 +51,12 @@ function JobAnalyzerPage() {
       setError('')
       try {
         const data = await getSkillGapForJob(token, selectedId)
-        if (!cancelled) setResults(data)
+        if (cancelled) return
+        setResults(data)
+        // The score in the job picker now matches what is on the page.
+        setJobs((list) => list.map((job) => (
+          job.id === selectedId ? { ...job, overall_match_percentage: data.overall_match.percentage } : job
+        )))
       } catch (err) {
         if (!cancelled) {
           setError(err.message || 'Something went wrong analyzing this match.')

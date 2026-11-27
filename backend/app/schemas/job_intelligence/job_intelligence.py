@@ -217,6 +217,7 @@ class JobIntelligenceSummary(BaseModel):
     created_at: str | None = None
     is_primary: bool = False
     # Latest comparison against the user's evidence; null until the job has
-    # been run through the skill-gap analysis.
+    # been run through the skill-gap analysis, and again once the evidence
+    # changes.
     overall_match_percentage: float | None = None
     overall_match_label: str | None = None

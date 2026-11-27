@@ -16,8 +16,12 @@ from app.schemas.skill_gap.skill_gap import SupportingEvidence
 from app.services.evidence.matching import known_canonicals, mentions_any, skill_aliases
 from app.services.evidence.review import dedupe_visible
 from app.services.evidence.scoring import decay_multiplier
+from app.services.leetcode.leetcode_taxonomy import PRACTICE_TAGS, practice_by_skill
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+|\n+")
+# How many practised topics are listed under data structures or algorithms.
+_MAX_PRACTICE_TOPICS = 5
+_PRACTICE_NAMES = {"data_structures": "Data structure", "algorithms": "Algorithm"}
 
 
 def _first_sentence_mentioning(text: str | None, names: set[str]) -> str | None:
@@ -72,10 +76,8 @@ def _from_repo(analysis: GithubProjectAnalysis, project: Project | None, names: 
     )
 
 
-async def _leetcode_topics(db: AsyncSession, user_id) -> dict[str, list[tuple[str, int]]]:
-    """canonical skill -> [(LeetCode topic, problems solved)], from the
-    newest count stored for each topic.
-    """
+async def _leetcode_counts(db: AsyncSession, user_id) -> dict[str, int]:
+    """The newest solved count stored for each LeetCode topic."""
     result = await db.execute(
         select(LeetcodeSnapshot.tag, LeetcodeSnapshot.solved_count)
         .where(LeetcodeSnapshot.user_id == user_id)
@@ -84,11 +86,41 @@ async def _leetcode_topics(db: AsyncSession, user_id) -> dict[str, list[tuple[st
     latest: dict[str, int] = {}
     for tag, count in result.all():
         latest.setdefault(tag, count)
-    canonical_by_tag = await known_canonicals(db, set(latest))
+    return latest
+
+
+def _solved(title: str, count: int) -> SupportingEvidence:
+    return SupportingEvidence(
+        kind="leetcode_topic", source="leetcode", title=title,
+        detail=f"{count} problem{'' if count == 1 else 's'} solved",
+    )
+
+
+def _from_practice(canonical: str, counts: dict[str, int]) -> list[SupportingEvidence]:
+    """A summary of the practice behind data structures or algorithms,
+    followed by the most practised topics.
+    """
+    topics = practice_by_skill(counts)[canonical].topics
+    if not topics:
+        return []
+    summary = SupportingEvidence(
+        kind="leetcode_topic", source="leetcode", title=f"{_PRACTICE_NAMES[canonical]} practice",
+        detail=f"{len(topics)} topic{'' if len(topics) == 1 else 's'} practised on LeetCode",
+    )
+    return [summary] + [
+        _solved(tag.replace("-", " ").capitalize(), count) for tag, count in topics[:_MAX_PRACTICE_TOPICS]
+    ]
+
+
+async def _leetcode_topics(db: AsyncSession, counts: dict[str, int]) -> dict[str, list[tuple[str, int]]]:
+    """canonical skill -> [(LeetCode topic, problems solved)] for the topics
+    that name a skill themselves.
+    """
+    canonical_by_tag = await known_canonicals(db, set(counts))
 
     topics: dict[str, list[tuple[str, int]]] = {}
     for tag, canonical in canonical_by_tag.items():
-        topics.setdefault(canonical, []).append((tag, latest[tag]))
+        topics.setdefault(canonical, []).append((tag, counts[tag]))
     for entries in topics.values():
         entries.sort(key=lambda t: t[1], reverse=True)
     return topics
@@ -124,11 +156,12 @@ async def build_supporting_evidence(
         select(Certificate).where(Certificate.user_id == user_id)
     )).scalars().all()}
     aliases = await skill_aliases(db, set(evidence_by_skill))
-    leetcode_topics = (
-        await _leetcode_topics(db, user_id)
+    leetcode_counts = (
+        await _leetcode_counts(db, user_id)
         if any(r.source_type == "leetcode_tag" for rows in evidence_by_skill.values() for r in rows)
         else {}
     )
+    leetcode_topics = await _leetcode_topics(db, leetcode_counts) if leetcode_counts else {}
 
     supporting: dict[str, list[SupportingEvidence]] = {}
     for canonical, rows in evidence_by_skill.items():
@@ -145,19 +178,13 @@ async def build_supporting_evidence(
                 analysis = analyses[row.source_id]
                 items.append(_from_repo(analysis, project_by_repo.get(analysis.repo_name), names))
             elif row.source_type == "leetcode_tag":
-                topics = leetcode_topics.get(canonical)
-                if topics:
-                    items.extend(
-                        SupportingEvidence(
-                            kind="leetcode_topic", source="leetcode", title=tag,
-                            detail=f"{count} problem{'' if count == 1 else 's'} solved",
-                        )
-                        for tag, count in topics
-                    )
+                if canonical in PRACTICE_TAGS:
+                    found = _from_practice(canonical, leetcode_counts)
                 else:
-                    items.append(SupportingEvidence(
-                        kind="leetcode_topic", source="leetcode", title="LeetCode practice history",
-                    ))
+                    found = [_solved(tag, count) for tag, count in leetcode_topics.get(canonical, [])]
+                items.extend(found or [SupportingEvidence(
+                    kind="leetcode_topic", source="leetcode", title="LeetCode practice history",
+                )])
             elif row.source_type == "linkedin_profile":
                 items.append(SupportingEvidence(
                     kind="linkedin", source="linkedin", title="LinkedIn profile",

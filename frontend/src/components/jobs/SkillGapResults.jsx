@@ -1,5 +1,6 @@
 // frontend/src/components/jobs/SkillGapResults.jsx
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { SourceBadges } from '../profile/evidence/ReviewControls'
 import './SkillGapResults.css'
 
@@ -82,7 +83,7 @@ function useCombinedSkills(report, canonicalSkillsMap, enrichedBySkill, priority
       rows.push({
         status: 'missing',
         skill: m.skill,
-        unmatchedExplanation: m.unmatched_explanation,
+        explanation: m.explanation,
         severity: m.severity,
         supporting: m.supporting || [],
         estimatedWeeks: m.estimated_weeks,
@@ -157,7 +158,7 @@ function SupportingEvidence({ items, weak }) {
 // ---------------------------------------------------------------------------
 function SkillRow({ row }) {
   const [expanded, setExpanded] = useState(false)
-  const hasDetail = row.supporting.length > 0 || row.explanation || row.reason || row.unmatchedExplanation
+  const hasDetail = row.supporting.length > 0 || row.explanation || row.reason
 
   return (
     <li className={`sg-row sg-row--${row.status}`}>
@@ -195,7 +196,6 @@ function SkillRow({ row }) {
         <div className="sg-row__detail">
           {row.explanation && <p>{row.explanation}</p>}
           {row.status === 'partial' && row.reason && <p className="sg-row__reason">{row.reason}</p>}
-          {row.unmatchedExplanation && <p>{row.unmatchedExplanation}</p>}
           <SupportingEvidence items={row.supporting} weak={row.status === 'missing'} />
           {row.flags?.length > 0 && <p className="sg-row__flag">⚠ {row.flags[0]}</p>}
         </div>
@@ -243,6 +243,37 @@ function CategoryRow({ c, combinedSkills }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function Verdict({ title, tone, mark, items }) {
+  if (!items?.length) return null
+  return (
+    <div className={`sg-card sg-verdict sg-verdict--${tone}`}>
+      <h3>{title}</h3>
+      <ul>
+        {items.map((text, i) => (
+          <li key={i}><span aria-hidden="true">{mark}</span>{text}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// Where to go next with this job.
+function NextSteps({ job }) {
+  return (
+    <div className="sg-next">
+      <p>Ready to act on this for <strong>{job.role || 'this role'}</strong>?</p>
+      <div className="sg-next__actions">
+        <Link to={`/career-planner?jobId=${job.id}`} className="sg-next__link sg-next__link--primary">
+          Plan how to close the gaps →
+        </Link>
+        <Link to={`/interview?jobId=${job.id}`} className="sg-next__link">
+          Practise interview questions →
+        </Link>
+      </div>
     </div>
   )
 }
@@ -360,8 +391,7 @@ function SkillGapResults({ data, onRegenerate }) {
         </div>
       </div>
 
-      {/* Match summary — narrative + role emphasis only. Strengths/Gaps
-          list removed: it just previewed the skill table below. */}
+      {/* Match summary — narrative + role emphasis. */}
       {analysis.executive_summary && (
         <div className="sg-card">
           <p className="sg-summary">{analysis.executive_summary}</p>
@@ -370,6 +400,13 @@ function SkillGapResults({ data, onRegenerate }) {
               {analysis.role_focus.map((f) => <span key={f} className="sg-tag">{f}</span>)}
             </div>
           )}
+        </div>
+      )}
+
+      {(analysis.strengths?.length > 0 || analysis.risks?.length > 0) && (
+        <div className="sg-verdicts">
+          <Verdict title="Strengths" tone="strengths" mark="✓" items={analysis.strengths} />
+          <Verdict title="Risks" tone="risks" mark="⚠" items={analysis.risks} />
         </div>
       )}
 
@@ -441,6 +478,8 @@ function SkillGapResults({ data, onRegenerate }) {
           </div>
         </div>
       )}
+
+      <NextSteps job={job} />
     </div>
   )
 }

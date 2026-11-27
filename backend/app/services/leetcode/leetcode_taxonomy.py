@@ -9,6 +9,7 @@ small, stable vocabulary that doesn't need re-deriving per user.
 A tag can only belong to one canonical topic here (no fan-out) so that
 summing per-topic counts never double-counts a solved problem.
 """
+from dataclasses import dataclass
 
 CANONICAL_TOPICS: dict[str, list[str]] = {
     "Arrays & Hashing": ["array", "hash-table", "two-pointers", "prefix-sum", "counting"],
@@ -93,6 +94,69 @@ def weighted_topic_totals(
         weight = TIER_WEIGHTS.get(tier, DEFAULT_TIER_WEIGHT)
         totals[topic] += count * weight
     return {topic: round(value, 1) for topic, value in totals.items()}
+
+
+# The two skills job descriptions ask for that LeetCode practice proves:
+# canonical skill -> the tag slugs that count toward it.
+PRACTICE_TAGS: dict[str, frozenset[str]] = {
+    "data_structures": frozenset({
+        "array", "matrix", "string", "hash-table", "linked-list", "doubly-linked-list", "stack",
+        "monotonic-stack", "queue", "monotonic-queue", "tree", "binary-tree", "binary-search-tree",
+        "graph", "union-find", "heap-priority-queue", "trie", "segment-tree", "binary-indexed-tree",
+        "ordered-set",
+    }),
+    "algorithms": frozenset({
+        "two-pointers", "sliding-window", "prefix-sum", "binary-search", "sorting", "recursion",
+        "divide-and-conquer", "backtracking", "dynamic-programming", "memoization", "greedy",
+        "depth-first-search", "breadth-first-search", "topological-sort", "shortest-path",
+        "bit-manipulation",
+    }),
+}
+# A topic counts toward breadth once this many of its problems are solved.
+MIN_SOLVED_PER_TOPIC = 3
+
+
+@dataclass(frozen=True)
+class Practice:
+    problems: int  # solved problems carrying one of the skill's tags
+    topics: list[tuple[str, int]]  # (tag, solved), most practised first
+
+    @property
+    def breadth(self) -> int:
+        return sum(1 for _tag, solved in self.topics if solved >= MIN_SOLVED_PER_TOPIC)
+
+
+def _tag_slug(name: str) -> str:
+    """Manual entry accepts names as people type them ("Dynamic Programming",
+    "Arrays"); the sync already sends slugs.
+    """
+    slug = "-".join(name.strip().lower().replace("_", " ").replace("-", " ").split())
+    known = {tag for tags in PRACTICE_TAGS.values() for tag in tags}
+    return slug[:-1] if slug not in known and slug.endswith("s") and slug[:-1] in known else slug
+
+
+def practice_by_skill(tag_counts: dict[str, int], total_solved: int | None = None) -> dict[str, Practice]:
+    """How much practice stands behind each skill in PRACTICE_TAGS.
+
+    A problem usually carries several tags, so adding tag counts overstates
+    how many problems were solved. When the total is known it caps the figure.
+    """
+    solved: dict[str, int] = {}
+    for name, count in tag_counts.items():
+        slug = _tag_slug(name)
+        solved[slug] = max(count, solved.get(slug, 0))
+
+    practice = {}
+    for skill, tags in PRACTICE_TAGS.items():
+        topics = sorted(
+            ((tag, count) for tag, count in solved.items() if tag in tags and count > 0),
+            key=lambda t: (-t[1], t[0]),
+        )
+        problems = sum(count for _tag, count in topics)
+        if total_solved:
+            problems = min(problems, total_solved)
+        practice[skill] = Practice(problems=problems, topics=topics)
+    return practice
 
 
 def log_unmapped_tags(tag_counts: dict[str, int]) -> set[str]:

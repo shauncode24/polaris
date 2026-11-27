@@ -216,7 +216,7 @@ def match_requirements(
                     f"add it to one of those sources and resync."
                 )
             missing.append(MissingSkill(
-                skill=canonical, reason=reason, unmatched_explanation=explanation,
+                skill=canonical, reason=reason, explanation=explanation,
                 severity=gap_severity(requirement_type, "missing"),
             ))
             continue
@@ -229,7 +229,7 @@ def match_requirements(
             missing.append(MissingSkill(
                 skill=canonical,
                 reason=f"Low confidence ({confidence:.2f}) — insufficient evidence",
-                unmatched_explanation=(
+                explanation=(
                     f"{name} wasn't matched because the verified evidence found in your profile "
                     f"had low confidence ({confidence:.2f}). Consider adding more details or projects to "
                     f"reinforce this skill."
@@ -247,7 +247,7 @@ def match_requirements(
                 skill=canonical, confidence=confidence,
                 reason=f"Mentioned in {len(labels)} source(s) but lacks substantial evidence.",
                 explanation=explanation, severity=gap_severity(requirement_type, "partial"),
-                evidence=labels, supporting=items,
+                supporting=items,
                 raw_confidence=entry["raw_confidence"], confidence_flags=entry["confidence_flags"],
             ))
         else:
@@ -256,7 +256,7 @@ def match_requirements(
                 if len(labels) > 1 else f"Verified in your {labels[0]}."
             )
             have.append(HaveSkill(
-                skill=canonical, confidence=confidence, evidence=labels, supporting=items,
+                skill=canonical, confidence=confidence, supporting=items,
                 explanation=explanation,
                 raw_confidence=entry["raw_confidence"], confidence_flags=entry["confidence_flags"],
             ))

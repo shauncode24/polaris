@@ -28,6 +28,16 @@ WEIGHTS = {
 }
 CONFIDENCE_CAP = 0.97
 
+# LeetCode practice toward "data structures" and "algorithms". Unlike a single
+# tag, sustained practice across topics is direct proof of these, so it can
+# meet the requirement on its own: (problems solved, topics covered, weight),
+# best tier first. Below every tier it is weak evidence.
+PRACTICE_TIERS: list[tuple[int, int, float]] = [
+    (100, 5, 0.75),  # counts as having the skill
+    (30, 3, 0.45),   # counts as partial
+]
+WEAK_PRACTICE_WEIGHT = 0.15
+
 STACK_ONLY_MULTIPLIER = 0.55
 
 # Fix #8 (Engineering Identity): previously two stack-only resume
@@ -40,6 +50,16 @@ STACK_ONLY_MULTIPLIER = 0.55
 # for repeated evidence from the same type.
 CORROBORATION_BONUS_MULTIPLIER = 1.15
 MIN_DISTINCT_SOURCE_TYPES_FOR_BONUS = 2
+
+
+def practice_weight(problems: int, topics: int) -> float:
+    """Evidence weight for coding practice; 0 when there is none."""
+    if problems <= 0:
+        return 0.0
+    for min_problems, min_topics, weight in PRACTICE_TIERS:
+        if problems >= min_problems and topics >= min_topics:
+            return weight
+    return WEAK_PRACTICE_WEIGHT
 
 
 def compute_skill_confidence(evidence_weights: list[float]) -> float:

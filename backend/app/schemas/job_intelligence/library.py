@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.schemas.skill_gap.interpretation import OverallMatch
+from app.schemas.skill_gap.skill_gap import OverallMatch
 
 
 class ComparedJob(BaseModel):

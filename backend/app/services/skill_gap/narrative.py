@@ -12,7 +12,8 @@ import logging
 
 from app.core.llm import chat_completion, MODEL
 from app.prompts.skill_gap.narrative import INTERPRETATION_SYSTEM_PROMPT
-from app.schemas.skill_gap.interpretation import NarrativeAnalysis
+from app.schemas.skill_gap.skill_gap import NarrativeAnalysis
+from app.services.evidence.supporting import evidence_labels
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,10 @@ def build_narrative_context(
         "role": role,
         "company": company,
         "have": [
-            {"skill": h.skill, "confidence": h.confidence, "evidence": h.evidence, "explanation": h.explanation}
+            {
+                "skill": h.skill, "confidence": h.confidence,
+                "evidence": evidence_labels(h.supporting), "explanation": h.explanation,
+            }
             for h in have
         ],
         "partial": [
@@ -44,7 +48,7 @@ def build_narrative_context(
             for p in partial
         ],
         "missing": [
-            {"skill": m.skill, "reason": m.reason, "unmatched_explanation": m.unmatched_explanation}
+            {"skill": m.skill, "reason": m.reason, "explanation": m.explanation}
             for m in missing
         ],
         "missing_priority_order": priority_order,

@@ -118,3 +118,13 @@
   font-weight: 600;
   color: var(--accent);
 }
+
+.sgsel__score {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.sgsel__score--strong { background: var(--success-soft); color: var(--success); }
+.sgsel__score--partial { background: var(--info-soft); color: var(--info); }
+.sgsel__score--weak { background: var(--warning-soft); color: var(--warning); }

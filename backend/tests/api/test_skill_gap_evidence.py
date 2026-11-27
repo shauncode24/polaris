@@ -186,7 +186,7 @@ def test_the_supporting_items_name_the_bullet_sentence_repo_and_topic(client, sc
     topic = items(result["dynamic_programming"][1])[("leetcode_topic", "Dynamic Programming")]
     assert topic["detail"] == "12 problems solved"  # the newest count, not the older 4
 
-    assert result["docker"][1]["evidence"] == ["GitHub: infra-kit", "Experience: Engineer at Acme"]
+    assert [i["title"] for i in result["docker"][1]["supporting"]] == ["infra-kit", "Engineer at Acme"]
 
 
 def test_every_gap_has_a_severity_and_weak_evidence_is_shown(client, scenario):

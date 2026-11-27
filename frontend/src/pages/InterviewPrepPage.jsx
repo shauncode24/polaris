@@ -66,9 +66,11 @@ function InterviewPrepPage() {
       .then((items) => {
         if (cancelled) return
         setJobs(items)
-        // The list starts with the primary target, if there is one.
-        if (items.length > 0 && !targetRole) {
-          handleSelectJob(items[0])
+        // A job named in the link wins; the list otherwise starts with the
+        // primary target, if there is one.
+        const linked = items.find((job) => job.id === searchParams.get('jobId'))
+        if (linked || (items.length > 0 && !targetRole)) {
+          handleSelectJob(linked || items[0])
         }
       })
       .catch(() => {})

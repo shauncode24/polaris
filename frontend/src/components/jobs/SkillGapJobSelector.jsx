@@ -15,6 +15,12 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function MatchScore({ percentage }) {
+  if (percentage == null) return null
+  const tone = percentage >= 75 ? 'strong' : percentage >= 50 ? 'partial' : 'weak'
+  return <span className={`sgsel__score sgsel__score--${tone}`}>{Math.round(percentage)}%</span>
+}
+
 function SkillGapJobSelector({ jobs, selectedId, onSelect, loading }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
@@ -71,7 +77,9 @@ function SkillGapJobSelector({ jobs, selectedId, onSelect, loading }) {
               onClick={() => { onSelect(j.id); setOpen(false) }}
             >
               <div className="sgsel__option-main">
-                <span className="sgsel__option-role">{j.role || 'Untitled role'}</span>
+                <span className="sgsel__option-role">
+                  {j.is_primary ? '★ ' : ''}{j.role || 'Untitled role'}
+                </span>
                 <span className="sgsel__option-company">{j.company || '—'}</span>
               </div>
               <div className="sgsel__option-meta">
@@ -79,6 +87,7 @@ function SkillGapJobSelector({ jobs, selectedId, onSelect, loading }) {
                   <span className="sgsel__pill">{SENIORITY_LABELS[j.seniority_level]}</span>
                 )}
                 <span className="sgsel__option-date">{formatDate(j.created_at)}</span>
+                <MatchScore percentage={j.overall_match_percentage} />
               </div>
             </button>
           ))}

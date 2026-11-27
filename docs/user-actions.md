@@ -7,10 +7,12 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit Phase 1 and Stage C.** Done.
 - [x] **Commit step 21.** Done.
 - [x] **Commit step 22.** Done.
-- [ ] **Commit step 23.**
+- [x] **Commit step 23.** Done.
+- [ ] **Commit step 24.**
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
 - [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now six new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, and the primary target flag. Expect the 2 legacy goals to lose their job link if their job can't be matched.
 - [ ] **After migrating, re-sync GitHub once** (Profile page, GitHub card). Repo descriptions and URLs are only stored from the next sync on, and GitHub-only projects are only created by a sync or a resume upload.
+- [ ] **Re-sync LeetCode once.** Solved problems only count toward "data structures" and "algorithms" from the next sync on.
 - [ ] **Upload your resume again once.** Evidence rows saved by earlier uploads can be attached to the wrong role (a bug fixed in step 21). A fresh upload replaces them: older rows stop counting.
 - [ ] **Paste your saved jobs in again.** Jobs analysed before step 22 keep their old skill names, and some may be missing requirements because the model's reply was cut off. A re-added job appears as a new entry; delete the old one from the library on the Job & Company Intel page.
 - [ ] **Try the job library in the browser** (after migrating): set a primary target, compare two jobs, delete one, then open Career Planner and Interview Prep and check both start from the primary target.
@@ -21,6 +23,7 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 
 ## Decisions I'm waiting on
 
+- [ ] **How much evidence should count?** A skill needs a score of 60% to be met and 30% to count partly. One source rarely gets there: a skill used in one job (25%) or seen in one ordinary GitHub repo (18% to 39%) is usually shown as a gap, and one project that describes it (35%) only counts partly. LeetCode is more generous by design: 100 problems across 5 topics meets "algorithms" by itself. Tell me if either should change; the numbers are in `services/evidence/scoring.py`.
 - [ ] **Hosting** (Render or Fly.io with managed Postgres, or one VPS). Needed for step 13 (staging) and Stage J.
 - [ ] **Password reset and email verification.** The app has email/password sign-in and no reset flow, so a forgotten password locks the user out. Choose: build it (needs a transactional email provider such as Resend or Postmark), or drop email/password and keep Google sign-in only.
 - [ ] **`services/projects/curation.py`.** Only tests use it, the app never calls it. Keep, wire in, or delete?
@@ -30,7 +33,7 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 
 - [ ] **Optional: add job descriptions you care about** (for example campus placement ones) as `.txt` files in `backend/eval/jd_extraction/jds/`, list the skills you expect in `gold.json` beside it, and ask me to run the check. It needs a local database; the command is at the top of `app/scripts/eval_jd_extraction.py`.
 - [ ] **Run the journey once by hand with a real `GROQ_API_KEY`** (Stage A, steps 3 and 4, which you skipped): register, upload a resume, sync GitHub, add a job, skill gap, tailoring, interview. Write what breaks into `docs/known-issues.md`. Everything I've verified so far used a stubbed or absent LLM, so real-model behaviour is untested.
-- [ ] **Repair CI** (Stage A, step 5, skipped): the workflow still runs on Windows with no Postgres, so the 32 database-backed tests are skipped there. I can do this edit if you tell me to.
+- [ ] **Repair CI** (Stage A, step 5, skipped): the workflow still runs on Windows with no Postgres, so the database-backed tests are skipped there. I can do this edit if you tell me to.
 - [ ] **Staging account and secrets** for the hosting choice above: `JWT_SECRET`, `ENCRYPTION_KEY`, `GROQ_API_KEY`, `GOOGLE_CLIENT_ID`. Never paste them into chat.
 - [ ] **Google OAuth console:** add the staging and production origins to the allowed origins.
 

@@ -13,8 +13,12 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
 from app.models.job_intelligence import GapAnalysisResultRow
-from app.schemas.skill_gap.interpretation import CategoryScore, NarrativeAnalysis, OverallMatch
-from app.schemas.skill_gap.skill_gap_page import SkillGapForJobResponse
+from app.schemas.skill_gap.skill_gap import (
+    CategoryScore,
+    NarrativeAnalysis,
+    OverallMatch,
+    SkillGapForJobResponse,
+)
 from app.services.company_intelligence.reader import get_company_intelligence_by_source_hash
 from app.services.identity.identity_refresh import trigger_identity_refresh
 from app.services.job_intelligence.builder import get_job_intelligence
