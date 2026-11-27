@@ -30,6 +30,8 @@ else:
 
 os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
 os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
+# Every test request comes from one client, far faster than any real user.
+os.environ.setdefault("RATE_LIMIT_REQUESTS", "100000")
 
 # Database-backed tests live under tests/api and need a real Postgres.
 collect_ignore = [] if TEST_DATABASE_URL else ["api"]

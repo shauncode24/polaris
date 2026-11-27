@@ -156,16 +156,18 @@ function InsufficientContextNote({ insufficient_context, insufficient_context_re
 
 /**
  * AutoAttachedJobBadge — shown when the backend auto-attached a job context
- * from the user's active goal because no explicit job_intelligence_id was passed.
- * Implementation plan §M: frontend must signal this rather than letting JD context
- * silently appear with no explanation.
+ * (the primary target, or an active goal's job) because no explicit
+ * job_intelligence_id was passed. Implementation plan §M: frontend must signal
+ * this rather than letting JD context silently appear with no explanation.
  */
-function AutoAttachedJobBadge({ jobId }) {
+function AutoAttachedJobBadge({ jobId, source }) {
   if (!jobId) return null
   return (
     <div className="chat-msg__auto-job">
       <span className="chat-msg__auto-job-icon">⚙</span>
-      Using context from your active goal's job description
+      {source === 'primary'
+        ? 'Using your primary target job'
+        : "Using context from your active goal's job description"}
     </div>
   )
 }
@@ -243,7 +245,10 @@ function ChatMessage({ message }) {
         </div>
 
         {/* §M — auto-attached JD context notice */}
-        <AutoAttachedJobBadge jobId={data.auto_attached_job_intelligence_id} />
+        <AutoAttachedJobBadge
+          jobId={data.auto_attached_job_intelligence_id}
+          source={data.job_context_source}
+        />
 
         {/* §S — differentiated insufficient_context rendering */}
         <InsufficientContextNote

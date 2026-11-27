@@ -141,12 +141,15 @@ class InterviewResponseOutput(BaseModel):
     correction_of: str | None = None
     suggested_action: str | None = None
     trace_id: str | None = None
+    # The job whose context was used, whether the caller named it or not.
+    job_intelligence_id: str | None = None
     # NEW (implementation plan §M) — set when job_intelligence_id was
-    # not explicitly passed by the caller but a real, active Goal's
-    # attached job was auto-attached instead, so the frontend can show
-    # "using context from your goal: X" rather than the JD context
-    # silently appearing with no explanation.
+    # not explicitly passed by the caller and the user's primary target
+    # (or an active Goal's job) was auto-attached instead, so the
+    # frontend can say so rather than the JD context silently appearing
+    # with no explanation. job_context_source is "primary" or "goal".
     auto_attached_job_intelligence_id: str | None = None
+    job_context_source: str | None = None
     # Phase 3 §Q/§R — prompt version hash for observability + regression
     # tracking. Format: "<8-char plan hash>/<8-char prose hash>" derived
     # deterministically from the actual prompt content, so it updates

@@ -43,6 +43,8 @@ function InterviewPrepPage() {
 
   const [targetRole, setTargetRole] = useState('')
   const [targetCompany, setTargetCompany] = useState('')
+  // Set when the target came from a saved job, so its requirements are used.
+  const [targetJobId, setTargetJobId] = useState(null)
 
   const [companyNotes, setCompanyNotes] = useState([])
   const [notesLoading, setNotesLoading] = useState(false)
@@ -64,9 +66,9 @@ function InterviewPrepPage() {
       .then((items) => {
         if (cancelled) return
         setJobs(items)
+        // The list starts with the primary target, if there is one.
         if (items.length > 0 && !targetRole) {
-          setTargetRole(items[0].role || '')
-          setTargetCompany(items[0].company || '')
+          handleSelectJob(items[0])
         }
       })
       .catch(() => {})
@@ -191,6 +193,7 @@ function InterviewPrepPage() {
         question: questionText,
         targetRole,
         targetCompany,
+        jobIntelligenceId: targetJobId,
         sessionId: activeSessionId,
       })
       setActiveSessionId(data.session_id)
@@ -248,9 +251,12 @@ function InterviewPrepPage() {
   function handleSelectJob(job) {
     setTargetRole(job.role || '')
     setTargetCompany(job.company || '')
+    setTargetJobId(job.id)
   }
 
   function handleManualTarget(role, company) {
+    // A different target no longer refers to the saved job.
+    if (role !== targetRole || company !== targetCompany) setTargetJobId(null)
     setTargetRole(role)
     setTargetCompany(company)
   }
@@ -283,7 +289,10 @@ function InterviewPrepPage() {
       })
       setMessages(rebuilt)
       setActiveSessionId(sessionId)
-      if (session.target_role) setTargetRole(session.target_role)
+      if (session.target_role) {
+        setTargetRole(session.target_role)
+        setTargetJobId(thread[thread.length - 1]?.job_intelligence_id || null)
+      }
       if (session.target_company !== undefined) setTargetCompany(session.target_company || '')
     } catch (err) {
       setMessages((prev) => [

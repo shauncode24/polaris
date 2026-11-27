@@ -40,6 +40,10 @@ function GoalSetupPanel({
     if (preselectedJobId && jobs.some((j) => j.id === preselectedJobId)) {
       setSource('job')
       setSelectedJobId(preselectedJobId)
+    } else {
+      // Start from the primary target, unless the person already chose a job.
+      const primary = jobs.find((j) => j.is_primary)
+      if (primary) setSelectedJobId((current) => current || primary.id)
     }
   }, [preselectedJobId, jobs])
 
@@ -149,7 +153,7 @@ function GoalSetupPanel({
                   <option value="">Select an analyzed job…</option>
                   {jobs.map((j) => (
                     <option key={j.id} value={j.id}>
-                      {j.role || 'Untitled role'}{j.company ? ` · ${j.company}` : ''}
+                      {j.is_primary ? '★ ' : ''}{j.role || 'Untitled role'}{j.company ? ` · ${j.company}` : ''}
                       {j.overall_match_percentage != null ? ` · ${Math.round(j.overall_match_percentage)}% match` : ''}
                     </option>
                   ))}

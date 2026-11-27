@@ -69,7 +69,7 @@ function TargetInterviewBar({ targetRole, targetCompany, jobs, onSelectJob, onMa
                       className="target-interview__job-option"
                       onClick={() => { onSelectJob(j); setOpen(false) }}
                     >
-                      {j.role || 'Untitled role'}{j.company ? ` · ${j.company}` : ''}
+                      {j.is_primary ? '★ ' : ''}{j.role || 'Untitled role'}{j.company ? ` · ${j.company}` : ''}
                     </button>
                   ))}
                 </div>

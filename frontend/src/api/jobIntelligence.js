@@ -48,6 +48,27 @@ export function listJobIntelligenceProfiles(token) {
   }).then(handle)
 }
 
+export function setPrimaryJob(token, jobIntelligenceId, primary) {
+  return fetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}/primary`, {
+    method: primary ? 'PUT' : 'DELETE',
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
+export function deleteJob(token, jobIntelligenceId) {
+  return fetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
+export function compareJobs(token, jobIntelligenceIds) {
+  const query = new URLSearchParams(jobIntelligenceIds.map((id) => ['ids', id]))
+  return fetch(`${API_BASE_URL}/job-intelligence/compare?${query}`, {
+    headers: authHeaders(token),
+  }).then(handle)
+}
+
 export function getJobIntelligenceProfile(token, jobIntelligenceId) {
   return fetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}`, {
     headers: { ...authHeaders(token) },

@@ -29,6 +29,10 @@ class Case:
 CASES = [
     Case("GET", "/job-intelligence/{job_id}", owner_status=200),
     Case("GET", "/jobs/by-intelligence/{job_id}"),
+    Case("GET", "/job-intelligence/compare?ids={job_id}&ids={job_id}"),
+    Case("PUT", "/job-intelligence/{job_id}/primary"),
+    Case("DELETE", "/job-intelligence/{job_id}/primary", owner_status=200),
+    Case("DELETE", "/job-intelligence/{job_id}"),
     Case("GET", "/projects/{project_id}/claim-audit", owner_status=200),
     Case("GET", "/projects/{project_id}/intelligence"),
     Case("GET", "/projects/{project_id}/interview-questions", owner_status=200),

@@ -16,6 +16,8 @@ from app.schemas.interview.interview_response import (
 )
 from app.services.interview import grounding
 from app.services.interview.context_builder import build_interview_context
+from app.services.job_intelligence.builder import get_job_intelligence
+from app.services.job_intelligence.library import get_primary_job_id
 from app.services.interview.response_generation import (
     InterviewGenerationError,
     classify_blueprint,
@@ -30,11 +32,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/interview", tags=["interview"])
 
 
-async def _auto_attach_job_intelligence_id(db, user_id) -> str | None:
-    """When the caller didn't pass an explicit job_intelligence_id, use
-    the job attached to the user's soonest-due active goal, so the
-    interview isn't left blind to the role they're preparing for.
-    """
+async def _goal_job_id(db, user_id) -> UUID | None:
+    """The job attached to the user's soonest-due active goal."""
     result = await db.execute(
         select(Goal.job_intelligence_id)
         .where(Goal.user_id == user_id)
@@ -43,8 +42,33 @@ async def _auto_attach_job_intelligence_id(db, user_id) -> str | None:
         .order_by(Goal.deadline.asc().nullslast())
         .limit(1)
     )
-    job_intelligence_id = result.scalar_one_or_none()
-    return str(job_intelligence_id) if job_intelligence_id else None
+    return result.scalar_one_or_none()
+
+
+def _names_another_job(job, target_role: str | None, target_company: str | None) -> bool:
+    """True when the caller asked to practise for a different role or company
+    than this job's.
+    """
+    return any(
+        wanted and wanted.strip().lower() != (actual or "").strip().lower()
+        for wanted, actual in ((target_role, job.role), (target_company, job.company))
+    )
+
+
+async def _auto_attach_job(db, user_id, target_role: str | None, target_company: str | None):
+    """When the caller didn't name a job, use the one the user is preparing
+    for: their primary target, otherwise their active goal's job. Neither is
+    used if the caller typed a different role or company. Returns
+    (job, "primary" | "goal"), or (None, None).
+    """
+    for source, find in (("primary", get_primary_job_id), ("goal", _goal_job_id)):
+        job_id = await find(db, user_id)
+        if job_id is None:
+            continue
+        job = await get_job_intelligence(db, user_id, job_id)
+        if job is not None and not _names_another_job(job, target_role, target_company):
+            return job, source
+    return None, None
 
 
 def _build_output(
@@ -57,7 +81,8 @@ def _build_output(
     trace_id: str,
     correction_of: UUID | None = None,
     suggested_action: str | None = None,
-    auto_attached_job_intelligence_id: str | None = None,
+    job_intelligence_id: str | None = None,
+    job_context_source: str | None = None,
 ) -> InterviewResponseOutput:
     return InterviewResponseOutput(
         question=question,
@@ -81,7 +106,9 @@ def _build_output(
         correction_of=str(correction_of) if correction_of else None,
         suggested_action=suggested_action,
         trace_id=trace_id,
-        auto_attached_job_intelligence_id=auto_attached_job_intelligence_id,
+        job_intelligence_id=job_intelligence_id,
+        auto_attached_job_intelligence_id=job_intelligence_id if job_context_source else None,
+        job_context_source=job_context_source,
         prompt_version=getattr(output, "prompt_version", None) or None,
     )
 
@@ -100,14 +127,16 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
     parent_response_id = UUID(payload.parent_response_id) if payload.parent_response_id else None
 
     job_intelligence_id = payload.job_intelligence_id
-    auto_attached_job_intelligence_id = None
+    job_context_source = None
+    target_role, target_company = payload.target_role, payload.target_company
     if not job_intelligence_id:
-        auto_attached_job_intelligence_id = await _auto_attach_job_intelligence_id(db, user.id)
-        job_intelligence_id = auto_attached_job_intelligence_id
-        if auto_attached_job_intelligence_id:
+        job, job_context_source = await _auto_attach_job(db, user.id, target_role, target_company)
+        if job is not None:
+            job_intelligence_id = job.id
+            target_role = target_role or job.role
+            target_company = target_company or job.company
             logger.info(
-                "[trace=%s] auto-attached job_intelligence_id=%s from active goal",
-                trace_id, auto_attached_job_intelligence_id,
+                "[trace=%s] auto-attached job_intelligence_id=%s (%s)", trace_id, job.id, job_context_source,
             )
 
     # Classification happens BEFORE context is built so retrieval's
@@ -115,7 +144,7 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
     blueprint_key = await classify_blueprint(payload.question, trace_id=trace_id)
 
     context = await build_interview_context(
-        db, user.id, payload.question, payload.target_role, payload.target_company,
+        db, user.id, payload.question, target_role, target_company,
         job_intelligence_id=job_intelligence_id,
         session_id=str(session_id),
         correction=payload.correction,
@@ -129,9 +158,9 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
         raise HTTPException(status_code=502, detail=_degraded_error_detail(trace_id, str(e)))
 
     output_full = _build_output(
-        payload.question, output, payload.target_role, payload.target_company,
+        payload.question, output, target_role, target_company,
         session_id, parent_response_id, trace_id,
-        auto_attached_job_intelligence_id=auto_attached_job_intelligence_id,
+        job_intelligence_id=job_intelligence_id, job_context_source=job_context_source,
     )
 
     response_row = InterviewResponse(
@@ -192,11 +221,18 @@ async def correct_interview_response(
     target_role = parent_rj.get("target_role")
     target_company = parent_rj.get("target_company")
     session_id = parent.session_id or uuid4()
+    # A correction rewrites the answer for the same job it was written for.
+    # (Responses saved before `job_intelligence_id` only recorded auto-attached ones.)
+    job_intelligence_id = (
+        parent_rj.get("job_intelligence_id") or parent_rj.get("auto_attached_job_intelligence_id")
+    )
+    job_context_source = parent_rj.get("job_context_source")
 
     blueprint_key = await classify_blueprint(parent.question, trace_id=trace_id)
 
     context = await build_interview_context(
         db, current_user.id, parent.question, target_role, target_company,
+        job_intelligence_id=job_intelligence_id,
         session_id=str(session_id),
         correction=payload.correction,
         blueprint_key=blueprint_key,
@@ -221,6 +257,7 @@ async def correct_interview_response(
     output_full = _build_output(
         parent.question, output, target_role, target_company,
         session_id, parent.id, trace_id, correction_of=parent.id, suggested_action=suggested_action,
+        job_intelligence_id=job_intelligence_id, job_context_source=job_context_source,
     )
 
     response_row = InterviewResponse(

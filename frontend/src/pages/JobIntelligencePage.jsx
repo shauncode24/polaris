@@ -8,10 +8,14 @@ import {
   analyzeJobIntelligencePdf,
   listJobIntelligenceProfiles,
   getJobIntelligenceProfile,
+  setPrimaryJob,
+  deleteJob,
+  compareJobs,
 } from '../api/jobIntelligence'
 import JobIntelligenceForm from '../components/job-intelligence/JobIntelligenceForm'
 import JobIntelligenceResults from '../components/job-intelligence/JobIntelligenceResults'
-import JobIntelligenceHistoryPanel from '../components/job-intelligence/JobIntelligenceHistoryPanel'
+import JobLibrary from '../components/job-intelligence/JobLibrary'
+import JobComparison from '../components/job-intelligence/JobComparison'
 import AnalyzingJobIntelligence from '../components/job-intelligence/AnalyzingJobIntelligence'
 import './JobIntelligencePage.css'
 
@@ -26,9 +30,10 @@ const STAGES = [
 function JobIntelligencePage() {
   const { token } = useAuth()
 
-  const [history, setHistory] = useState([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-  const [selectedId, setSelectedId] = useState(null)
+  const [jobs, setJobs] = useState([])
+  const [jobsLoading, setJobsLoading] = useState(true)
+  const [jobsBusy, setJobsBusy] = useState(false)
+  const [comparison, setComparison] = useState(null)
 
   const [loading, setLoading] = useState(false)
   const [resultsLoading, setResultsLoading] = useState(false)
@@ -39,29 +44,56 @@ function JobIntelligencePage() {
   useEffect(() => {
     let cancelled = false
 
-    async function loadHistory() {
-      setHistoryLoading(true)
+    async function loadJobs() {
+      setJobsLoading(true)
       try {
         const items = await listJobIntelligenceProfiles(token)
-        if (cancelled) return
-        setHistory(items)
-        if (items.length > 0) {
-          await selectProfile(items[0].id)
-        }
+        if (!cancelled) setJobs(items)
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Could not load your role history.')
+        if (!cancelled) setError(err.message || 'Could not load your saved jobs.')
       } finally {
-        if (!cancelled) setHistoryLoading(false)
+        if (!cancelled) setJobsLoading(false)
       }
     }
 
-    loadHistory()
+    loadJobs()
     return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  async function selectProfile(jobIntelligenceId) {
-    setSelectedId(jobIntelligenceId)
+  // One library action at a time; the list is re-read after a change.
+  async function runLibraryAction(action, failure) {
+    setJobsBusy(true)
+    setError('')
+    try {
+      await action()
+    } catch (err) {
+      setError(err.message || failure)
+    } finally {
+      setJobsBusy(false)
+    }
+  }
+
+  function handleSetPrimary(id, primary) {
+    runLibraryAction(async () => {
+      await setPrimaryJob(token, id, primary)
+      setJobs(await listJobIntelligenceProfiles(token))
+    }, 'Could not change the primary target.')
+  }
+
+  function handleDelete(id) {
+    runLibraryAction(async () => {
+      await deleteJob(token, id)
+      setJobs(await listJobIntelligenceProfiles(token))
+    }, 'Could not delete this job.')
+  }
+
+  function handleCompare(ids) {
+    runLibraryAction(async () => {
+      setComparison(await compareJobs(token, ids))
+    }, 'Could not compare these jobs.')
+  }
+
+  async function openJob(jobIntelligenceId) {
     setResultsLoading(true)
     setError('')
     try {
@@ -90,11 +122,9 @@ function JobIntelligencePage() {
           ? await analyzeJobIntelligenceText(token, { rawText: text, company, role })
           : await analyzeJobIntelligencePdf(token, file, { company, role })
       setResults(data)
-      setSelectedId(data.job_intelligence?.id || null)
 
       try {
-        const items = await listJobIntelligenceProfiles(token)
-        setHistory(items)
+        setJobs(await listJobIntelligenceProfiles(token))
       } catch {
         // Non-fatal — the result is already shown even if the list refresh fails.
       }
@@ -106,11 +136,13 @@ function JobIntelligencePage() {
     }
   }
 
-  function handleNewExtraction() {
+  function showLibrary() {
     setResults(null)
-    setSelectedId(null)
+    setComparison(null)
     setError('')
   }
+
+  const showingDetail = results || comparison || resultsLoading
 
   return (
     <div className="ji-page-layout">
@@ -122,24 +154,32 @@ function JobIntelligencePage() {
           hideSearch
           hideNotifications
           actions={
-            results ? (
-              <button type="button" className="ji-page-new-btn" onClick={handleNewExtraction}>
-                + New extraction
+            showingDetail ? (
+              <button type="button" className="ji-page-new-btn" onClick={showLibrary}>
+                ← Your jobs
               </button>
             ) : null
           }
         />
 
         <div className="ji-page-content">
-          {!results && (
+          {!showingDetail && (
             <>
               <div className="ji-page-intro">
                 <h1>Job & Company Intelligence</h1>
-                <p>Paste a job description to understand the role and company on their own — no comparison against your profile.</p>
+                <p>Add the jobs you&apos;re interested in, compare how well you match them, and pick the one to prepare for.</p>
               </div>
 
               <div className="ji-page-columns">
-                <JobIntelligenceHistoryPanel items={history} selectedId={selectedId} onSelect={selectProfile} loading={historyLoading} />
+                <JobLibrary
+                  items={jobs}
+                  loading={jobsLoading}
+                  busy={jobsBusy}
+                  onOpen={openJob}
+                  onSetPrimary={handleSetPrimary}
+                  onDelete={handleDelete}
+                  onCompare={handleCompare}
+                />
 
                 {loading ? (
                   <AnalyzingJobIntelligence stages={STAGES} activeIndex={stageIndex} />
@@ -152,10 +192,12 @@ function JobIntelligencePage() {
             </>
           )}
 
-          {results && (
+          {showingDetail && (
             <>
               {resultsLoading ? (
                 <p className="ji-page-loading-results">Loading role…</p>
+              ) : comparison ? (
+                <JobComparison data={comparison} />
               ) : (
                 <JobIntelligenceResults data={results} />
               )}

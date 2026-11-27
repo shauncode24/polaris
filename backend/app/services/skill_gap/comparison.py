@@ -7,6 +7,7 @@ requirement_type + curriculum_phase, then handed to the narrowed
 prioritize_missing_skills() as a given, per design doc §5.4.
 """
 from collections import Counter
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,7 @@ from app.schemas.skill_gap.skill_gap import (
     MissingSkill,
     PartialSkill,
     SkillGapReport,
+    SupportingEvidence,
 )
 from app.services.evidence.confidence import (
     get_active_skill_evidence,
@@ -116,31 +118,94 @@ async def analyze_skill_gap(
             evidence_version=REPORT_VERSION,
         )
 
-    canonical_order = list(canonical_skills.keys())
+    view = await load_evidence_view(db, user_id, set(canonical_skills))
+    have, partial, missing = match_requirements(canonical_skills, view)
 
+    frequency = await _historical_skill_frequency(db, user_id)
+    missing_names = [m.skill for m in missing]
+
+    if missing_names:
+        role_priority_order = _role_priority_order(missing_names, canonical_skills)
+        try:
+            context = {
+                "role": role,
+                "company": company,
+                "role_priority_order": role_priority_order,
+                "have": [{"skill": h.skill, "confidence": h.confidence} for h in have],
+                "partial": [{"skill": p.skill, "confidence": p.confidence} for p in partial],
+                "missing": missing_names,
+            }
+            result = await prioritize_missing_skills(context)
+
+            valid_priority = [s for s in result.priority_order if s in missing_names]
+            for s in missing_names:
+                if s not in valid_priority:
+                    valid_priority.append(s)
+            valid_priority = _enforce_band_boundaries(valid_priority, role_priority_order, canonical_skills)
+
+            weeks_by_skill = {
+                s: max(1, result.estimated_weeks.get(s, estimate_weeks(1))) for s in missing_names
+            }
+        except PrioritizationError as e:
+            logger.warning("Prioritization degraded, using role-order fallback: %s", e)
+            valid_priority, weeks_by_skill = _fallback_prioritization(missing_names, frequency, role_priority_order)
+    else:
+        valid_priority, weeks_by_skill = [], {}
+
+    for m in missing:
+        m.estimated_weeks = weeks_by_skill.get(m.skill, 0)
+
+    missing.sort(key=lambda m: get_curriculum_rank(m.skill))
+    total_weeks = sum(weeks_by_skill.values()) if weeks_by_skill else estimate_weeks(len(missing))
+
+    return SkillGapReport(
+        have=have, partial=partial, missing=missing,
+        priority_order=valid_priority, estimated_weeks=total_weeks,
+        evidence_version=REPORT_VERSION,
+    )
+
+
+@dataclass
+class EvidenceView:
+    """What a user's record says about a set of skills, read once so several
+    jobs can be matched against it.
+    """
+    reconciled: dict[str, dict]
+    supporting: dict[str, list[SupportingEvidence]]
+    hidden: set[str]
+
+
+async def load_evidence_view(db: AsyncSession, user_id, canonicals: set[str]) -> EvidenceView:
     # The same confidence every other feature reads (claim-risk and timeline
     # discounts applied; hidden and superseded evidence excluded), plus the
     # concrete items behind it.
     reconciled = await get_reconciled_skill_confidences(db, user_id)
     active_evidence = await get_active_skill_evidence(db, user_id)
     supporting = await build_supporting_evidence(
-        db, user_id, {c: active_evidence[c] for c in canonical_order if c in active_evidence}
+        db, user_id, {c: rows for c, rows in active_evidence.items() if c in canonicals}
     )
-    hidden_by_user = await get_hidden_skill_names(db, user_id)
+    return EvidenceView(reconciled, supporting, await get_hidden_skill_names(db, user_id))
 
+
+def match_requirements(
+    canonical_skills: dict[str, str], view: EvidenceView
+) -> tuple[list[HaveSkill], list[PartialSkill], list[MissingSkill]]:
+    """Which of a job's requirements the user has, half has and lacks.
+    Deterministic. `canonical_skills` maps each skill to how the job asks
+    for it, and `view` must cover those skills.
+    """
     have: list[HaveSkill] = []
     partial: list[PartialSkill] = []
     missing: list[MissingSkill] = []
 
-    for canonical in canonical_order:
+    for canonical, requirement_type in canonical_skills.items():
         name = canonical.replace("_", " ").title()
-        requirement_type = canonical_skills[canonical]
-        entry = reconciled.get(canonical)
-        items = supporting.get(canonical, [])
+        entry = view.reconciled.get(canonical)
+        items = view.supporting.get(canonical, [])
 
         # A requirement only counts as met when there is something to point at.
         if entry is None or not items:
-            if canonical in hidden_by_user:
+            if canonical in view.hidden:
                 reason = "You hid this skill from your evidence record"
                 explanation = f"{name} is hidden in your profile. Restore it there if it should count."
             else:
@@ -196,48 +261,4 @@ async def analyze_skill_gap(
                 raw_confidence=entry["raw_confidence"], confidence_flags=entry["confidence_flags"],
             ))
 
-    frequency = await _historical_skill_frequency(db, user_id)
-    missing_names = [m.skill for m in missing]
-
-    if missing_names:
-        role_priority_order = _role_priority_order(missing_names, canonical_skills)
-        try:
-            learning_plan_curriculum = [
-                {"skill": s, "weeks": estimate_weeks(1), "phase": ""} for s in role_priority_order
-            ]
-            context = {
-                "role": role,
-                "company": company,
-                "role_priority_order": role_priority_order,
-                "have": [{"skill": h.skill, "confidence": h.confidence} for h in have],
-                "partial": [{"skill": p.skill, "confidence": p.confidence} for p in partial],
-                "missing": missing_names,
-            }
-            result = await prioritize_missing_skills(context)
-
-            valid_priority = [s for s in result.priority_order if s in missing_names]
-            for s in missing_names:
-                if s not in valid_priority:
-                    valid_priority.append(s)
-            valid_priority = _enforce_band_boundaries(valid_priority, role_priority_order, canonical_skills)
-
-            weeks_by_skill = {
-                s: max(1, result.estimated_weeks.get(s, estimate_weeks(1))) for s in missing_names
-            }
-        except PrioritizationError as e:
-            logger.warning("Prioritization degraded, using role-order fallback: %s", e)
-            valid_priority, weeks_by_skill = _fallback_prioritization(missing_names, frequency, role_priority_order)
-    else:
-        valid_priority, weeks_by_skill = [], {}
-
-    for m in missing:
-        m.estimated_weeks = weeks_by_skill.get(m.skill, 0)
-
-    missing.sort(key=lambda m: get_curriculum_rank(m.skill))
-    total_weeks = sum(weeks_by_skill.values()) if weeks_by_skill else estimate_weeks(len(missing))
-
-    return SkillGapReport(
-        have=have, partial=partial, missing=missing,
-        priority_order=valid_priority, estimated_weeks=total_weeks,
-        evidence_version=REPORT_VERSION,
-    )
+    return have, partial, missing

@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,13 +11,19 @@ from app.models.inference import ProfileSnapshot, ResumeReview
 from app.services.career_planner.curriculum import get_curriculum_topics, get_relevant_domains
 from app.services.career_planner.topic_signals import build_topic_signals
 from app.services.job_intelligence.builder import get_job_intelligence
-from app.services.job_intelligence.gap_results import get_latest_gap_result
+from app.services.job_intelligence.gap_results import get_latest_gap_result, is_current_gap_result
+from app.services.job_intelligence.library import get_primary_job_id
+from app.services.skill_gap.category_breakdown import compute_overall_match
+from app.services.skill_gap.comparison import load_evidence_view, match_requirements
+from app.services.skill_gap.effort_estimation import estimate_weeks
+from app.services.taxonomy.skill_taxonomy import get_curriculum_rank
 from app.services.evidence.confidence import get_reconciled_skill_confidences
 from app.services.evidence.review import dedupe_visible
 
 MAX_PLAN_DAYS = 14
 DEFAULT_PLAN_DAYS = 5
 MAX_PROJECTS_IN_PROMPT = 6
+_SEVERITY_ORDER = {"critical": 0, "moderate": 1, "minor": 2}
 
 
 def compute_days_available(deadline: date | None) -> int:
@@ -52,22 +59,55 @@ async def _get_skills_by_confidence(db: AsyncSession, user_id) -> list[dict]:
     ]
 
 
-async def _get_target_job_context(db: AsyncSession, user_id, job_intelligence_id) -> dict | None:
-    """Role facts plus the latest gap analysis for the job this goal
-    targets. With no explicit job, falls back to the user's most
-    recently analysed job. Returns None when there is no parsed job, or
-    when it has not been compared against the user's evidence yet.
+async def _target_job_id(db: AsyncSession, user_id, job_intelligence_id):
+    """The goal's own job; otherwise the user's primary target; otherwise
+    the job they compared most recently.
     """
-    gap_row = await get_latest_gap_result(db, user_id, job_intelligence_id)
-    if gap_row is None:
-        return None
+    if job_intelligence_id is not None:
+        return job_intelligence_id
+    primary_id = await get_primary_job_id(db, user_id)
+    if primary_id is not None:
+        return primary_id
+    latest = await get_latest_gap_result(db, user_id)
+    return latest.job_intelligence_id if latest is not None else None
 
-    job_intelligence = await get_job_intelligence(db, user_id, gap_row.job_intelligence_id)
+
+async def _match_for_job(db: AsyncSession, user_id, job_intelligence) -> tuple[dict, dict]:
+    """(report, overall match) for the job against the user's evidence now.
+    The stored comparison is used while it is current, because it carries the
+    effort estimates; otherwise the match is worked out afresh.
+    """
+    stored = await get_latest_gap_result(db, user_id, UUID(job_intelligence.id))
+    if stored is not None and await is_current_gap_result(db, user_id, stored):
+        return stored.report_json or {}, stored.overall_match_json or {}
+
+    requirements = job_intelligence.canonical_skills_map
+    if not requirements:
+        return {}, {}
+    view = await load_evidence_view(db, user_id, set(requirements))
+    have, partial, missing = match_requirements(requirements, view)
+    for entry in missing:
+        entry.estimated_weeks = estimate_weeks(1)
+    missing.sort(key=lambda m: (_SEVERITY_ORDER[m.severity], get_curriculum_rank(m.skill)))
+    report = {
+        group: [entry.model_dump(mode="json") for entry in entries]
+        for group, entries in (("have", have), ("partial", partial), ("missing", missing))
+    }
+    return report, compute_overall_match(requirements, have, partial, missing)
+
+
+async def _get_target_job_context(db: AsyncSession, user_id, job_intelligence_id) -> dict | None:
+    """Role facts plus the current match for the job this plan is for (see
+    `_target_job_id`). Returns None when the user has no such job.
+    """
+    job_id = await _target_job_id(db, user_id, job_intelligence_id)
+    if job_id is None:
+        return None
+    job_intelligence = await get_job_intelligence(db, user_id, job_id)
     if job_intelligence is None:
         return None
 
-    report = gap_row.report_json or {}
-    overall = gap_row.overall_match_json or {}
+    report, overall = await _match_for_job(db, user_id, job_intelligence)
     return {
         "role": job_intelligence.role,
         "company": job_intelligence.company,

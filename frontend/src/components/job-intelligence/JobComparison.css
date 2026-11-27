@@ -1,0 +1,47 @@
+/* frontend/src/components/job-intelligence/JobComparison.css */
+.job-compare { display: flex; flex-direction: column; gap: 20px; }
+
+.job-compare__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.job-compare__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.job-compare__card h3 { font-size: 14.5px; }
+.job-compare__card p { font-size: 12.5px; }
+.job-compare__card strong { font-size: 28px; color: var(--ink); line-height: 1.3; }
+.job-compare__primary { font-size: 11.5px; font-weight: 700; color: var(--accent); }
+
+.job-compare__table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.job-compare__table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.job-compare__table th,
+.job-compare__table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+.job-compare__table tbody tr:last-child > * { border-bottom: 0; }
+.job-compare__table thead th { font-size: 12.5px; color: var(--ink); vertical-align: bottom; }
+.job-compare__table thead th span { display: block; font-weight: 500; color: var(--text-soft); }
+.job-compare__table tbody th { font-weight: 600; color: var(--ink); text-transform: capitalize; }
+
+.job-compare__status {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.job-compare__status--have { background: var(--success-soft); color: var(--success); }
+.job-compare__status--partial { background: var(--warning-soft); color: var(--warning); }
+.job-compare__status--missing { background: var(--danger-soft); color: var(--danger); }
+
+.job-compare__band--required { font-weight: 700; color: var(--ink); }
+.job-compare__none { color: var(--text-soft); }

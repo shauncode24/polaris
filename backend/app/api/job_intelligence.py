@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ from app.core.settings import settings
 from app.models.facts import User
 from app.models.job_intelligence import JobIntelligenceProfileRow
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceSummary
+from app.schemas.job_intelligence.library import JobComparison
 from app.schemas.job_intelligence.target_profile import TargetProfile
 from app.services.company_intelligence.reader import get_company_intelligence_by_source_hash
 from app.services.job_intelligence.builder import (
@@ -19,6 +20,7 @@ from app.services.job_intelligence.builder import (
     get_job_intelligence,
 )
 from app.services.job_intelligence.gap_results import get_latest_gap_results_by_job
+from app.services.job_intelligence.library import MAX_COMPARED_JOBS, compare_jobs, delete_job, set_primary
 from app.services.resume.pdf_parser import PdfParseError, extract_text_from_pdf_bytes
 from app.services.target_profile.builder import build_target_profile
 
@@ -99,6 +101,59 @@ async def analyze_job_intelligence_pdf(
     return build_target_profile(job_profile, company_profile)
 
 
+# Declared before "/{job_intelligence_id}", which would otherwise capture it.
+@router.get("/compare", response_model=JobComparison)
+async def compare_job_intelligence(
+    ids: list[UUID] = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The user's match for each of several saved jobs, side by side."""
+    unique_ids = list(dict.fromkeys(ids))
+    if len(unique_ids) > MAX_COMPARED_JOBS:
+        raise HTTPException(status_code=400, detail=f"Compare at most {MAX_COMPARED_JOBS} jobs at a time.")
+    comparison = await compare_jobs(db, current_user.id, unique_ids)
+    if comparison is None:
+        raise HTTPException(status_code=404, detail="Job intelligence profile not found")
+    if len(unique_ids) < 2:
+        raise HTTPException(status_code=400, detail="Choose at least two different jobs to compare.")
+    return comparison
+
+
+@router.put("/{job_intelligence_id}/primary")
+async def mark_primary_job(
+    job_intelligence_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The job the career planner and interview practice work toward."""
+    if not await set_primary(db, current_user.id, job_intelligence_id, True):
+        raise HTTPException(status_code=404, detail="Job intelligence profile not found")
+    return {"id": str(job_intelligence_id), "is_primary": True}
+
+
+@router.delete("/{job_intelligence_id}/primary")
+async def unmark_primary_job(
+    job_intelligence_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not await set_primary(db, current_user.id, job_intelligence_id, False):
+        raise HTTPException(status_code=404, detail="Job intelligence profile not found")
+    return {"id": str(job_intelligence_id), "is_primary": False}
+
+
+@router.delete("/{job_intelligence_id}")
+async def delete_job_intelligence(
+    job_intelligence_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not await delete_job(db, current_user.id, job_intelligence_id):
+        raise HTTPException(status_code=404, detail="Job intelligence profile not found")
+    return {"status": "deleted"}
+
+
 @router.get("/{job_intelligence_id}", response_model=TargetProfile)
 async def get_job_intelligence_by_id(
     job_intelligence_id: UUID,
@@ -119,10 +174,11 @@ async def list_job_intelligence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """The user's saved jobs: the primary target first, then newest first."""
     result = await db.execute(
         select(JobIntelligenceProfileRow)
         .where(JobIntelligenceProfileRow.user_id == current_user.id)
-        .order_by(JobIntelligenceProfileRow.created_at.desc())
+        .order_by(JobIntelligenceProfileRow.is_primary.desc(), JobIntelligenceProfileRow.created_at.desc())
     )
     rows = list(result.scalars().all())
     latest_gap = await get_latest_gap_results_by_job(db, current_user.id)
@@ -141,6 +197,7 @@ async def list_job_intelligence(
             seniority_level=seniority.get("level", "unspecified"),
             extraction_quality_label=quality.get("label", "Low"),
             created_at=row.created_at.isoformat(),
+            is_primary=row.is_primary,
             overall_match_percentage=overall.get("percentage"),
             overall_match_label=overall.get("label"),
         ))

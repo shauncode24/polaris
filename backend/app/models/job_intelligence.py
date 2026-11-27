@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, false, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,12 +19,17 @@ class JobIntelligenceProfileRow(Base):
     migration.
     """
     __tablename__ = "job_intelligence_profiles"
+    __table_args__ = (
+        Index("uq_job_intelligence_primary", "user_id", unique=True, postgresql_where=text("is_primary")),
+    )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     source_text_hash: Mapped[str] = mapped_column(String(64), index=True)
     profile_json: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # The job the user is preparing for. At most one per user.
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class CompanyIntelligenceProfileRow(Base):
