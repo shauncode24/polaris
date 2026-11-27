@@ -12,15 +12,24 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job_intelligence import JobIntelligenceProfileRow
-from app.models.inference import SkillEvidence
-from app.models.structure import Skill
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
-from app.schemas.skill_gap.skill_gap import HaveSkill, MissingSkill, PartialSkill, SkillGapReport
-from app.services.evidence.confidence import build_evidence_details
-from app.services.evidence.scoring import compute_decayed_skill_confidence
+from app.schemas.skill_gap.skill_gap import (
+    REPORT_VERSION,
+    HaveSkill,
+    MissingSkill,
+    PartialSkill,
+    SkillGapReport,
+)
+from app.services.evidence.confidence import (
+    get_active_skill_evidence,
+    get_hidden_skill_names,
+    get_reconciled_skill_confidences,
+)
+from app.services.evidence.supporting import build_supporting_evidence, evidence_labels
 from app.services.resume.review import classify_match
 from app.services.skill_gap.effort_estimation import estimate_weeks
 from app.services.skill_gap.prioritization import PrioritizationError, prioritize_missing_skills
+from app.services.skill_gap.severity import gap_severity
 from app.services.taxonomy.skill_taxonomy import get_curriculum_rank
 import logging
 
@@ -102,86 +111,90 @@ async def analyze_skill_gap(
     company = job_intelligence.company
 
     if not canonical_skills:
-        return SkillGapReport(have=[], partial=[], missing=[], priority_order=[], estimated_weeks=0)
+        return SkillGapReport(
+            have=[], partial=[], missing=[], priority_order=[], estimated_weeks=0,
+            evidence_version=REPORT_VERSION,
+        )
 
     canonical_order = list(canonical_skills.keys())
-    skill_rows = await db.execute(select(Skill).where(Skill.canonical_name.in_(canonical_order)))
-    skills_by_canonical = {s.canonical_name: s for s in skill_rows.scalars().all()}
+
+    # The same confidence every other feature reads (claim-risk and timeline
+    # discounts applied; hidden and superseded evidence excluded), plus the
+    # concrete items behind it.
+    reconciled = await get_reconciled_skill_confidences(db, user_id)
+    active_evidence = await get_active_skill_evidence(db, user_id)
+    supporting = await build_supporting_evidence(
+        db, user_id, {c: active_evidence[c] for c in canonical_order if c in active_evidence}
+    )
+    hidden_by_user = await get_hidden_skill_names(db, user_id)
 
     have: list[HaveSkill] = []
     partial: list[PartialSkill] = []
     missing: list[MissingSkill] = []
 
     for canonical in canonical_order:
-        skill = skills_by_canonical.get(canonical)
-        if skill is None:
-            missing.append(MissingSkill(
-                skill=canonical,
-                reason="No evidence found in profile",
-                unmatched_explanation=(
-                    f"{canonical.title()} wasn't matched because no verified evidence was found in your: "
-                    f"Resume, Projects, or GitHub. If you've used {canonical.title()}, "
+        name = canonical.replace("_", " ").title()
+        requirement_type = canonical_skills[canonical]
+        entry = reconciled.get(canonical)
+        items = supporting.get(canonical, [])
+
+        # A requirement only counts as met when there is something to point at.
+        if entry is None or not items:
+            if canonical in hidden_by_user:
+                reason = "You hid this skill from your evidence record"
+                explanation = f"{name} is hidden in your profile. Restore it there if it should count."
+            else:
+                reason = "No evidence found in profile"
+                explanation = (
+                    f"{name} wasn't matched because no verified evidence was found in your: "
+                    f"Resume, Projects, or GitHub. If you've used {name}, "
                     f"add it to one of those sources and resync."
-                ),
+                )
+            missing.append(MissingSkill(
+                skill=canonical, reason=reason, unmatched_explanation=explanation,
+                severity=gap_severity(requirement_type, "missing"),
             ))
             continue
 
-        evidence_result = await db.execute(
-            select(SkillEvidence).where(
-                SkillEvidence.skill_id == skill.id,
-                SkillEvidence.user_id == user_id,
-            )
-        )
-        evidence_rows = list(evidence_result.scalars().all())
-
-        if not evidence_rows:
-            missing.append(MissingSkill(
-                skill=canonical,
-                reason="No evidence found in profile",
-                unmatched_explanation=(
-                    f"{canonical.title()} wasn't matched because no verified evidence was found in your: "
-                    f"Resume, Projects, or GitHub. If you've used {canonical.title()}, "
-                    f"add it to one of those sources and resync."
-                ),
-            ))
-            continue
-
-        confidence = compute_decayed_skill_confidence(evidence_rows)
+        confidence = entry["confidence"]
         bucket = classify_match(confidence)
+        labels = evidence_labels(items)
 
         if bucket == "missing":
             missing.append(MissingSkill(
                 skill=canonical,
                 reason=f"Low confidence ({confidence:.2f}) — insufficient evidence",
                 unmatched_explanation=(
-                    f"{canonical.title()} wasn't matched because the verified evidence found in your profile "
+                    f"{name} wasn't matched because the verified evidence found in your profile "
                     f"had low confidence ({confidence:.2f}). Consider adding more details or projects to "
                     f"reinforce this skill."
                 ),
+                severity=gap_severity(requirement_type, "missing"),
+                supporting=items,
             ))
-            continue
-
-        evidence_details = await build_evidence_details(db, evidence_rows)
-
-        if bucket == "partial":
+        elif bucket == "partial":
             explanation = (
-                f"Mentioned in your {evidence_details[0]} but lacks substantial backing."
-                if len(evidence_details) == 1
-                else f"Mentioned in {len(evidence_details)} source(s) but lacks substantial backing."
+                f"Mentioned in your {labels[0]} but lacks substantial backing."
+                if len(labels) == 1
+                else f"Mentioned in {len(labels)} source(s) but lacks substantial backing."
             )
             partial.append(PartialSkill(
                 skill=canonical, confidence=confidence,
-                reason=f"Mentioned in {len(evidence_details)} source(s) but lacks substantial evidence.",
-                explanation=explanation,
+                reason=f"Mentioned in {len(labels)} source(s) but lacks substantial evidence.",
+                explanation=explanation, severity=gap_severity(requirement_type, "partial"),
+                evidence=labels, supporting=items,
+                raw_confidence=entry["raw_confidence"], confidence_flags=entry["confidence_flags"],
             ))
         else:
-            if len(evidence_details) > 1:
-                explanation = f"Multiple independent sources verified {canonical.title()} usage."
-            elif len(evidence_details) == 1:
-                explanation = f"Verified in your {evidence_details[0]}."
-            else:
-                explanation = f"Verified {canonical.title()} usage."
-            have.append(HaveSkill(skill=canonical, confidence=confidence, evidence=evidence_details, explanation=explanation))
+            explanation = (
+                f"Multiple independent sources verified {name} usage."
+                if len(labels) > 1 else f"Verified in your {labels[0]}."
+            )
+            have.append(HaveSkill(
+                skill=canonical, confidence=confidence, evidence=labels, supporting=items,
+                explanation=explanation,
+                raw_confidence=entry["raw_confidence"], confidence_flags=entry["confidence_flags"],
+            ))
 
     frequency = await _historical_skill_frequency(db, user_id)
     missing_names = [m.skill for m in missing]
@@ -226,4 +239,5 @@ async def analyze_skill_gap(
     return SkillGapReport(
         have=have, partial=partial, missing=missing,
         priority_order=valid_priority, estimated_weeks=total_weeks,
+        evidence_version=REPORT_VERSION,
     )

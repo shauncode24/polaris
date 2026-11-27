@@ -1,5 +1,6 @@
 """Reads a user's skill evidence and turns it into confidence.
 
+  get_active_skill_evidence          the evidence rows that currently count
   get_all_skill_confidences          canonical skill -> decayed confidence
   get_reconciled_skill_confidences   the same, after claim-risk and
                                      timeline discounts, with sources
@@ -12,8 +13,10 @@ timeline discounts are applied, and covers EVERY skill with evidence
 career planner and the interview context all read it, so they cannot
 disagree about how confident a skill is.
 
-Skills the user has hidden (UserSkillOverride) are excluded from every
-reader here.
+Evidence counts only while the thing it points at is part of the record:
+skills the user hid (UserSkillOverride), items the user hid, and rows from
+an earlier upload that a newer copy of the same item replaced are excluded
+from every reader here.
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +26,7 @@ from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import ProjectClaimAuditReview, SkillEvidence
 from app.models.structure import Skill
 from app.services.evidence.reconciliation import reconcile_skill_confidence
+from app.services.evidence.review import dedupe_rows, dedupe_visible
 from app.services.evidence.scoring import compute_corroboration_count, compute_decayed_skill_confidence
 from app.services.resume.timeline_plausibility import build_timeline_plausibility_notes
 
@@ -76,12 +80,48 @@ async def build_evidence_details(db: AsyncSession, evidence_rows: list[SkillEvid
     return list(dict.fromkeys(details))
 
 
-async def get_all_skill_confidences(db: AsyncSession, user_id) -> dict[str, float]:
-    """canonical_name -> recency-decayed confidence, for ONE user.
+async def _active_source_filter(db: AsyncSession, user_id):
+    """Returns a function telling whether an evidence row still counts."""
+    projects = list((await db.execute(
+        select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
+    )).scalars().all())
+    experiences = list((await db.execute(
+        select(Experience).where(Experience.user_id == user_id).order_by(Experience.created_at.desc())
+    )).scalars().all())
+    analyses = (await db.execute(
+        select(GithubProjectAnalysis.id, GithubProjectAnalysis.repo_name)
+        .where(GithubProjectAnalysis.user_id == user_id)
+    )).all()
 
-    One query over that user's evidence, grouped in Python. Skills the user
-    has hidden are left out.
-    """
+    current_projects = dedupe_rows("projects", projects)
+    active_project_ids = {p.id for p in current_projects if not p.is_hidden}
+    active_experience_ids = {e.id for e in dedupe_visible("experiences", experiences)}
+
+    # A repo stops counting when every project standing for it is hidden.
+    repo_projects: dict[str, list] = {}
+    for project in current_projects:
+        if project.github_repo_name:
+            repo_projects.setdefault(project.github_repo_name, []).append(project)
+    active_repo_ids = {
+        analysis_id for analysis_id, repo_name in analyses
+        if not repo_projects.get(repo_name) or any(not p.is_hidden for p in repo_projects[repo_name])
+    }
+
+    active_by_type = {
+        "project": active_project_ids,
+        "experience": active_experience_ids,
+        "github_repo": active_repo_ids,
+    }
+
+    def counts(row: SkillEvidence) -> bool:
+        active_ids = active_by_type.get(row.source_type)
+        return active_ids is None or row.source_id in active_ids
+
+    return counts
+
+
+async def get_active_skill_evidence(db: AsyncSession, user_id) -> dict[str, list[SkillEvidence]]:
+    """canonical_name -> the evidence rows that currently count, for ONE user."""
     hidden = select(UserSkillOverride.skill_id).where(
         UserSkillOverride.user_id == user_id, UserSkillOverride.is_hidden.is_(True)
     )
@@ -91,9 +131,29 @@ async def get_all_skill_confidences(db: AsyncSession, user_id) -> dict[str, floa
         .where(SkillEvidence.user_id == user_id)
         .where(Skill.id.not_in(hidden))
     )
+    counts = await _active_source_filter(db, user_id)
     evidence_by_skill: dict[str, list[SkillEvidence]] = {}
     for canonical_name, evidence_row in result.all():
-        evidence_by_skill.setdefault(canonical_name, []).append(evidence_row)
+        if counts(evidence_row):
+            evidence_by_skill.setdefault(canonical_name, []).append(evidence_row)
+    for rows in evidence_by_skill.values():
+        rows.sort(key=lambda r: (-r.weight, r.source_type))  # strongest first, stable
+    return evidence_by_skill
+
+
+async def get_hidden_skill_names(db: AsyncSession, user_id) -> set[str]:
+    """Canonical names of the skills this user has hidden."""
+    result = await db.execute(
+        select(Skill.canonical_name)
+        .join(UserSkillOverride, UserSkillOverride.skill_id == Skill.id)
+        .where(UserSkillOverride.user_id == user_id, UserSkillOverride.is_hidden.is_(True))
+    )
+    return set(result.scalars().all())
+
+
+async def get_all_skill_confidences(db: AsyncSession, user_id) -> dict[str, float]:
+    """canonical_name -> recency-decayed confidence, for ONE user."""
+    evidence_by_skill = await get_active_skill_evidence(db, user_id)
     return {
         canonical: compute_decayed_skill_confidence(rows) for canonical, rows in evidence_by_skill.items()
     }
@@ -107,8 +167,10 @@ async def get_claim_risk_details(db: AsyncSession, user_id) -> list[dict]:
     _get_claim_risk_details so it has exactly one owner, callable by both
     Engineering Identity and the Skill Gap Analyzer.
     """
-    proj_result = await db.execute(select(Project.id, Project.name).where(Project.user_id == user_id))
-    projects_by_id = {pid: name for pid, name in proj_result.all()}
+    proj_result = await db.execute(
+        select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
+    )
+    projects_by_id = {p.id: p.name for p in dedupe_visible("projects", list(proj_result.scalars().all()))}
     if not projects_by_id:
         return []
     audit_result = await db.execute(
@@ -148,42 +210,17 @@ async def get_reconciled_skill_confidences(db: AsyncSession, user_id) -> dict[st
     skill by definition won't be in a top-N-by-confidence list) both
     call this rather than each recomputing reconciliation independently.
     """
-    confidences = await get_all_skill_confidences(db, user_id)
-    if not confidences:
+    evidence_by_skill = await get_active_skill_evidence(db, user_id)
+    if not evidence_by_skill:
         return {}
 
-    canonical_names = list(confidences.keys())
-    skill_rows = await db.execute(select(Skill).where(Skill.canonical_name.in_(canonical_names)))
-    skills_by_canonical = {s.canonical_name: s for s in skill_rows.scalars().all()}
-
-    # N+1 avoidance — same pattern identity_builder._get_top_skills()
-    # already used: one batched evidence query over every skill id.
-    skill_ids = [s.id for s in skills_by_canonical.values()]
-    evidence_by_skill_id: dict = {}
-    if skill_ids:
-        ev_result = await db.execute(
-            select(SkillEvidence).where(
-                SkillEvidence.skill_id.in_(skill_ids),
-                SkillEvidence.user_id == user_id,
-            )
-        )
-        for row in ev_result.scalars().all():
-            evidence_by_skill_id.setdefault(row.skill_id, []).append(row)
-
     base_entries: list[dict] = []
-    for canonical, confidence in confidences.items():
-        skill = skills_by_canonical.get(canonical)
-        sources: list[str] = []
-        corroboration_count = 0
-        if skill is not None:
-            evidence_rows = evidence_by_skill_id.get(skill.id, [])
-            sources = await build_evidence_details(db, evidence_rows)
-            corroboration_count = compute_corroboration_count(evidence_rows)
+    for canonical, evidence_rows in evidence_by_skill.items():
         base_entries.append({
             "skill": canonical,
-            "confidence": round(confidence, 2),
-            "sources": sources,
-            "corroboration_count": corroboration_count,
+            "confidence": round(compute_decayed_skill_confidence(evidence_rows), 2),
+            "sources": await build_evidence_details(db, evidence_rows),
+            "corroboration_count": compute_corroboration_count(evidence_rows),
         })
 
     claim_risk_details = await get_claim_risk_details(db, user_id)

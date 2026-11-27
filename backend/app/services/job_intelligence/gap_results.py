@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job_intelligence import GapAnalysisResultRow
+from app.schemas.skill_gap.skill_gap import REPORT_VERSION
+from app.services.evidence.state import evidence_cutoff
 
 
 async def get_latest_gap_result(
@@ -24,6 +26,17 @@ async def get_latest_gap_result(
     stmt = stmt.order_by(GapAnalysisResultRow.created_at.desc()).limit(1)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def is_current_gap_result(db: AsyncSession, user_id, row: GapAnalysisResultRow) -> bool:
+    """False when the stored comparison should be rebuilt: it predates the
+    user's last evidence change, or it was written before reports carried
+    supporting evidence and severity.
+    """
+    if (row.report_json or {}).get("evidence_version", 0) < REPORT_VERSION:
+        return False
+    cutoff = await evidence_cutoff(db, user_id)
+    return cutoff is None or row.created_at >= cutoff
 
 
 async def get_latest_gap_results_by_job(db: AsyncSession, user_id) -> dict:

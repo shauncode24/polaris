@@ -1,9 +1,12 @@
 // frontend/src/components/jobs/SkillGapResults.jsx
 import { useMemo, useState } from 'react'
+import { SourceBadges } from '../profile/evidence/ReviewControls'
 import './SkillGapResults.css'
 
 const REQ_TYPE_LABEL = { required: 'Required', implicit: 'Implicit', nice_to_have: 'Nice to have' }
 const REQ_TYPE_TONE = { required: 'required', implicit: 'implicit', nice_to_have: 'nice' }
+const SEVERITY_LABEL = { critical: 'Critical gap', moderate: 'Moderate gap', minor: 'Minor gap' }
+const SEVERITY_ORDER = { critical: 0, moderate: 1, minor: 2 }
 
 // Canonical skill names come through as snake_case ("full_stack_development",
 // "aws"). Title-case each word, but keep known acronyms upper-cased instead
@@ -55,7 +58,7 @@ function useCombinedSkills(report, canonicalSkillsMap, enrichedBySkill, priority
         skill: h.skill,
         confidence: h.confidence,
         explanation: h.explanation,
-        evidence: h.evidence || [],
+        supporting: h.supporting || [],
         flags: h.confidence_flags || [],
         reqType: canonicalSkillsMap[h.skill],
         category: enrichedBySkill[h.skill]?.category,
@@ -68,7 +71,9 @@ function useCombinedSkills(report, canonicalSkillsMap, enrichedBySkill, priority
         confidence: p.confidence,
         explanation: p.explanation,
         reason: p.reason,
-        evidence: p.evidence || [],
+        severity: p.severity,
+        supporting: p.supporting || [],
+        flags: p.confidence_flags || [],
         reqType: canonicalSkillsMap[p.skill],
         category: enrichedBySkill[p.skill]?.category,
       })
@@ -78,6 +83,8 @@ function useCombinedSkills(report, canonicalSkillsMap, enrichedBySkill, priority
         status: 'missing',
         skill: m.skill,
         unmatchedExplanation: m.unmatched_explanation,
+        severity: m.severity,
+        supporting: m.supporting || [],
         estimatedWeeks: m.estimated_weeks,
         priorityIndex: priorityIndexBySkill[m.skill],
         reqType: canonicalSkillsMap[m.skill],
@@ -114,13 +121,43 @@ function barTierClass(pct) {
   return 'sg-catbar__fill--weak'
 }
 
+function SeverityBadge({ severity }) {
+  if (!severity) return null
+  return <span className={`sg-severity sg-severity--${severity}`}>{SEVERITY_LABEL[severity] || severity}</span>
+}
+
+// The actual projects, bullets, repos and LeetCode topics behind a skill.
+function SupportingEvidence({ items, weak }) {
+  if (!items.length) return null
+  return (
+    <div className="sg-support">
+      <span className="sg-support__label">{weak ? 'Weak evidence so far' : 'Supported by'}</span>
+      <ul className="sg-support__list">
+        {items.map((item) => (
+          <li key={`${item.kind}-${item.item_id || ''}-${item.title}`} className="sg-support__item">
+            <div className="sg-support__head">
+              {item.url ? (
+                <a href={item.url} target="_blank" rel="noreferrer" className="sg-support__title">{item.title}</a>
+              ) : (
+                <span className="sg-support__title">{item.title}</span>
+              )}
+              <SourceBadges sources={[item.source]} />
+            </div>
+            {item.detail && <p className="sg-support__detail">{item.detail}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Skill row — progressive disclosure: one line by default, expands for
 // evidence / explanation instead of showing everything at once.
 // ---------------------------------------------------------------------------
 function SkillRow({ row }) {
   const [expanded, setExpanded] = useState(false)
-  const hasDetail = (row.evidence && row.evidence.length > 0) || row.explanation || row.reason || row.unmatchedExplanation
+  const hasDetail = row.supporting.length > 0 || row.explanation || row.reason || row.unmatchedExplanation
 
   return (
     <li className={`sg-row sg-row--${row.status}`}>
@@ -133,6 +170,7 @@ function SkillRow({ row }) {
         <StatusIcon status={row.status} />
         <span className="sg-row__name">{normalizeSkillName(row.skill)}</span>
         <ReqTypeBadge type={row.reqType} />
+        <SeverityBadge severity={row.severity} />
 
         {row.status === 'missing' && row.priorityIndex != null && (
           <span className="sg-row__priority">Priority #{row.priorityIndex + 1}</span>
@@ -158,11 +196,7 @@ function SkillRow({ row }) {
           {row.explanation && <p>{row.explanation}</p>}
           {row.status === 'partial' && row.reason && <p className="sg-row__reason">{row.reason}</p>}
           {row.unmatchedExplanation && <p>{row.unmatchedExplanation}</p>}
-          {row.evidence?.length > 0 && (
-            <ul className="sg-row__evidence">
-              {row.evidence.map((e, i) => <li key={i}>{e}</li>)}
-            </ul>
-          )}
+          <SupportingEvidence items={row.supporting} weak={row.status === 'missing'} />
           {row.flags?.length > 0 && <p className="sg-row__flag">⚠ {row.flags[0]}</p>}
         </div>
       )}
@@ -248,7 +282,10 @@ function SkillGapResults({ data, onRegenerate }) {
   })
 
   const topPriorityGaps = [...(report.missing || [])]
-    .sort((a, b) => (priorityIndexBySkill[a.skill] ?? 999) - (priorityIndexBySkill[b.skill] ?? 999))
+    .sort((a, b) => (
+      (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3)
+      || (priorityIndexBySkill[a.skill] ?? 999) - (priorityIndexBySkill[b.skill] ?? 999)
+    ))
     .slice(0, 3)
 
   const seniority = job.seniority_signal || {}
@@ -313,6 +350,7 @@ function SkillGapResults({ data, onRegenerate }) {
                 {topPriorityGaps.map((m, i) => (
                   <span key={m.skill} className="sg-top-gaps__chip">
                     <strong>#{i + 1}</strong> {normalizeSkillName(m.skill)}
+                    <SeverityBadge severity={m.severity} />
                     {m.estimated_weeks > 0 && <em>~{m.estimated_weeks}w</em>}
                   </span>
                 ))}

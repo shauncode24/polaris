@@ -12,6 +12,7 @@ from app.models.inference import SkillEvidence, ProfileSnapshot
 
 from app.services.resume.extraction import extract_resume_data
 from app.services.resume.skill_classifier import resolve_skills
+from app.services.evidence.matching import mentions_skill
 from app.services.evidence.scoring import WEIGHTS, STACK_ONLY_MULTIPLIER, compute_skill_confidence
 from app.services.resume.review import flag_for_review, REVIEW_THRESHOLD
 
@@ -47,11 +48,6 @@ def extract_skills_from_text(raw_text: str) -> list[str]:
                         skills.append(skill_name)
 
     return skills
-
-
-def _mentions_skill(text: str, raw_name: str) -> bool:
-    pattern = r"(?<![a-zA-Z0-9])" + re.escape(raw_name.lower()) + r"(?![a-zA-Z0-9])"
-    return re.search(pattern, text.lower()) is not None
 
 
 async def _get_or_create_skill(db: AsyncSession, canonical_name: str, display_name: str) -> Skill:
@@ -196,7 +192,7 @@ async def ingest_resume(
 
         for proj_row, proj_extracted in zip(project_rows, extraction.projects):
             stack_match = any(resolved.get(s) == canonical for s in proj_extracted.stack)
-            desc_match = bool(proj_extracted.description) and _mentions_skill(
+            desc_match = bool(proj_extracted.description) and mentions_skill(
                 proj_extracted.description, raw_name
             )
             if stack_match or desc_match:
@@ -212,7 +208,7 @@ async def ingest_resume(
 
         for exp_row, exp_extracted in zip(experience_rows, extraction.experiences):
             stack_match = any(resolved.get(s) == canonical for s in exp_extracted.stack)
-            bullet_hits = [b for b in exp_extracted.bullets if _mentions_skill(b, raw_name)]
+            bullet_hits = [b for b in exp_extracted.bullets if mentions_skill(b, raw_name)]
 
             if bullet_hits:
                 weights.append(WEIGHTS["experience"])
@@ -236,13 +232,18 @@ async def ingest_resume(
 
         confidence = compute_skill_confidence(weights)
 
-        for entry, weight in zip(evidence_entries, weights):
+        # One row per contributing source, with that source's own weight.
+        # An experience with several matching bullets has one entry per
+        # bullet, but only the first carries weight.
+        for entry in evidence_entries:
+            if entry["weight"] <= 0:
+                continue
             db.add(SkillEvidence(
                 user_id=user.id,
                 skill_id=skill.id,
                 source_type=entry["source_type"],
                 source_id=UUID(entry["source_id"]),
-                weight=weight,
+                weight=entry["weight"],
             ))
 
         skills_json[canonical] = {"confidence_at_upload": confidence, "evidence": evidence_entries}

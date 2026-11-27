@@ -4,58 +4,109 @@ This is the complete, ordered plan to take Polaris from its current state to a d
 
 Estimates assume one developer working part-time and are rough. Total: about **10–12 weeks**.
 
+## Progress
+
+Updated after step 21. Unmarked steps (22 to 71, plus 6 and 13) are not started.
+
+| Stage | Status | Steps |
+|---|---|---|
+| A. Baseline and safety net | ◐ partly done | 1, 2 done; 5 partial; 3, 4 skipped; 6 not started |
+| B. Consolidate and make the data trustworthy | ✅ done except step 13 | 7 to 12 done (committed in `82bac8a`); 13 not started |
+| C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
+| D. JD fit tied to evidence | ◐ in progress | 21 done; 22 to 24 not started |
+| E. LLM foundation | not started | 25 to 28 |
+| F. Tailored resume | not started | 29 to 37 |
+| G. Interview kit and practice | not started | 38 to 43 |
+| H. Hardening and account basics | not started | 44 to 51 |
+| I. Frontend quality | not started | 52 to 57 |
+| J. Deployment | not started | 58 to 67 |
+| K. Beta and launch | not started | 68 to 71 |
+
+**16 of 71 steps done, 1 partial, 2 skipped, 52 not started** (50 of them in Stages D to K).
+
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 229 pass against a throwaway database; the frontend builds.
+
+### Where the work differs from the plan
+
+- **Extended instead of added.** The evidence review lives in the existing My Profile page; no new page was created (step 18).
+- **Timestamp instead of stale flags.** Out-of-date reports are detected by comparing against `users.evidence_updated_at`, not by a flag on each report (step 20).
+- **Hide, then dedupe order.** Items are deduplicated first, newest wins, and only then hidden ones are dropped; otherwise hiding the newest copy would bring back an older upload.
+- **Added, not in the plan.** A database-backed test setup (`TEST_DATABASE_URL`, rebuilt from the migrations on every run), a mutation check of the tests, and `docs/user-actions.md`.
+- **Still needs you.** Applying the migrations to Neon, a hosting choice, the real-LLM run, and a look at the profile page: see `docs/user-actions.md`.
+
 ## Decisions to make before step 1
 
 Recommended choice in bold.
 
-| Decision | Options | Affects |
-|---|---|---|
-| Hosting | **Render or Fly.io with managed Postgres**, or one VPS with Compose | Step 52 onward |
-| LLM provider | **Keep Groq, behind a provider setting**, or switch | Steps 33, 34 |
-| Resume export | **One structured resume JSON rendered to DOCX (`python-docx`) and PDF (WeasyPrint on an HTML template)** | Steps 22–24 |
-| Background work | **FastAPI tasks plus a `jobs` table**; Celery/RQ only if needed | Step 33 |
-| Legacy `JobDescription` rows | **Migrate any worth keeping, then drop the table** | Step 6 |
-| Transactional email (password reset) | **A hosted provider such as Resend or Postmark** | Step 39 |
-| Secondary features (dashboard nudges, weekly brief, planner, Identity page) | **Frozen: only unbreak or delete, no new work** | all |
+| Decision | Options | Affects | Status |
+|---|---|---|---|
+| Hosting | **Render or Fly.io with managed Postgres**, or one VPS with Compose | Steps 13 and 58 to 67 | open |
+| LLM provider | **Keep Groq, behind a provider setting**, or switch | Steps 25 and 31 | open |
+| Resume export | **One structured resume JSON rendered to DOCX (`python-docx`) and PDF (WeasyPrint on an HTML template)** | Steps 29 to 36 | open |
+| Background work | **FastAPI tasks plus a `jobs` table**; Celery/RQ only if needed | Steps 26 and 27 | open |
+| Legacy `JobDescription` rows | **Migrate any worth keeping, then drop the table** | Step 7 | ✅ done |
+| Transactional email (password reset) | **A hosted provider such as Resend or Postmark** | Step 46 | open |
+| Secondary features (dashboard nudges, weekly brief, planner, Identity page) | **Frozen: only unbreak or delete, no new work** | all | open |
 
-## Stage A: Baseline and safety net (about 2 days)
+## Stage A: Baseline and safety net (about 2 days) — ◐ partly done
 
-1. Run Postgres locally in Docker. Run `alembic upgrade head` on an empty database to confirm the migration chain.
-2. Add `GROQ_API_KEY`, `GROQ_BASE_URL` and `GROQ_MODEL` to `.env.example`. Remove the Ollama and Gemini variables that no code reads.
-3. Walk the current journey by hand with a real key: register, upload a resume, sync GitHub, sync LeetCode, add a JD, skill gap, tailoring, interview. Write every failure into `docs/known-issues.md`.
-4. Confirm the JD seam: add a JD through the Job Intelligence page and check whether the Resume, Career Planner, Interview and Dashboard pages list it.
-5. Repair CI (`.github/workflows/tests.yml`): Linux runner, Postgres service, dummy values for `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, run `alembic upgrade head` before tests, and add a frontend job running `npm ci` and `npm run build`. Delete `tests/test_placeholder.py`.
-   - **Gate:** CI is green on a clean clone.
+✅ 1. Run Postgres locally in Docker. Run `alembic upgrade head` on an empty database to confirm the migration chain.
+   - **Status:** Done. Built the full migration chain on an empty pgvector Postgres in Docker, and ran upgrade/downgrade cycles on it. `docker-compose.yml` still has no database service (Stage J).
+✅ 2. Add `GROQ_API_KEY`, `GROQ_BASE_URL` and `GROQ_MODEL` to `.env.example`. Remove the Ollama and Gemini variables that no code reads.
+   - **Status:** Done. `.env.example` now lists the Groq variables, the Ollama ones are gone, and it documents `TEST_DATABASE_URL`. The commented-out clients in `core/llm.py` are still there (step 25).
+⏭ 3. Walk the current journey by hand with a real key: register, upload a resume, sync GitHub, sync LeetCode, add a JD, skill gap, tailoring, interview. Write every failure into `docs/known-issues.md`.
+   - **Status:** Skipped by choice. Still worth doing once with a real `GROQ_API_KEY`: everything verified so far used a stubbed or absent LLM. Tracked in `docs/user-actions.md`.
+⏭ 4. Confirm the JD seam: add a JD through the Job Intelligence page and check whether the Resume, Career Planner, Interview and Dashboard pages list it.
+   - **Status:** Skipped. Not observed live. The seam was confirmed from the code and fixed in step 7.
+◐ 5. Repair CI (`.github/workflows/tests.yml`): Linux runner, Postgres service, dummy values for `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, run `alembic upgrade head` before tests, and add a frontend job running `npm ci` and `npm run build`. Delete `tests/test_placeholder.py`.
+   - **Gate:** CI is green on a clean clone. ◐ CI not run; the test suite no longer depends on env vars.
+   - **Status:** Partly done. Test setup no longer needs env vars (`tests/conftest.py` supplies safe defaults), so CI should stop failing for that reason. The workflow itself is unchanged: still Windows, no Postgres service, no frontend job, and `tests/test_placeholder.py` still exists.
 6. Write the journey test skeleton in `backend/tests/journey/test_core_journey.py`: async client, test database, stubbed `chat_completion`, with the steps that don't work yet marked `xfail`. Every later step extends this test.
+   - **Status:** Not started. Not started. The pieces it needs now exist: `tests/api/` has a seeded test database, an authenticated client and the migration rebuild.
 
-## Stage B: Consolidate and make the data trustworthy (1–1.5 weeks)
+## Stage B: Consolidate and make the data trustworthy (1–1.5 weeks) — ✅ done, except step 13
 
-7. **Finish the JD migration.** Make `JobIntelligenceProfileRow` the only JD record.
+✅ 7. **Finish the JD migration.** Make `JobIntelligenceProfileRow` the only JD record.
    - Migrate or drop legacy `JobDescription` rows (back up the database first and review row counts).
    - Re-key tailoring, resume analysis, career planner, interview and dashboard on the new record. Files: `api/jobs.py`, `api/resume.py`, `services/resume/tailoring_llm.py`, `services/career_planner/context_builder.py`, `models/facts.py`, `frontend/src/api/jobs.js`, and the Resume, Planner, Interview and Dashboard pages.
    - Remove `/jobs/analyze`, `/jobs/analyze-pdf`, `/jobs/{id}`, `GET /jobs`, the dual-write, and the unused `analyzeJobText`, `analyzeJobPdf` and `getJobAnalysis`.
-8. Scope every ID lookup by `user_id`: `get_job_intelligence`, `get_cached_claim_audit_report`, `get_cached_interview_questions`, then sweep every `where(X.id ==` in the codebase.
-9. Add the authorization test matrix: every route that takes an ID, called as another user, must return 404.
-10. Remove `?token=` authentication. The resume preview fetches with a header and uses a blob URL. Delete `get_current_user_from_query`.
-11. Treat a malformed token `sub` as 401. Wrap all three PDF-parsing call sites so a corrupt file returns 400, and run parsing off the event loop. Sanitize the download filename. Stop logging emails.
-12. Delete confirmed dead backend code: `services/resume/ats_checks.py` and its import, `core/config.py`, `services/career_planner/practice_modes.py`, the ORM models `AgentFeedback`, `GoalEvent`, `ReadinessScore`, `Embedding`, `CapabilityRequirement` (with a migration dropping their tables), `models/retrieval.py` and the unused pgvector dependency, `backend/ollama/`, and the other unreferenced definitions the audit listed. Review each remaining unused definition before deleting.
-    - **Gate:** the authorization matrix and the JD steps of the journey test pass in CI, and a JD added in the UI appears in every picker.
+   - **Status:** Done. Committed in `82bac8a`. Migrated by direct link or text hash and tested on seeded data covering every case; the downgrade restores structure, not data. Not yet applied to Neon.
+✅ 8. Scope every ID lookup by `user_id`: `get_job_intelligence`, `get_cached_claim_audit_report`, `get_cached_interview_questions`, then sweep every `where(X.id ==` in the codebase.
+   - **Status:** Done. Committed in `82bac8a`. The claim-audit, interview-question and tailoring caches are now scoped by user too (the coherence cache followed in step 20).
+✅ 9. Add the authorization test matrix: every route that takes an ID, called as another user, must return 404.
+   - **Status:** Done. Committed in `82bac8a` with 16 routes (19 cases now that the profile routes are covered), plus a meta-test that fails when a new route with an ID has no case. Verified by reintroducing the original bugs.
+✅ 10. Remove `?token=` authentication. The resume preview fetches with a header and uses a blob URL. Delete `get_current_user_from_query`.
+    - **Status:** Done. Committed in `82bac8a`.
+✅ 11. Treat a malformed token `sub` as 401. Wrap all three PDF-parsing call sites so a corrupt file returns 400, and run parsing off the event loop. Sanitize the download filename. Stop logging emails.
+    - **Status:** Done. Committed in `82bac8a`.
+✅ 12. Delete confirmed dead backend code: `services/resume/ats_checks.py` and its import, `core/config.py`, `services/career_planner/practice_modes.py`, the ORM models `AgentFeedback`, `GoalEvent`, `ReadinessScore`, `Embedding`, `CapabilityRequirement` (with a migration dropping their tables), `models/retrieval.py` and the unused pgvector dependency, `backend/ollama/`, and the other unreferenced definitions the audit listed. Review each remaining unused definition before deleting.
+    - **Gate:** the authorization matrix and the JD steps of the journey test pass in CI, and a JD added in the UI appears in every picker. ◐ Authorization matrix passes locally (not in CI); the journey test does not exist yet. The JD flow is fixed in code but not seen in the UI.
+    - **Status:** Done. Committed in `82bac8a`, with two deviations: the `pgvector` dependency stays because the first migration imports it, and `services/projects/curation.py` (used only by tests) and `app/scripts/clear_db.py` (truncates every table in the configured database) were left for you to decide.
 13. Stand up a staging environment now, even if rough, and deploy to it from CI, so deployment problems surface early. (The production work remains in Stage H.)
+    - **Status:** Not started. Not started. Needs your hosting choice and an account (`docs/user-actions.md`).
 
-## Stage C: Pillar 1, unified evidence record (about 1.5 weeks)
+## Stage C: Pillar 1, unified evidence record (about 1.5 weeks) — ✅ done (UI not yet seen in a browser)
 
-14. Add `source` (resume, github, both) and a shared dedupe key to `Project` (`models/facts.py`, new migration, reusing `normalize_name` and the repo URL).
-15. Create or merge `Project` rows from analyzed repos during GitHub sync (`services/github/github_sync.py`, `services/projects/repo_linking.py`). Uncertain matches go into a "needs confirmation" state.
-16. Merge the six confidence and evidence modules into one reader (`services/resume/confidence*.py`, `services/identity/*confidence*.py`, `services/evidence.py`, `services/resume/analysis/evidence.py`). First add characterization tests that capture current outputs, so the merge is checked against them.
-17. Expose provenance on every skill, project and experience (which sources support it, with confidence) through the API (`api/profile.py`).
-18. Build the evidence review page: confirm, edit or hide any project, experience or skill. User edits override extraction and survive re-sync.
-19. Mount the LinkedIn import panel and the LinkedIn workspace view, and merge LinkedIn roles into the review page (`components/profile/LinkedInImportPanel.jsx`, `pages/ProfilePage.jsx`).
-20. When evidence changes, mark dependent tailored resumes, claim audits and interview kits as stale (`services/identity/identity_refresh.py`).
-    - **Gate:** a repo missing from the resume appears as a project candidate, re-sync creates no duplicates, every item shows its source, and a user edit survives a re-sync. The journey test covers this.
+✅ 14. Add `source` (resume, github, both) and a shared dedupe key to `Project` (`models/facts.py`, new migration, reusing `normalize_name` and the repo URL).
+    - **Status:** Done. `source` is now set to resume, github or both, and a `dedupe_key` that edits never change was added, plus review state and hide flag on projects, experiences and education (migration `d3a7b5c9e1f2`).
+✅ 15. Create or merge `Project` rows from analyzed repos during GitHub sync (`services/github/github_sync.py`, `services/projects/repo_linking.py`). Uncertain matches go into a "needs confirmation" state.
+    - **Status:** Done. `services/projects/reconcile.py`, idempotent, runs after a GitHub sync, a resume upload and a link change. Exact matches link automatically; near matches stay as suggestions for the user to confirm, and unlinking is remembered.
+✅ 16. Merge the six confidence and evidence modules into one reader (`services/resume/confidence*.py`, `services/identity/*confidence*.py`, `services/evidence.py`, `services/resume/analysis/evidence.py`). First add characterization tests that capture current outputs, so the merge is checked against them.
+    - **Status:** Done. Six modules became three in `services/evidence/`, after pinning the old numbers in tests, none of which changed. `services/resume/analysis/evidence.py` was deliberately left alone: it measures something different (source counts on the resume), not confidence.
+✅ 17. Expose provenance on every skill, project and experience (which sources support it, with confidence) through the API (`api/profile.py`).
+    - **Status:** Done. `/profile/data` returns each item's sources and review state, and every skill's confidence, sources and flags.
+✅ 18. Build the evidence review page: confirm, edit or hide any project, experience or skill. User edits override extraction and survive re-sync.
+    - **Status:** Done. Built into the existing My Profile page instead of a new page, and driven by the server record. Confirm, edit, hide and restore work for projects, experiences, education and skills, and decisions survive GitHub re-syncs and resume re-uploads. Verified by tests and a successful build; **not yet seen in a browser**.
+✅ 19. Mount the LinkedIn import panel and the LinkedIn workspace view, and merge LinkedIn roles into the review page (`components/profile/LinkedInImportPanel.jsx`, `pages/ProfilePage.jsx`).
+    - **Status:** Done. The panel is mounted and shows the last import. LinkedIn roles appear in the Experiences card with a LinkedIn badge. Not seen in a browser.
+✅ 20. When evidence changes, mark dependent tailored resumes, claim audits and interview kits as stale (`services/identity/identity_refresh.py`).
+    - **Gate:** a repo missing from the resume appears as a project candidate, re-sync creates no duplicates, every item shows its source, and a user edit survives a re-sync. The journey test covers this. ◐ Met by automated tests (GitHub-only projects appear, re-sync adds no duplicates, every item shows its source, edits survive). Not checked by a journey test or in a browser.
+    - **Status:** Done. Implemented as an evidence timestamp (`users.evidence_updated_at`) that cached reports are compared against, covering tailoring, claim audit, interview questions, coherence and portfolio narrative. Tailored resumes and interview kits don't exist yet, so steps 29 to 43 must use the same check. `identity_refresh.py` was not changed.
 
-## Stage D: Pillar 2, JD fit tied to evidence (about 1 week)
+## Stage D: Pillar 2, JD fit tied to evidence (about 1 week) — ◐ in progress
 
-21. For every matched requirement, return the specific project, bullet or LeetCode topic that supports it. Gaps return a severity.
+✅ 21. For every matched requirement, return the specific project, bullet or LeetCode topic that supports it. Gaps return a severity.
+    - **Status:** Done. Every met requirement carries the projects, bullets, repos and LeetCode topics behind it; every missing or partial one carries a severity (critical, moderate, minor); weak evidence is shown for near misses; the Skill Gap page displays both. Fixed on the way, because step 21's output depends on them: the skill gap ignored hidden skills and the claim-risk discount; evidence from hidden items and from superseded uploads still counted (re-uploading inflated scores); resume ingestion attached evidence to the wrong role when a role had several matching bullets; stored comparisons were never rebuilt after the evidence changed. Verified by tests; **not yet seen in a browser**. Known limits: editing a project's technologies does not change which skills it counts for, and role-fit and resume analysis still read raw evidence rows.
 22. Run JD extraction on 5–10 real job descriptions and fix prompts or normalization where skills are missed or invented.
 23. Build the JD library: list, compare, delete, and mark one as the primary target that the planner and interview read.
 24. Unify the skill-gap response models, and delete the orphaned jobs components (`JobAnalysisResults`, `JobDescriptionForm`, `PastAnalysesPanel`, `HistoryPopover`, `AnalyzingProgress`) after copying anything `SkillGapResults` lacks.

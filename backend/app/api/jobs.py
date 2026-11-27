@@ -18,7 +18,7 @@ from app.schemas.skill_gap.skill_gap_page import SkillGapForJobResponse
 from app.services.company_intelligence.reader import get_company_intelligence_by_source_hash
 from app.services.identity.identity_refresh import trigger_identity_refresh
 from app.services.job_intelligence.builder import get_job_intelligence
-from app.services.job_intelligence.gap_results import get_latest_gap_result
+from app.services.job_intelligence.gap_results import get_latest_gap_result, is_current_gap_result
 from app.services.skill_gap.category_breakdown import (
     compute_category_breakdown,
     compute_overall_match,
@@ -44,14 +44,15 @@ async def _get_or_build_gap_result_for_job_intelligence(
     regenerate: bool,
 ) -> GapAnalysisResultRow:
     """Runs the Comparison Engine + narrative over an existing job
-    profile, or reads back the latest stored result unless the caller
-    asks to regenerate. Never re-extracts the job description itself.
+    profile. Reads back the latest stored result instead when it is still
+    current and the caller didn't ask to regenerate. Never re-extracts the
+    job description itself.
     """
     job_intelligence_uuid = UUID(job_intelligence.id)
 
     if not regenerate:
         cached = await get_latest_gap_result(db, user.id, job_intelligence_uuid)
-        if cached is not None:
+        if cached is not None and await is_current_gap_result(db, user.id, cached):
             return cached
 
     target_profile = build_target_profile(job_intelligence, company_intelligence)
@@ -116,8 +117,8 @@ async def get_skill_gap_for_job_intelligence(
     db: AsyncSession = Depends(get_db),
 ):
     """Compare the current user's evidence against one of their parsed
-    jobs (from GET /job-intelligence). Reads back the latest stored
-    comparison unless `regenerate` is set.
+    jobs (from GET /job-intelligence). Every met requirement carries the
+    items that support it; every gap carries a severity.
     """
     job_intelligence = await get_job_intelligence(db, current_user.id, job_intelligence_id)
     if job_intelligence is None:

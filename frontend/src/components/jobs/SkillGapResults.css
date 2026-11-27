@@ -236,8 +236,6 @@
   line-height: 1.55;
 }
 .sg-row__reason { font-style: italic; }
-.sg-row__evidence { padding-left: 14px; display: flex; flex-direction: column; gap: 3px; }
-.sg-row__evidence li { list-style: disc; }
 .sg-row__flag { color: #a2760f; }
 
 .sg-reqtype { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: var(--radius-pill); flex-shrink: 0; }
@@ -304,3 +302,23 @@
   .sg-catrow__header { grid-template-columns: 100px 1fr 36px 16px; }
   .sg-catrow__matched { display: none; }
 }
+
+/* Severity of a gap, and the evidence behind a requirement. */
+.sg-severity {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.sg-severity--critical { background: var(--danger-soft); color: var(--danger); }
+.sg-severity--moderate { background: var(--warning-soft); color: #a2760f; }
+.sg-severity--minor { background: var(--surface-soft); color: var(--text-soft); }
+
+.sg-support { margin-top: 8px; }
+.sg-support__label { font-size: 12px; font-weight: 600; color: var(--text-soft); }
+.sg-support__list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sg-support__item { border-left: 2px solid var(--border); padding-left: 10px; }
+.sg-support__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sg-support__title { font-weight: 600; font-size: 13px; color: var(--ink); }
+.sg-support__detail { font-size: 12.5px; color: var(--text-soft); margin: 2px 0 0; }

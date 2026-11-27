@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import './EvidenceReview.css'
 
-const SOURCE_LABELS = { resume: 'Resume', github: 'GitHub', linkedin: 'LinkedIn' }
+const SOURCE_LABELS = {
+  resume: 'Resume', github: 'GitHub', linkedin: 'LinkedIn', leetcode: 'LeetCode', certificate: 'Certificate',
+}
 
 // Where an item came from. Every item in the evidence record shows this.
 export function SourceBadges({ sources = [] }) {

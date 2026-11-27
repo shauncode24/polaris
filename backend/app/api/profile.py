@@ -11,9 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models.facts import Education, Experience, Project, User, UserSkillOverride
-from app.models.structure import Skill
-from app.services.evidence.confidence import get_reconciled_skill_confidences
+from app.models.facts import Education, Experience, Project, User
+from app.services.evidence.confidence import get_hidden_skill_names, get_reconciled_skill_confidences
 from app.services.evidence.review import (
     KINDS,
     ReviewError,
@@ -117,13 +116,9 @@ async def get_profile_data(
         }
         for entry in sorted(reconciled.values(), key=lambda e: e["confidence"], reverse=True)
     ]
-    hidden_skill_rows = await db.execute(
-        select(Skill.canonical_name)
-        .join(UserSkillOverride, UserSkillOverride.skill_id == Skill.id)
-        .where(UserSkillOverride.user_id == uid, UserSkillOverride.is_hidden.is_(True))
-        .order_by(Skill.canonical_name)
-    )
-    skills += [{"skill": name, "is_hidden": True} for (name,) in hidden_skill_rows.all()]
+    skills += [
+        {"skill": name, "is_hidden": True} for name in sorted(await get_hidden_skill_names(db, uid))
+    ]
 
     # Resume projects that look like a GitHub repo but not exactly: the user
     # confirms or ignores each one. (Exact matches are linked automatically.)
