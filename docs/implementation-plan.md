@@ -6,14 +6,14 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 21. Unmarked steps (22 to 71, plus 6 and 13) are not started.
+Updated during step 22. Unmarked steps (23 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
 | A. Baseline and safety net | ◐ partly done | 1, 2 done; 5 partial; 3, 4 skipped; 6 not started |
 | B. Consolidate and make the data trustworthy | ✅ done except step 13 | 7 to 12 done (committed in `82bac8a`); 13 not started |
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
-| D. JD fit tied to evidence | ◐ in progress | 21 done; 22 to 24 not started |
+| D. JD fit tied to evidence | ◐ in progress | 21 done; 22 partly done; 23, 24 not started |
 | E. LLM foundation | not started | 25 to 28 |
 | F. Tailored resume | not started | 29 to 37 |
 | G. Interview kit and practice | not started | 38 to 43 |
@@ -22,9 +22,9 @@ Updated after step 21. Unmarked steps (22 to 71, plus 6 and 13) are not started.
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**16 of 71 steps done, 1 partial, 2 skipped, 52 not started** (50 of them in Stages D to K).
+**16 of 71 steps done, 2 partial, 2 skipped, 51 not started** (49 of them in Stages D to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 229 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 294 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -107,7 +107,8 @@ Recommended choice in bold.
 
 ✅ 21. For every matched requirement, return the specific project, bullet or LeetCode topic that supports it. Gaps return a severity.
     - **Status:** Done. Every met requirement carries the projects, bullets, repos and LeetCode topics behind it; every missing or partial one carries a severity (critical, moderate, minor); weak evidence is shown for near misses; the Skill Gap page displays both. Fixed on the way, because step 21's output depends on them: the skill gap ignored hidden skills and the claim-risk discount; evidence from hidden items and from superseded uploads still counted (re-uploading inflated scores); resume ingestion attached evidence to the wrong role when a role had several matching bullets; stored comparisons were never rebuilt after the evidence changed. Verified by tests; **not yet seen in a browser**. Known limits: editing a project's technologies does not change which skills it counts for, and role-fit and resume analysis still read raw evidence rows.
-22. Run JD extraction on 5–10 real job descriptions and fix prompts or normalization where skills are missed or invented.
+◐ 22. Run JD extraction on 5–10 real job descriptions and fix prompts or normalization where skills are missed or invented.
+    - **Status:** Code done; final check pending. Ran 10 real software postings through the pipeline with the real model and scored them against skills written down beforehand: 96 of 141 (68%) before any change. The main fault was replies cut off partway (5 of 10) and saved as if complete; they are now detected, asked for again, and fail loudly if still incomplete, with lower reasoning effort so they fit. Also fixed: entries bundling several skills, one skill under several names, soft skills and candidate history listed as requirements, inferred skills resting on invented quotes, and prompt gaps. After the fixes, 85 of 97 (88%) on the 8 postings that ran before Groq's daily limit; **the other 2 are still to be run**. These postings were also used to tune the fixes, so the score is optimistic for new ones. Known limits: some duty phrases and long "nice to have" sentences still come through, a skill is occasionally put in the wrong band or missed, results vary a little between runs, and LeetCode practice does not yet count toward "data structures" or "algorithms". Rerun with `app/scripts/eval_jd_extraction.py`.
 23. Build the JD library: list, compare, delete, and mark one as the primary target that the planner and interview read.
 24. Unify the skill-gap response models, and delete the orphaned jobs components (`JobAnalysisResults`, `JobDescriptionForm`, `PastAnalysesPanel`, `HistoryPopover`, `AnalyzingProgress`) after copying anything `SkillGapResults` lacks.
     - **Gate:** a real JD gives a match view where every "met" requirement links to evidence.

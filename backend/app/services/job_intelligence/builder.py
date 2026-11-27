@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.job_intelligence import CompanyIntelligenceProfileRow, JobIntelligenceProfileRow
 from app.schemas.job_intelligence.company_intelligence import CompanyIntelligenceProfile
 from app.schemas.job_intelligence.job_intelligence import ExtractionQuality, JobIntelligenceProfile, SeniorityLevel
+from app.services.job_intelligence.cleanup import clean_implicit, clean_requirements, drop_repeats
 from app.services.job_intelligence.extraction import JobIntelligenceExtractionError, extract_job_and_company
 from app.services.job_intelligence.interview_focus import derive_interview_focus_areas
 from app.services.job_intelligence.keywords import derive_resume_keyword_tiers, derive_resume_keywords
@@ -43,7 +44,7 @@ _ENTRY_LEVEL_TITLE_WORDS = ["trainee", "intern", "graduate trainee", "entry leve
 # dropped something rather than the JD genuinely having nothing to say.
 _NICE_TO_HAVE_PHRASES = [
     "added advantage", "nice to have", "nice-to-have", "is a plus",
-    "a plus", "bonus", "preferred", "good to have",
+    "a plus", "bonus", "preferred", "good to have", "even better if", "helpful experience",
 ]
 _EXPERIENCE_PHRASES = [
     "experience", "internship", "years of", "yrs of", "hands on", "hands-on",
@@ -197,9 +198,14 @@ async def build_job_intelligence(
     job_extraction = extracted.job
     company_extraction = extracted.company
 
-    enriched_required = await enrich_skill_requirements(job_extraction.required_skills, "required", db)
-    enriched_implicit = await enrich_skills(job_extraction.implicit_skills, "implicit", db)
-    enriched_nice = await enrich_skill_requirements(job_extraction.nice_to_have, "nice_to_have", db)
+    required_items = clean_requirements(job_extraction.required_skills)
+    implicit_items = clean_implicit(job_extraction.implicit_skills, raw_text)
+    nice_items = clean_requirements(job_extraction.nice_to_have)
+
+    enriched_required = await enrich_skill_requirements(required_items, "required", db)
+    enriched_implicit = await enrich_skills(implicit_items, "implicit", db)
+    enriched_nice = await enrich_skill_requirements(nice_items, "nice_to_have", db)
+    enriched_implicit, enriched_nice = drop_repeats(enriched_required, enriched_implicit, enriched_nice)
 
     resolved_role = role or job_extraction.role or job_extraction.role_identity.title
     resolved_company = company or job_extraction.company
@@ -211,9 +217,9 @@ async def build_job_intelligence(
         raw_text, resolved_role, designation=job_extraction.role_identity.designation,
     )
 
-    raw_required = [s.skill for s in job_extraction.required_skills]
-    raw_implicit = [s.skill for s in job_extraction.implicit_skills]
-    raw_nice_to_have = [s.skill for s in job_extraction.nice_to_have]
+    raw_required = [s.skill for s in required_items]
+    raw_implicit = [s.raw for s in enriched_implicit]
+    raw_nice_to_have = [s.raw for s in enriched_nice]
 
     resume_keywords = derive_resume_keywords(
         enriched_required, enriched_implicit, raw_required, raw_implicit, job_extraction.architecture_topics,

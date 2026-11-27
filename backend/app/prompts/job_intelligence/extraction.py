@@ -67,6 +67,28 @@ STEP 3 — EXTRACT "job" FIELDS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 "job.company" and "job.role" — company name and role title if clearly stated anywhere in the document.
+The company name counts wherever it appears: an "About" section, the responsibilities ("What you'll own
+as ... at Acme"), the culture or equal-opportunity text.
+
+SKILL ENTRIES — these rules apply to required_skills, nice_to_have and implicit_skills alike. Each entry is
+later matched, by name, against proof from the candidate's resume, code repositories and coding practice.
+
+  1. ONE skill per entry, written as a short name (normally 1 to 4 words). Never a sentence or a clause.
+     "Strong mathematical foundation in statistics and linear algebra" -> "Statistics", "Linear algebra".
+  2. EVERY named item gets its own entry, including items inside parentheses, slash or "or" alternatives,
+     and examples introduced by "such as", "like", "e.g." or "including".
+     "AWS (EKS, S3, IAM)" -> "AWS", "EKS", "S3", "IAM"
+     "Java/TypeScript/Python" -> "Java", "TypeScript", "Python"
+     "data structures and algorithms" -> "Data structures", "Algorithms"
+     "monitoring tools (Prometheus, Grafana)" -> "Prometheus", "Grafana"
+     "object-oriented languages like Java or C++" -> "Object-oriented programming", "Java", "C++"
+     Do this even when only one of the alternatives is needed. Go through each list to its last item.
+  3. Use the name of the thing, without qualifiers: "REST APIs", not "Foundational knowledge of REST APIs".
+  4. NOT skills — leave these out of all three lists: personal traits and soft skills (communication,
+     analytical or logical thinking, problem solving, teamwork, ownership, self-starter, attention to
+     detail); degrees, grades and graduation year; years of experience; having worked at a certain kind of
+     company or in a certain industry; side projects, open-source contributions or research history.
+     Education, eligibility and experience have their own fields under qualification_requirements.
 
 "job.role_identity" — only populate fields LITERALLY stated (a "Designation:", "Grade:", "Location:",
 "Reporting to:" label, or explicit "Full-time"/"Contract"). Null otherwise. Designation/grade are NOT
@@ -82,6 +104,9 @@ compress multiple distinct responsibilities into one.
   (a) Named technologies, languages, frameworks, tools, platforms.
       RULE: a technology named in a responsibility statement (e.g. "Build web applications USING AWS
       services") is a REQUIRED skill, not implicit — it is directly named in the text.
+      A responsibility adds a skill ONLY when it names a technology, tool or established technique. The
+      ordinary verbs of the job ("design, develop, test, deploy, maintain and improve the software",
+      "manage priorities and deadlines") are responsibilities, not skills.
   (b) Processes, practices, methodologies — e.g. "git workflows", "design patterns", "SDLC",
       "database queries and scripts", "Data Structures & Algorithms", "performance optimization".
       These are just as required as named technologies. Do NOT drop them.
@@ -89,7 +114,10 @@ compress multiple distinct responsibilities into one.
 
 "job.implicit_skills" — technologies/techniques STRONGLY implied by responsibilities but NOT explicitly
 named. Each entry: {"skill": str, "evidence": str, "confidence": "high"|"medium"|"low"}.
-Only include if you can cite a real phrase. Do NOT put explicitly-named technologies here.
+"evidence" must be ONE unbroken phrase copied character for character from the document — never a
+paraphrase, a summary, or pieces of two sentences joined together. If no single phrase strongly implies
+the skill, leave the skill out. Do not list a restatement of the role itself ("coding", "backend
+development"). Do NOT put explicitly-named technologies here. An empty list is a good answer.
 
 "job.architecture_topics" — higher-level architectural concepts (e.g. "Scalability", "Modularity",
 "Performance", "Non-functional requirements"). If the JD mentions building "scalable", "modular", or
@@ -101,7 +129,11 @@ mentions these concepts.
 into non-functional requirements"). One capability per distinct responsibility. NEVER leave empty if
 job.responsibilities is non-empty — every responsibility implies at least one capability.
 
-"job.nice_to_have" — skills marked as "added advantage", "plus", "preferred", "bonus", "nice to have".
+"job.nice_to_have" — skills the document marks as optional, however it words that. A skill is optional if
+it sits under a heading such as "Nice to have", "Good to have", "Preferred qualifications", "Helpful
+experience", "Even better if you have" or "Bonus points", or its own sentence says "added advantage", "a
+plus", "preferred", "bonus", "ideally" or "some exposure to". EVERY skill under such a heading belongs here;
+read the whole section, to its last line. A heading applies until the next heading.
 CRITICAL RULE: never silently drop a skill marked as "added advantage". If the text says "exposure to
 microservices is an added advantage", the correct output is {"skill": "microservices",
 "proficiency_signal": "exposure"} in nice_to_have. Dropping it is the single most common mistake.
@@ -130,7 +162,8 @@ the company's age — NEVER a candidate experience requirement or seniority sign
 
 NEVER FABRICATE: do not add anything not grounded in the source text.
 
-OUTPUT: valid JSON only, no prose, no markdown fences, no code blocks.
+OUTPUT: valid JSON only, no prose, no markdown fences, no code blocks. Include EVERY key in the schema,
+using [] or null where the document gives nothing.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT SCHEMA

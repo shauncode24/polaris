@@ -86,6 +86,77 @@ CANONICAL_SKILLS: dict[str, str] = {
 
     # Vector search
     "vector search": "vector_search",
+
+    # Every spelling below maps to ONE name, because the skill gap matches a
+    # job's requirement to a user's evidence on that name alone.
+
+    # Languages
+    "go": "go", "golang": "go", "go lang": "go",
+    "c": "c", "c++": "cpp", "cpp": "cpp",
+    ".net": "dotnet", "dotnet": "dotnet",
+    "ruby": "ruby", "rails": "ruby_on_rails", "ruby on rails": "ruby_on_rails",
+    "scala": "scala", "rust": "rust", "linux": "linux",
+
+    # Computer-science fundamentals and practices
+    "object-oriented programming": "object_oriented_programming",
+    "object oriented programming": "object_oriented_programming",
+    "object-oriented design": "object_oriented_programming",
+    "object oriented design": "object_oriented_programming",
+    "oop": "object_oriented_programming", "oops": "object_oriented_programming",
+    "data structures": "data_structures", "algorithms": "algorithms",
+    "design patterns": "design_patterns",
+    "concurrency": "concurrency",
+    "multithreading": "multithreading", "multi-threading": "multithreading",
+    "distributed systems": "distributed_systems", "distributed system": "distributed_systems",
+    "distributed computing": "distributed_systems",
+    "testing": "testing", "unit testing": "testing", "unit tests": "testing",
+    "debugging": "debugging",
+    "api": "api", "apis": "api", "api design": "api", "api development": "api",
+    "restful apis": "rest_api", "rest api development": "rest_api",
+    "micro-services": "microservices", "micro-services architecture": "microservices",
+    "microservices architecture": "microservices",
+    "monitoring": "monitoring", "alerting": "alerting", "observability": "observability",
+    "ci/cd": "ci_cd", "ci-cd": "ci_cd", "cicd": "ci_cd", "ci cd": "ci_cd",
+    "ci/cd pipelines": "ci_cd", "ci/cd pipeline": "ci_cd",
+    "infrastructure as code": "infrastructure_as_code",
+    "infrastructure-as-code": "infrastructure_as_code", "iac": "infrastructure_as_code",
+    "data modeling": "data_modeling", "data modelling": "data_modeling",
+    "domain modeling": "data_modeling", "domain modelling": "data_modeling",
+    "data pipelines": "data_pipelines", "data pipeline": "data_pipelines",
+    "data warehousing": "data_warehousing",
+    "big data": "big_data", "big data technologies": "big_data",
+    "machine learning": "machine_learning", "ml": "machine_learning",
+    "statistics": "statistics", "statistical methods": "statistics",
+    "linear algebra": "linear_algebra",
+    "threat modeling": "threat_modeling", "threat modelling": "threat_modeling",
+
+    # Cloud
+    "gcp": "gcp", "google cloud": "gcp", "google cloud platform": "gcp",
+    "azure": "azure", "microsoft azure": "azure", "ms azure": "azure", "msft azure": "azure",
+    "s3": "s3", "aws s3": "s3", "amazon s3": "s3",
+    "ec2": "ec2", "aws ec2": "ec2", "amazon ec2": "ec2",
+    "eks": "eks", "aws eks": "eks", "amazon eks": "eks",
+    "sqs": "sqs", "aws sqs": "sqs", "amazon sqs": "sqs",
+    "iam": "iam", "aws iam": "iam",
+    "rds": "rds", "aws rds": "rds", "amazon rds": "rds",
+    "msk": "msk", "aws msk": "msk", "amazon msk": "msk",
+    "emr": "emr", "aws emr": "emr", "amazon emr": "emr",
+    "redshift": "redshift", "aws redshift": "redshift", "amazon redshift": "redshift",
+
+    # Data and infrastructure tools
+    "elasticsearch": "elasticsearch", "elastic search": "elasticsearch",
+    "kafka": "kafka", "apache kafka": "kafka",
+    "spark": "spark", "apache spark": "spark",
+    "airflow": "airflow", "apache airflow": "airflow",
+    "flink": "flink", "apache flink": "flink",
+    "iceberg": "iceberg", "apache iceberg": "iceberg",
+    "hudi": "hudi", "apache hudi": "hudi",
+    "superset": "superset", "apache superset": "superset",
+    "power bi": "power_bi", "powerbi": "power_bi",
+    "scikit-learn": "scikit_learn", "scikit learn": "scikit_learn", "sklearn": "scikit_learn",
+    "next.js": "nextjs", "nextjs": "nextjs",
+    "argocd": "argocd", "argo cd": "argocd",
+    "github actions": "github_actions",
 }
 
 from app.prompts.shared.classification import CLASSIFICATION_SYSTEM_PROMPT
@@ -161,7 +232,8 @@ async def resolve_skills(raw_strings: set[str], db: AsyncSession) -> dict[str, s
         unresolved = still_unresolved
 
     if unresolved:
-        classified = await _classify_via_llm(list(unresolved))
+        # Sorted so the same set of strings always produces the same request.
+        classified = await _classify_via_llm(sorted(unresolved))
 
         for raw, (canonical, is_valid) in classified.items():
             key = raw.strip().lower()

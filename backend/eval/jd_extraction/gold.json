@@ -1,0 +1,83 @@
+{
+  "_readme": "Hand-written expectations for app/scripts/eval_jd_extraction.py, written from the postings before any model output was seen. Each entry lists the canonical names that count as the same skill, separated by |.",
+
+  "01_hackerrank_sde_intern": {
+    "required": [],
+    "nice_to_have": []
+  },
+  "02_hevo_associate_sde_intern": {
+    "required": [
+      "java", "typescript", "python", "data_structures", "algorithms", "rest_api",
+      "object_oriented_programming|oop|object_oriented_design", "design_principles|software_design_principles",
+      "data_pipelines|data_pipeline", "json", "api|apis"
+    ],
+    "nice_to_have": []
+  },
+  "03_hevo_sde1": {
+    "required": [
+      "java", "typescript", "python", "data_structures", "algorithms", "rest_api",
+      "object_oriented_programming|oop|object_oriented_design", "design_principles|software_design_principles",
+      "data_pipelines|data_pipeline", "json", "api|apis"
+    ],
+    "nice_to_have": []
+  },
+  "04_fampay_backend_intern": {
+    "required": [],
+    "nice_to_have": ["python", "go|golang", "aws"]
+  },
+  "05_razorpay_frontend": {
+    "required": [
+      "html", "css", "javascript", "react", "angular", "vue", "ember|emberjs", "backbone|backbonejs",
+      "sass|scss", "stylus", "jade|pug", "grunt", "gulp", "rest_api"
+    ],
+    "nice_to_have": []
+  },
+  "06_rubrik_winter_intern": {
+    "required": [
+      "java", "cpp|c++", "scala", "python", "object_oriented_programming|oop|object_oriented_design"
+    ],
+    "nice_to_have": []
+  },
+  "07_hackerrank_devops": {
+    "required": [
+      "aws", "eks|amazon_eks|aws_eks", "ec2|amazon_ec2|aws_ec2", "s3|amazon_s3|aws_s3", "sqs|amazon_sqs|aws_sqs",
+      "iam|aws_iam", "terraform", "docker", "kubernetes", "linux", "python", "java", "ci_cd|cicd", "monitoring",
+      "opsgenie", "new_relic|newrelic", "elk|elk_stack", "redis", "rds|amazon_rds|aws_rds",
+      "redshift|amazon_redshift|aws_redshift", "elasticsearch", "kafka|apache_kafka"
+    ],
+    "nice_to_have": [
+      "gcp|google_cloud|google_cloud_platform", "argocd|argo_cd", "jenkins", "prometheus", "grafana",
+      "security_engineering", "threat_modeling|threat_modelling", "penetration_testing"
+    ]
+  },
+  "08_inmobi_ml_backend": {
+    "required": [
+      "python", "tensorflow", "pytorch", "scikit_learn|sklearn", "spark|apache_spark", "java", "scala",
+      "distributed_systems", "machine_learning", "statistics|statistical_methods", "microservices",
+      "data_structures", "algorithms", "concurrency", "multithreading|multi_threading", "big_data"
+    ],
+    "nice_to_have": [
+      "sql", "data_warehousing", "databricks", "recommendation_systems", "linear_algebra",
+      "azure|microsoft_azure", "gcp|google_cloud|google_cloud_platform"
+    ]
+  },
+  "09_gitlab_backend": {
+    "required": ["ruby", "rails|ruby_on_rails", "go|golang", "api_design|api|apis", "testing"],
+    "nice_to_have": [
+      "grpc", "docker", "kubernetes", "helm", "ci_cd|cicd", "rust", "postgres", "observability", "caching",
+      "concurrency", "profiling"
+    ]
+  },
+  "10_fampay_data_engineer": {
+    "required": [
+      "python", "pyspark", "sql", "aws", "s3|amazon_s3|aws_s3", "eks|amazon_eks|aws_eks",
+      "msk|amazon_msk|aws_msk", "infrastructure_as_code|iac", "airflow|apache_airflow", "temporal",
+      "distributed_systems", "data_modeling|data_modelling|domain_modeling|domain_modelling"
+    ],
+    "nice_to_have": [
+      "go|golang", "java", "scala", "debezium", "peerdb", "iceberg|apache_iceberg", "delta|delta_lake",
+      "hudi|apache_hudi", "flink|apache_flink", "emr|amazon_emr|aws_emr", "github_actions",
+      "trino", "clickhouse", "metabase", "superset|apache_superset", "powerbi|power_bi"
+    ]
+  }
+}
