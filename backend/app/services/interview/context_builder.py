@@ -73,7 +73,8 @@ def _experience_text(e: Experience) -> str:
     return f"{' '.join(e.bullets or [])} {' '.join(e.stack or [])}"
 
 
-async def _load_projects_with_tags(db: AsyncSession, user_id) -> list[Project]:
+async def load_projects_with_tags(db: AsyncSession, user_id) -> list[Project]:
+    """The user's current, visible projects, newest first."""
     result = await db.execute(
         select(Project).where(Project.user_id == user_id).order_by(Project.created_at.desc())
     )
@@ -86,11 +87,12 @@ async def _load_projects_with_tags(db: AsyncSession, user_id) -> list[Project]:
     tags_by_key = await tag_or_backfill_items(db, items)
     for p in projects:
         if p.competency_tags is None:
-            p.competency_tags = tags_by_key.get(str(p.id), [])
+            p.competency_tags = tags_by_key.get(str(p.id))  # stays unset if it couldn't be tagged
     return projects
 
 
-async def _load_experiences_with_tags(db: AsyncSession, user_id) -> list[Experience]:
+async def load_experiences_with_tags(db: AsyncSession, user_id) -> list[Experience]:
+    """The user's current, visible roles, most recent first."""
     result = await db.execute(
         select(Experience)
         .where(Experience.user_id == user_id)
@@ -105,7 +107,7 @@ async def _load_experiences_with_tags(db: AsyncSession, user_id) -> list[Experie
     tags_by_key = await tag_or_backfill_items(db, items)
     for e in experiences:
         if e.competency_tags is None:
-            e.competency_tags = tags_by_key.get(str(e.id), [])
+            e.competency_tags = tags_by_key.get(str(e.id))
     return experiences
 
 
@@ -121,19 +123,40 @@ def _rank_and_cap(
     confidence_by_canonical: dict[str, float],
     max_items: int,
 ) -> list[dict]:
+    """The best-ranked rows (see `score_rows`), as the prompt wants them."""
+    scores = score_rows(
+        rows,
+        canonicals_of=lambda row: {canonical_by_raw.get(s) for s in (stack_of(row) or [])} - {None},
+        tags_of=tags_of,
+        competency_hints=competency_hints,
+        required_technologies=required_technologies,
+        confidence_by_canonical=confidence_by_canonical,
+    )
+    ranked = sorted(zip(scores, rows), key=lambda pair: pair[0], reverse=True)
+    return [to_dict(row) for _, row in ranked[:max_items]]
+
+
+def score_rows(
+    rows: list,
+    *,
+    canonicals_of,
+    tags_of,
+    competency_hints: set[str],
+    required_technologies: set[str],
+    confidence_by_canonical: dict[str, float],
+) -> list[float]:
     """Deterministic ranking formula — every weight below is explainable
     in one sentence, same philosophy as github_scoring.score_repository().
-    Rows already arrive most-recent-first from the caller's DB query.
+    Returns one score per row, in order. Rows arrive most-recent-first.
     """
     total = len(rows)
-    scored: list[tuple[float, object]] = []
+    scores: list[float] = []
 
     for idx, row in enumerate(rows):
         tags = set(tags_of(row) or [])
         tag_score = 1.0 if (competency_hints and tags & competency_hints) else 0.0
 
-        canonicals = {canonical_by_raw.get(s) for s in (stack_of(row) or [])}
-        canonicals.discard(None)
+        canonicals = canonicals_of(row)
         jd_overlap = len(canonicals & required_technologies) if required_technologies else 0
 
         confidences = [confidence_by_canonical[c] for c in canonicals if c in confidence_by_canonical]
@@ -141,11 +164,9 @@ def _rank_and_cap(
 
         recency_score = max(0.0, 1.0 - (idx / max(total, 1)))
 
-        score = (tag_score * 3.0) + (jd_overlap * 1.5) + (confidence_score * 1.0) + (recency_score * 0.5)
-        scored.append((score, row))
+        scores.append((tag_score * 3.0) + (jd_overlap * 1.5) + (confidence_score * 1.0) + (recency_score * 0.5))
 
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    return [to_dict(row) for _, row in scored[:max_items]]
+    return scores
 
 
 async def _get_confidence_map(db: AsyncSession, user_id) -> dict[str, float]:
@@ -323,8 +344,8 @@ async def build_interview_context(
     confidence_by_canonical = await _get_confidence_map(db, user_id)
     skills = _slim_skills(confidence_by_canonical)
 
-    project_rows = await _load_projects_with_tags(db, user_id)
-    experience_rows = await _load_experiences_with_tags(db, user_id)
+    project_rows = await load_projects_with_tags(db, user_id)
+    experience_rows = await load_experiences_with_tags(db, user_id)
 
     raw_stack_strings: set[str] = set()
     for p in project_rows:

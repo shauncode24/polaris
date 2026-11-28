@@ -1,10 +1,11 @@
-"""Builds the interview kit for one job: outlines its questions, then asks the
-model to word them for that job.
+"""Builds the interview kit for one job: outlines its questions, asks the model
+to word them for that job, and matches each to the user's evidence.
 
-The model is sent the job only, never anything about the candidate. It can't
-add, drop or retag a question: each reply is matched to an outline slot, and a
-slot with no usable wording keeps the standard one. So a kit always comes out,
-with a notice when the model's wording is missing from some or all of it.
+The call that words the questions is sent the job only, never anything about the
+candidate. It can't add, drop or retag a question: each reply is matched to an
+outline slot, and a slot with no usable wording keeps the standard one. So a kit
+always comes out, with a notice when the model's wording is missing from some or
+all of it. The evidence is matched separately (kit_evidence.py).
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,10 +18,10 @@ from app.schemas.interview.kit import (
     QuestionWordingReply,
 )
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
-from app.services.evidence.matching import mentions_any, skill_aliases
-from app.services.interview.kit_outline import build_outline, spellings
+from app.services.evidence.matching import skill_aliases
+from app.services.interview.kit_evidence import map_evidence
+from app.services.interview.kit_outline import build_outline, names_topic, spellings
 from app.services.job_intelligence.builder import get_job_intelligence
-from app.services.job_intelligence.cleanup import plain_text
 
 _MIN_QUESTION_LENGTH = 15
 _MAX_RESPONSIBILITIES = 10
@@ -34,26 +35,13 @@ def _skill_names(job: JobIntelligenceProfile, aliases: dict[str, set[str]]) -> d
     return {s.canonical: spellings(s, aliases) for s in skills}
 
 
-def _names_topic(text: str, names: set[str]) -> bool:
-    """True when `text` uses one of the skill's names, allowing for a singular
-    or plural and for how it is hyphenated.
-    """
-    def loose(value: str) -> str:
-        return " ".join(plain_text(value).replace("-", " ").split())
-
-    forms = {loose(name) for name in names}
-    forms |= {f"{form}s" for form in forms}
-    forms |= {form[:-1] for form in forms if len(form) > 3 and form.endswith("s")}
-    return mentions_any(loose(text), forms)
-
-
 def _usable(text: str, question: KitQuestion, names: dict[str, set[str]]) -> bool:
     if not _MIN_QUESTION_LENGTH <= len(text) <= MAX_QUESTION_LENGTH:
         return False
     # A technical question that doesn't name its skill may be about something
     # else, and would then be matched to the wrong evidence.
     if question.category == "technical_depth" and question.skills:
-        return any(_names_topic(text, names[skill]) for skill in question.skills)
+        return any(names_topic(text, names[skill]) for skill in question.skills)
     return True
 
 
@@ -128,11 +116,18 @@ async def generate_interview_kit(db: AsyncSession, user_id, job_intelligence_id)
                 "of them couldn't be used."
             )
 
+    questions = [
+        question.model_copy(update={"text": worded[slot], "origin": "model"}) if slot in worded else question
+        for slot, question in outline.items()
+    ]
+    mapping = await map_evidence(db, user_id, job, questions)
     return InterviewKitDraft(
         seniority=seniority,
         notice=notice,
+        evidence_mapped_at=mapping.mapped_at,
+        evidence_notice=mapping.notice,
         questions=[
-            question.model_copy(update={"text": worded[slot], "origin": "model"}) if slot in worded else question
-            for slot, question in outline.items()
+            question.model_copy(update={"evidence_refs": refs, "thin_evidence": not refs})
+            for question, refs in zip(questions, mapping.refs)
         ],
     )

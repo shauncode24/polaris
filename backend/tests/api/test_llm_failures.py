@@ -78,6 +78,6 @@ def test_a_failed_tagging_call_is_tried_again_next_time(seeded, model):
 
     first, remembered, second = run(go)
 
-    assert first == {"p1": []}
+    assert first == {}
     assert second == {"p1": ["ownership"]}
     assert len(model.requests) == 2

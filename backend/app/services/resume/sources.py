@@ -15,7 +15,7 @@ from app.services.evidence.matching import find_skill
 _BULLET_MARK = re.compile(r"^\s*(?:[-*•·‣▪]|\d+[.)])\s+")
 # Spellings of skills that are also ordinary words, so that finding one in a
 # sentence shows nothing.
-_ORDINARY_WORDS = {"c", "express", "go", "node", "rails", "react", "rest", "rust", "spark", "spring"}
+ORDINARY_WORDS = {"c", "express", "go", "node", "rails", "react", "rest", "rust", "spark", "spring"}
 
 
 def description_lines(description: str | None) -> list[str]:
@@ -77,7 +77,7 @@ def stated_name(kind: str, row, spellings: set[str], repo=None) -> tuple[str, bo
     for name in _listed_names(kind, row, repo):
         if name and name.strip().lower() in spellings:
             return name.strip(), True
-    in_prose = sorted(spellings - _ORDINARY_WORDS, key=lambda s: (-len(s), s))  # longest first
+    in_prose = sorted(spellings - ORDINARY_WORDS, key=lambda s: (-len(s), s))  # longest first
     for text in row_bullets(kind, row):
         for spelling in in_prose:
             if found := find_skill(text or "", spelling):

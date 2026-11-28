@@ -26,6 +26,8 @@ KINDS = {
 }
 
 _LIST_FIELDS = {"stack", "bullets"}
+# Competency tags are worked out from these, so changing one clears them.
+_TAGGED_FIELDS = {"description", "stack", "bullets"}
 ACTIONS = ("confirm", "edit", "hide", "unhide")
 
 
@@ -87,6 +89,8 @@ async def apply_review(
         row.dedupe_key = item_key(kind, row)  # pin identity before the name can change
         for name, value in cleaned.items():
             setattr(row, name, value)
+        if _TAGGED_FIELDS & cleaned.keys():
+            row.competency_tags = None
         row.review_state = "edited"
     elif action == "confirm":
         if row.review_state == "auto":

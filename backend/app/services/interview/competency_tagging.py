@@ -24,6 +24,7 @@ context_builder.py is what turns tags into a ranking.
 from datetime import datetime, timezone
 import hashlib
 import logging
+import re
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -45,15 +46,29 @@ CANONICAL_COMPETENCIES: frozenset[str] = frozenset({
 # github_commit_hygiene.py's GENERIC_MESSAGES and shared_signals.py's
 # STRONG_ACTION_VERBS. Extend by hand as real bullets show a genuine
 # tier-1 miss, rather than trying to enumerate every possible phrasing.
+# Matched at the start of a word ("led " is not in "compiled "); a keyword
+# ending in a space must also end the word. Words that on a resume usually
+# describe software ("failed", "trained", "conflict") are left to tier 2.
 COMPETENCY_KEYWORDS: dict[str, list[str]] = {
     "leadership": ["led ", "spearheaded", "directed the", "drove the", "coordinated", "owned the roadmap"],
     "teamwork": ["collaborated", "worked closely with", "paired with", "cross-functional", "team of"],
-    "conflict_resolution": ["disagreement", "conflict", "pushback", "differing opinion", "resolved a dispute", "aligned stakeholders"],
+    "conflict_resolution": ["disagreement", "pushback", "differing opinion", "resolved a dispute", "aligned stakeholders"],
     "ownership": ["owned ", "took ownership", "end-to-end", "end to end", "solely responsible", "single-handedly", "drove the decision"],
     "problem_solving": ["debugged", "root cause", "diagnosed", "troubleshot", "resolved a critical", "fixed a critical"],
     "technical_depth": ["architected", "designed the system", "optimized", "scaled", "built from scratch", "implemented a"],
-    "failure_recovery": ["failed", "mistake", "rolled back", "postmortem", "learned from", "incorrect assumption"],
-    "mentorship": ["mentored", "onboarded", "trained", "taught", "guided a junior"],
+    "failure_recovery": ["mistake", "rolled back", "postmortem", "learned from", "incorrect assumption"],
+    "mentorship": ["mentored", "onboarded", "taught", "guided a junior"],
+}
+
+
+def _keyword_pattern(keyword: str) -> str:
+    end = r"(?![a-z])" if keyword.endswith(" ") else ""
+    return r"(?<![a-z])" + re.escape(keyword.strip()) + end
+
+
+_COMPETENCY_PATTERNS = {
+    competency: re.compile("|".join(_keyword_pattern(k) for k in keywords))
+    for competency, keywords in COMPETENCY_KEYWORDS.items()
 }
 
 MAX_ITEMS_PER_LLM_BATCH = 20
@@ -64,7 +79,7 @@ def tag_text_deterministic(text: str) -> list[str]:
     be empty) of every competency whose keyword set matches.
     """
     lowered = (text or "").lower()
-    tags = [c for c, kws in COMPETENCY_KEYWORDS.items() if any(kw in lowered for kw in kws)]
+    tags = [c for c, pattern in _COMPETENCY_PATTERNS.items() if pattern.search(lowered)]
     return sorted(tags)
 
 
@@ -89,7 +104,8 @@ async def _classify_via_llm(texts_by_key: dict[str, str]) -> dict[str, list[str]
 
 async def tag_or_backfill_items(db: AsyncSession, items: list[dict]) -> dict[str, list[str]]:
     """items: [{"key": str, "text": str, "existing_tags": list[str] | None}].
-    Returns key -> sorted competency tags.
+    Returns key -> sorted competency tags. A key whose text couldn't be
+    classified (the model failed or skipped it) is left out.
 
     "existing_tags" being non-None means the caller already has a
     persisted value (Project.competency_tags / Experience.competency_tags
@@ -147,8 +163,7 @@ async def tag_or_backfill_items(db: AsyncSession, items: list[dict]) -> dict[str
 
         for key in batch_keys:
             if key not in classified:
-                results[key] = []  # untagged for now; asked again next time
-                continue
+                continue  # untagged for now; asked again next time
             tags = classified[key]
             results[key] = tags
             stmt = (

@@ -42,11 +42,12 @@ async def save_new_kit(
     kit = InterviewKit(
         id=uuid.uuid4(), user_id=user_id, job_intelligence_id=job_intelligence_id,
         version=(latest or 0) + 1, seniority=draft.seniority, notice=draft.notice,
+        evidence_mapped_at=draft.evidence_mapped_at, evidence_notice=draft.evidence_notice,
     )
     db.add(kit)
     await db.flush()  # the questions refer to it
     db.add_all([
-        InterviewQuestion(kit_id=kit.id, position=position, **question.model_dump())
+        InterviewQuestion(kit_id=kit.id, position=position, **question.model_dump(mode="json"))
         for position, question in enumerate(draft.questions)
     ])
     await db.commit()

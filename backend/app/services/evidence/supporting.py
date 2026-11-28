@@ -76,7 +76,7 @@ def _from_repo(analysis: GithubProjectAnalysis, project: Project | None, names: 
     )
 
 
-async def _leetcode_counts(db: AsyncSession, user_id) -> dict[str, int]:
+async def latest_leetcode_counts(db: AsyncSession, user_id) -> dict[str, int]:
     """The newest solved count stored for each LeetCode topic."""
     result = await db.execute(
         select(LeetcodeSnapshot.tag, LeetcodeSnapshot.solved_count)
@@ -157,7 +157,7 @@ async def build_supporting_evidence(
     )).scalars().all()}
     aliases = await skill_aliases(db, set(evidence_by_skill))
     leetcode_counts = (
-        await _leetcode_counts(db, user_id)
+        await latest_leetcode_counts(db, user_id)
         if any(r.source_type == "leetcode_tag" for rows in evidence_by_skill.values() for r in rows)
         else {}
     )

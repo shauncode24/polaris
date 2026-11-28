@@ -126,7 +126,7 @@ class Practice:
         return sum(1 for _tag, solved in self.topics if solved >= MIN_SOLVED_PER_TOPIC)
 
 
-def _tag_slug(name: str) -> str:
+def tag_slug(name: str) -> str:
     """Manual entry accepts names as people type them ("Dynamic Programming",
     "Arrays"); the sync already sends slugs.
     """
@@ -143,7 +143,7 @@ def practice_by_skill(tag_counts: dict[str, int], total_solved: int | None = Non
     """
     solved: dict[str, int] = {}
     for name, count in tag_counts.items():
-        slug = _tag_slug(name)
+        slug = tag_slug(name)
         solved[slug] = max(count, solved.get(slug, 0))
 
     practice = {}

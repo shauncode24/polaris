@@ -100,7 +100,7 @@ def test_the_model_words_each_question_and_nothing_else_changes(seeded, model, w
     assert len(stand_in.asked) == 1
 
 
-def test_only_the_job_is_sent_to_the_model(seeded, worder):
+def test_only_the_job_is_sent_to_word_the_questions(seeded, worder):
     user = new_user()
     experience(user, "Secret Role", ["Kubernetes"], ["Ran the secret cluster."], company="Hidden Co")
     project(user, "Quiet Project", ["Redis"], "Cached results in Redis.")
@@ -261,8 +261,8 @@ def test_a_kit_is_saved_and_read_back_in_order(seeded, worder):
     assert [q.position for q in saved.questions] == list(range(len(draft.questions)))
     assert [(q.category, q.topic, q.text, q.skills, q.competencies, q.origin) for q in saved.questions] == [
         (q.category, q.topic, q.text, q.skills, q.competencies, q.origin) for q in draft.questions]
-    # Not matched against the user's evidence yet.
-    assert {(tuple(q.evidence_refs), q.thin_evidence) for q in saved.questions} == {((), None)}
+    # This user has no work to match.
+    assert {(tuple(q.evidence_refs), q.thin_evidence) for q in saved.questions} == {((), True)}
 
 
 def test_each_save_is_a_new_version_and_earlier_questions_stay(seeded, model):

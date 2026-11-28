@@ -24,6 +24,7 @@ import re
 from app.schemas.interview.kit import KitQuestion, QuestionCategory
 from app.schemas.job_intelligence.job_intelligence import EnrichedSkill, JobIntelligenceProfile
 from app.services.evidence.matching import mentions_any
+from app.services.job_intelligence.cleanup import plain_text
 
 # How many questions of each category, by the job's seniority.
 QUESTION_MIX: dict[str, dict[QuestionCategory, int]] = {
@@ -82,6 +83,9 @@ _TECHNICAL = [
 ]
 _DESIGN = "Walk through a design where this matters: {topic}. What would you build, and which trade-offs would you weigh?"
 _TRADE_OFFS = "System design and trade-offs"
+_A_DECISION = "A technical decision"
+# Topics of the outline's own that name nothing a piece of work could mention.
+GENERIC_TOPICS = frozenset({_TRADE_OFFS, _A_DECISION})
 _TRADE_OFFS_TEXT = (
     "Design a service this role might own. Walk through its parts and its data, what fails first as use grows, "
     "and what you would trade to fix it."
@@ -116,6 +120,19 @@ def spellings(skill: EnrichedSkill, aliases: dict[str, set[str]]) -> set[str]:
     """Every way a text might name this skill."""
     names = {skill.raw, skill.canonical, skill.canonical.replace("_", " "), *aliases.get(skill.canonical, ())}
     return {name.strip() for name in names if name.strip()}
+
+
+def names_topic(text: str, names: set[str]) -> bool:
+    """True when `text` uses one of the names, allowing for a singular or plural
+    and for how it is hyphenated.
+    """
+    def loose(value: str) -> str:
+        return " ".join(plain_text(value).replace("-", " ").split())
+
+    forms = {loose(name) for name in names}
+    forms |= {f"{form}s" for form in forms}
+    forms |= {form[:-1] for form in forms if len(form) > 3 and form.endswith("s")}
+    return mentions_any(loose(text), forms)
 
 
 def _job_skills(job: JobIntelligenceProfile) -> list[EnrichedSkill]:
@@ -207,7 +224,7 @@ def build_outline(job: JobIntelligenceProfile, aliases: dict[str, set[str]] | No
             outline.technical(skill)
     if not outline.count("technical_depth"):
         outline.add(
-            "technical_depth", "A technical decision",
+            "technical_depth", _A_DECISION,
             "Walk me through a technical decision you made. What were the options, and why did you choose yours?",
             [], ["technical_depth"],
         )

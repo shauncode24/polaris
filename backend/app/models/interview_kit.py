@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,10 @@ class InterviewKit(Base):
     version: Mapped[int] = mapped_column(Integer)  # 1, 2, ... for each job
     seniority: Mapped[str] = mapped_column(String(20))  # the job's, when the kit was made
     notice: Mapped[str | None] = mapped_column(Text)
+    # When the record was read to match the questions' evidence. Older than the
+    # user's `evidence_updated_at` means the matching is out of date.
+    evidence_mapped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    evidence_notice: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = created_at_col()
 
 
@@ -49,7 +53,7 @@ class InterviewQuestion(Base):
     skills: Mapped[list] = mapped_column(JSONB)
     competencies: Mapped[list] = mapped_column(JSONB)
     origin: Mapped[str] = mapped_column(String(10))
-    # The candidate's evidence for answering it. Empty and NULL until the
-    # question has been matched against the record.
+    # The candidate's evidence for answering it (`QuestionEvidence`), and whether
+    # none qualified. Empty and NULL until matched against the record.
     evidence_refs: Mapped[list] = mapped_column(JSONB, default=list)
     thin_evidence: Mapped[bool | None] = mapped_column(Boolean)
