@@ -146,3 +146,19 @@ class TailoredResumeDocument(BaseModel):
         if sorted(self.section_order) != sorted(get_args(Section)):
             raise ValueError("section_order must list every section once")
         return self
+
+
+class RankedEvidence(BaseModel):
+    """How one experience or project ranked for the job."""
+    id: str
+    type: Literal["experience", "project"]
+    label: str
+    relevance_score: float
+    matched_skills: list[str] = []
+    claim_risk: str | None = None  # "high" | "medium": its score was reduced for this
+    selected: bool
+
+
+class Selection(BaseModel):
+    document: TailoredResumeDocument
+    ranking: list[RankedEvidence]  # most relevant first

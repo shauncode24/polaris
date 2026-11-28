@@ -14,7 +14,8 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit the password fix.** Done. Run `uv sync` from `backend/` on any other machine that runs the app.
 - [x] **Commit step 27.** Done.
 - [x] **Commit step 28.** Done.
-- [ ] **Commit step 29.**
+- [x] **Commit step 29.** Done.
+- [ ] **Commit step 30.**
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
 - [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now nine new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, the background jobs table, the daily usage table and the tailored resumes table (most AI features fail without the last two). Expect the 2 legacy goals to lose their job link if their job can't be matched.
@@ -30,6 +31,7 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 
 ## Decisions I'm waiting on
 
+- [ ] **Save resume dates.** Uploading a resume (or pasting LinkedIn) reads the start and end dates and then throws them away, so a tailored resume would show none. Tell me to fix it; you would then upload your resume once more.
 - [ ] **Daily AI limit per user.** Set to 100 calls. On Groq's free tier that is too generous to protect anyone: one person using all of it could spend the whole app's 200,000 daily tokens. Roughly 30 would stop one user taking everything but still allows only about a handful of active users a day. Change it with `LLM_DAILY_CALLS_PER_USER` in `.env`; decide it together with the provider below.
 - [ ] **How much evidence should count?** A skill needs a score of 60% to be met and 30% to count partly. One source rarely gets there: a skill used in one job (25%) or seen in one ordinary GitHub repo (18% to 39%) is usually shown as a gap, and one project that describes it (35%) only counts partly. LeetCode is more generous by design: 100 problems across 5 topics meets "algorithms" by itself. Tell me if either should change; the numbers are in `services/evidence/scoring.py`.
 - [ ] **Hosting** (Render or Fly.io with managed Postgres, or one VPS). Needed for step 13 (staging) and Stage J.

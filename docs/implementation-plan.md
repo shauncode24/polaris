@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 29. Unmarked steps (30 to 71, plus 6 and 13) are not started.
+Updated after step 30. Unmarked steps (31 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -15,16 +15,16 @@ Updated after step 29. Unmarked steps (30 to 71, plus 6 and 13) are not started.
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
-| F. Tailored resume | ◐ in progress | 29 done; 30 to 37 not started |
+| F. Tailored resume | ◐ in progress | 29 and 30 done; 31 to 37 not started |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**24 of 71 steps done, 1 partial, 2 skipped, 44 not started** (42 of them in Stages F to K).
+**25 of 71 steps done, 1 partial, 2 skipped, 43 not started** (41 of them in Stages F to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 489 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 504 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -134,7 +134,8 @@ New tables: `TailoredResume` (user, JD, version, structured JSON, status, create
 
 ✅ 29. Define the structured resume schema: header, summary, experience (role, company, dates, bullets), projects, education, skills. Every bullet carries `source_ids`.
     - **Status:** Done. `TailoredResumeDocument` in `schemas/resume/tailored.py`; the references are called `sources` (kind, row id, bullet number) and every line, entry and skill needs at least one. Each line keeps the original wording, an AI rewrite, the user's decision and any edit; **a rewrite appears only once accepted**. Table `tailored_resumes` stores numbered versions per job, and deleting a job deletes them (`services/resume/tailored_store.py`). Nothing generates or shows a resume yet. Not yet checked: that referenced rows exist and belong to the user (needed before the editor can send a document, steps 32 and 34).
-30. Selection: reuse `rank_items_for_jd` over the whole evidence record (resume, GitHub, LinkedIn), keeping the claim-risk penalty.
+✅ 30. Selection: reuse `rank_items_for_jd` over the whole evidence record (resume, GitHub, LinkedIn), keeping the claim-risk penalty.
+    - **Status:** Done. `select_for_job` in `services/resume/selection.py` builds a `TailoredResumeDocument` in the evidence's own wording, with a ranking that says why each item was chosen. No model calls; nothing calls it yet. Up to 4 roles (most relevant, in resume order) and 4 projects (relevant ones, topped up to 2), bullets that show the job's skills first, and up to 18 skills the user has evidence for, required ones first. Hidden items and skills are left out; LeetCode practice alone lists a skill only when the job asks for it. **Limits:** a project description is one bullet per line, so a paragraph stays one bullet; a claim-audit penalty is lost after a resume re-upload until the project is audited again. **Gap found:** resume and LinkedIn imports discard start and end dates, so tailored resumes have none; fix before the editor and export (steps 34 and 36).
 31. Bullet rewriting: the LLM rewrites each selected bullet toward the JD's language, given only that bullet's source facts, through `llm_json`.
 32. Grounding gate: every number, technology and claim in a rewritten bullet must exist in its source facts. Violations are dropped or flagged "needs your confirmation". Reuse the approach in `services/interview/grounding.py`.
 33. Deterministic fallback: if the LLM fails, return the original bullets ordered by relevance with a notice.

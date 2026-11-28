@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import Prompt, llm_json
 from app.models.facts import Experience, Project
-from app.models.inference import ResumeTailoringReview, ProjectClaimAuditReview
+from app.models.inference import ResumeTailoringReview
 from app.prompts.resume.resume_tailoring import TAILORING_SYSTEM_PROMPT
 from app.schemas.resume.resume_tailoring import RankedItem, TailoringLLMOutput, TailoringReport
 from app.services.evidence.confidence import get_all_skill_confidences
@@ -26,25 +26,7 @@ MAX_BULLETS_IN_PROMPT = 40
 # FIX (Important #5): same idea projects/comparison.py already applies to
 # its goal-aware ranking — an unresolved claim-risk finding should reduce
 # how strongly Tailoring recommends leading with a project.
-from app.services.resume.claim_risk import CLAIM_RISK_MULTIPLIER, apply_claim_risk_penalty
-
-
-async def _get_claim_risk_by_project_id(db: AsyncSession, project_ids: list) -> dict:
-    """project_id -> "high"|"medium", for projects with an unresolved
-    Claim Audit risk finding. Mirrors how the Projects module's
-    goal-aware ranking already reads this same table.
-    """
-    if not project_ids:
-        return {}
-    result = await db.execute(
-        select(ProjectClaimAuditReview).where(ProjectClaimAuditReview.project_id.in_(project_ids))
-    )
-    risk_by_id = {}
-    for row in result.scalars().all():
-        level = (row.report_json or {}).get("narrative", {}).get("risk_level")
-        if level in ("high", "medium"):
-            risk_by_id[row.project_id] = level
-    return risk_by_id
+from app.services.resume.claim_risk import apply_claim_risk_penalty, claim_risk_by_project_id
 
 
 async def get_cached_tailoring_report(
@@ -152,7 +134,7 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_in
     # goal-aware ranking already applies, so Tailoring never confidently
     # recommends leading with a project the Claim Audit has already
     # flagged as unsupported.
-    claim_risk_by_id = await _get_claim_risk_by_project_id(db, [p.id for p in projects])
+    claim_risk_by_id = await claim_risk_by_project_id(db, [p.id for p in projects])
     for r in ranked:
         if r["type"] != "project":
             continue
