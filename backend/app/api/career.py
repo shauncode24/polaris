@@ -166,6 +166,7 @@ async def _build_and_save_plan(db: AsyncSession, user_id, goal_id: UUID) -> Care
             "days_available": context["days_available"],
             "topic_signals": context["topic_signals"],
             "target_job": target_job_summary.model_dump() if target_job_summary else None,
+            "study_plan": context.get("study_plan"),
             "degraded": degraded,
         },
         created_at=datetime.now(timezone.utc),
@@ -189,4 +190,5 @@ async def _build_and_save_plan(db: AsyncSession, user_id, goal_id: UUID) -> Care
         degraded=degraded,
         topic_signals=[TopicSignal(**t) for t in context["topic_signals"]],
         target_job=target_job_summary,
+        study_plan=context.get("study_plan"),
     )

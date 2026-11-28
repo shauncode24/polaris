@@ -3,6 +3,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.schemas.interview.study import LeetcodeTopic, StudyPlan
+
 
 class GoalCreateRequest(BaseModel):
     title: str
@@ -36,6 +38,8 @@ class DailyPlanItem(BaseModel):
     estimated_time: str = ""
     rationale: str = ""
     source: str = "llm"  # "llm" | "fallback"
+    # The study plan's LeetCode topics this day names. Set by code, never by the model.
+    links: list[LeetcodeTopic] = []
 
 
 class CareerPlanLLMOutput(BaseModel):
@@ -70,3 +74,4 @@ class CareerPlanResponse(BaseModel):
     degraded: bool = False
     topic_signals: list[TopicSignal] = []
     target_job: TargetJobSummary | None = None
+    study_plan: StudyPlan | None = None  # the target job's gaps this plan was built around

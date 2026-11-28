@@ -50,6 +50,7 @@ CASES = [
          json={"answer": "An answer long enough to be reviewed."}),
     Case("GET", "/interview/questions/{question_id}/attempts", owner_status=200),
     Case("GET", "/interview/kits/{job_id}/progress", owner_status=200),
+    Case("GET", "/interview/study-plan/{job_id}", owner_status=200),
     Case("POST", "/interview/correct", json={"parent_response_id": "{response_id}", "correction": "x"}),
     Case("PATCH", "/goals/{goal_id}", json={"title": "renamed"}, owner_status=200),
     Case("DELETE", "/goals/{goal_id}"),

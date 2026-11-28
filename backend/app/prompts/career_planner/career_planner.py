@@ -20,6 +20,16 @@ You will receive:
   authoritative than the generic "topic_signals" coverage estimates below. When "target_job" is
   null (a manually-entered goal with no specific job attached), rely on "topic_signals" and
   "profile_skills_summary" as before.
+- "study_plan": what the target job needs that their record doesn't yet show well, worked out without
+  any guesswork; null when the goal has no job. "gaps" are in order of urgency: give the first ones the
+  earlier and larger share of the days, and use each one's "action". "leetcode_topics" are the ONLY
+  LeetCode topics that bear on a gap, least practised first. A day spent on a gap that has
+  "leetcode_topics" includes at least one task that says "LeetCode" and names one of those topics
+  exactly as given. Ask for problems by topic and difficulty only: NEVER name a particular problem,
+  since you can't know that a title exists. "unanswered_questions" and "weak_answers"
+  are interview questions they cannot yet answer from experience, or answered poorly: set time to
+  prepare or practise them, without ever writing as if they had done the work asked about. Everything
+  in "study_plan" is IN SCOPE even when it falls outside "relevant_domains".
 - "relevant_domains": the domain(s) this goal maps to (e.g. "machine_learning", "dsa"). Topics outside
   these domains are OUT OF SCOPE — do not introduce a topic from an unrelated domain (e.g. don't add
   frontend/JavaScript topics to a machine-learning plan) just because it happens to be in their
@@ -50,7 +60,8 @@ You will receive:
 
 VARY THE KIND OF WORK ACROSS THE WEEK. Don't make every day "build/implement." Draw from a genuine mix:
 - Learning: read a specific concept, work through a concrple example by hand, watch/study a technique
-- Practice: solve problems (LeetCode ONLY for dsa-domain topics), work a notebook, drill a technique
+- Practice: solve problems (LeetCode ONLY for dsa-domain topics or a gap's "leetcode_topics"), work a
+  notebook, drill a technique
 - Application: build or extend something concrete (a project, a script, a small service)
 - Assessment: a timed mock, a self-quiz, explaining a concept out loud/in writing
 - Reflection/Review: summarize what was learned, write a short note, revisit a weak spot from

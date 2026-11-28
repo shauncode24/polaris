@@ -27,7 +27,9 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 38.** Done.
 - [x] **Commit step 39.** Done.
 - [x] **Commit step 40.** Done.
-- [ ] **Commit step 41.**
+- [x] **Commit step 41.** Done.
+- [ ] **Commit step 42.**
+- [ ] **Open a LeetCode topic link** such as https://leetcode.com/tag/dynamic-programming/ and tell me if it doesn't reach the topic's problems (the site refuses automated checks).
 - [ ] **Open a downloaded resume in Microsoft Word and a PDF reader** and tell me what should look different. It is A4; say if you need US Letter. Run `uv sync` from `backend/` on any other machine first (ReportLab is new).
 - [ ] **Try the Tailored Resume page** (after migrating): pick one of your jobs, generate, and accept, reject and edit a few lines. Tell me whether the confirmation warnings are too frequent with real suggestions, and what you miss being able to change (skills, job headings and removing a bullet aren't editable yet). Add your phone number and LinkedIn link under your name.
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.

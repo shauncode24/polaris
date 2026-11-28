@@ -10,6 +10,7 @@ from app.services.projects.linking import normalize_name
 from app.models.inference import ProfileSnapshot, ResumeReview
 from app.services.career_planner.curriculum import get_curriculum_topics, get_relevant_domains
 from app.services.career_planner.topic_signals import build_topic_signals
+from app.services.interview.study_plan import build_study_plan
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.job_intelligence.gap_results import get_latest_gap_result, is_current_gap_result
 from app.services.job_intelligence.library import get_primary_job_id
@@ -23,6 +24,10 @@ from app.services.evidence.review import dedupe_visible
 MAX_PLAN_DAYS = 14
 DEFAULT_PLAN_DAYS = 5
 MAX_PROJECTS_IN_PROMPT = 6
+# A fortnight at most is planned, so a longer list of gaps would not be reached.
+MAX_GAPS = 12
+MAX_QUESTIONS_PER_GAP = 2
+MAX_QUESTIONS = 5
 _SEVERITY_ORDER = {"critical": 0, "moderate": 1, "minor": 2}
 
 
@@ -126,6 +131,19 @@ async def _get_target_job_context(db: AsyncSession, user_id, job_intelligence_id
         "seniority_signal": job_intelligence.seniority_signal.model_dump(),
         "interview_focus_areas": job_intelligence.interview_focus_areas,
     }
+
+
+async def _get_study_plan(db: AsyncSession, user_id, job_intelligence_id) -> dict | None:
+    """The target job's study plan, cut to what a plan of days can use."""
+    job_id = await _target_job_id(db, user_id, job_intelligence_id)
+    study = await build_study_plan(db, user_id, job_id) if job_id is not None else None
+    if study is None:
+        return None
+    study.gaps = study.gaps[:MAX_GAPS]
+    for gap in study.gaps:
+        gap.questions = gap.questions[:MAX_QUESTIONS_PER_GAP]
+    study.unanswered, study.weak = study.unanswered[:MAX_QUESTIONS], study.weak[:MAX_QUESTIONS]
+    return study.model_dump(mode="json")
 
 
 async def _get_latest_ats_flags(db: AsyncSession, user_id) -> tuple[set[str], list[str]]:
@@ -254,6 +272,7 @@ async def build_career_plan_context(db: AsyncSession, user_id, goal: Goal) -> di
         "days_available": days_available,
         "relevant_domains": relevant_domains,
         "target_job": target_job,
+        "study_plan": await _get_study_plan(db, user_id, goal.job_intelligence_id),
         "topic_signals": topic_signals,
         "resume_review_top_fixes": resume_top_fixes,
         "profile_skills_summary": [

@@ -16,8 +16,10 @@ from app.schemas.interview.interview_response import (
     InterviewSessionSummary,
 )
 from app.schemas.interview.practice import KitProgress, PracticeAnswer, PracticeAttemptView
+from app.schemas.interview.study import StudyPlan
 from app.services.interview import grounding, practice
 from app.services.interview.context_builder import build_interview_context
+from app.services.interview.study_plan import build_study_plan
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.job_intelligence.library import get_primary_job_id
 from app.services.interview.response_generation import (
@@ -414,3 +416,16 @@ async def get_practice_progress(
     if progress is None:
         raise HTTPException(status_code=404, detail="Interview kit not found.")
     return progress
+
+
+@router.get("/study-plan/{job_intelligence_id}", response_model=StudyPlan)
+async def get_study_plan(
+    job_intelligence_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """What to study for one of the user's jobs."""
+    plan = await build_study_plan(db, current_user.id, job_intelligence_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return plan
