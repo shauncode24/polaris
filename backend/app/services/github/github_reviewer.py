@@ -20,11 +20,10 @@ Guardrails applied here (same pattern as resume/reviewer.py):
 import logging
 from datetime import datetime, timezone
 
-import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.inference import GithubPortfolioReview
 from app.prompts.github.github_review import GITHUB_REVIEW_SYSTEM_PROMPT
 from app.schemas.github.github_review import GithubPortfolioReviewLLMOutput, GithubPortfolioReviewReport
@@ -60,25 +59,15 @@ async def generate_github_portfolio_review(db: AsyncSession, user_id) -> GithubP
     if knowledge is None or not knowledge.get("repositories"):
         raise ValueError("No synced GitHub data found for this user — run a GitHub sync first.")
 
-    degraded = False
-    try:
-        logger.info("Requesting GitHub portfolio review from LLM...")
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": GITHUB_REVIEW_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(knowledge)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.4,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw GitHub portfolio review JSON: %s", content)
-        llm_output = GithubPortfolioReviewLLMOutput.model_validate(json.loads(content))
-    except Exception as e:
-        logger.warning("GitHub portfolio review degraded, using fallback: %s", e)
-        llm_output = _fallback_report(knowledge)
-        degraded = True
+    logger.info("Requesting GitHub portfolio review from LLM...")
+    reply = await llm_json(
+        Prompt(GITHUB_REVIEW_SYSTEM_PROMPT, knowledge), GithubPortfolioReviewLLMOutput,
+        lambda: _fallback_report(knowledge), label="github_review", temperature=0.4,
+        expect=("engineering_assessment", "flagship_projects", "skill_confidence_explanations",
+                "engineering_habits", "recruiter_perspective", "resume_integration_suggestions",
+                "growth_story", "improvement_roadmap"),
+    )
+    llm_output, degraded = reply.value, reply.degraded
 
     real_repo_names = {r["name"] for r in knowledge["repositories"]}
     llm_output.flagship_projects = [

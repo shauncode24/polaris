@@ -1,9 +1,8 @@
-import json
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.inference import LeetcodePortfolioReview
 from app.prompts.leetcode.leetcode_review import LEETCODE_REVIEW_SYSTEM_PROMPT
 from app.schemas.leetcode.leetcode_review import LeetcodePortfolioReviewLLMOutput, LeetcodePortfolioReviewReport
@@ -105,23 +104,14 @@ async def generate_leetcode_portfolio_review(db: AsyncSession, user_id) -> Leetc
     if knowledge is None:
         raise ValueError("No LeetCode sync history found. Please run a sync first.")
 
-    degraded = False
-    try:
-        logger.info("Requesting LeetCode portfolio review from LLM...")
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": LEETCODE_REVIEW_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(knowledge)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.4,
-            max_tokens=2000,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw LeetCode portfolio review JSON: %s", content)
-        llm_output = LeetcodePortfolioReviewLLMOutput.model_validate(json.loads(content))
-
+    logger.info("Requesting LeetCode portfolio review from LLM...")
+    reply = await llm_json(
+        Prompt(LEETCODE_REVIEW_SYSTEM_PROMPT, knowledge), LeetcodePortfolioReviewLLMOutput,
+        lambda: _fallback_report(knowledge), label="leetcode_review", temperature=0.4, max_tokens=2000,
+        expect=("interview_coach", "learning_strategy", "target_focus_topics", "roadmap_actions"),
+    )
+    llm_output, degraded = reply.value, reply.degraded
+    if not degraded:
         ungrounded = (
             _flag_ungrounded_company_mentions(llm_output.interview_coach)
             + _flag_ungrounded_company_mentions(llm_output.learning_strategy)
@@ -131,10 +121,6 @@ async def generate_leetcode_portfolio_review(db: AsyncSession, user_id) -> Leetc
                 "LeetCode portfolio review mentioned company name(s) outside COMPANY_TOPIC_WEIGHTS: %s",
                 sorted(set(ungrounded)),
             )
-    except Exception as e:
-        logger.warning("LeetCode portfolio review degraded, using fallback: %s", e)
-        llm_output = _fallback_report(knowledge)
-        degraded = True
 
     # Validate target focus topics against the exact set of canonical topics to avoid LLM hallucination
     allowed_topics = set(CANONICAL_TOPICS.keys())

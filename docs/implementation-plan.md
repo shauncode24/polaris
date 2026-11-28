@@ -6,15 +6,15 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 24. Unmarked steps (25 to 71, plus 6 and 13) are not started.
+Updated after step 25. Unmarked steps (26 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
 | A. Baseline and safety net | ◐ partly done | 1, 2 done; 5 partial; 3, 4 skipped; 6 not started |
 | B. Consolidate and make the data trustworthy | ✅ done except step 13 | 7 to 12 done (committed in `82bac8a`); 13 not started |
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
-| D. JD fit tied to evidence | ◐ one check left | 21, 23, 24 done; 22 partly done |
-| E. LLM foundation | not started | 25 to 28 |
+| D. JD fit tied to evidence | ✅ done | 21 to 24 |
+| E. LLM foundation | ◐ in progress | 25 done; 26 to 28 not started |
 | F. Tailored resume | not started | 29 to 37 |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
@@ -22,9 +22,9 @@ Updated after step 24. Unmarked steps (25 to 71, plus 6 and 13) are not started.
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**18 of 71 steps done, 2 partial, 2 skipped, 49 not started** (47 of them in Stages E to K).
+**20 of 71 steps done, 1 partial, 2 skipped, 48 not started** (46 of them in Stages E to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 340 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 387 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -41,7 +41,7 @@ Recommended choice in bold.
 | Decision | Options | Affects | Status |
 |---|---|---|---|
 | Hosting | **Render or Fly.io with managed Postgres**, or one VPS with Compose | Steps 13 and 58 to 67 | open |
-| LLM provider | **Keep Groq, behind a provider setting**, or switch | Steps 25 and 31 | open |
+| LLM provider | **Keep Groq, behind a provider setting**, or switch | Steps 25 and 31 | Groq kept (step 25); budget still open |
 | Resume export | **One structured resume JSON rendered to DOCX (`python-docx`) and PDF (WeasyPrint on an HTML template)** | Steps 29 to 36 | open |
 | Background work | **FastAPI tasks plus a `jobs` table**; Celery/RQ only if needed | Steps 26 and 27 | open |
 | Legacy `JobDescription` rows | **Migrate any worth keeping, then drop the table** | Step 7 | ✅ done |
@@ -103,23 +103,24 @@ Recommended choice in bold.
     - **Gate:** a repo missing from the resume appears as a project candidate, re-sync creates no duplicates, every item shows its source, and a user edit survives a re-sync. The journey test covers this. ◐ Met by automated tests (GitHub-only projects appear, re-sync adds no duplicates, every item shows its source, edits survive). Not checked by a journey test or in a browser.
     - **Status:** Done. Implemented as an evidence timestamp (`users.evidence_updated_at`) that cached reports are compared against, covering tailoring, claim audit, interview questions, coherence and portfolio narrative. Tailored resumes and interview kits don't exist yet, so steps 29 to 43 must use the same check. `identity_refresh.py` was not changed.
 
-## Stage D: Pillar 2, JD fit tied to evidence (about 1 week) — ◐ in progress
+## Stage D: Pillar 2, JD fit tied to evidence (about 1 week) — ✅ done (UI not yet seen in a browser)
 
 ✅ 21. For every matched requirement, return the specific project, bullet or LeetCode topic that supports it. Gaps return a severity.
     - **Status:** Done. Every met requirement carries the projects, bullets, repos and LeetCode topics behind it; every missing or partial one carries a severity (critical, moderate, minor); weak evidence is shown for near misses; the Skill Gap page displays both. Fixed on the way, because step 21's output depends on them: the skill gap ignored hidden skills and the claim-risk discount; evidence from hidden items and from superseded uploads still counted (re-uploading inflated scores); resume ingestion attached evidence to the wrong role when a role had several matching bullets; stored comparisons were never rebuilt after the evidence changed. Verified by tests; **not yet seen in a browser**. Known limits: editing a project's technologies does not change which skills it counts for, and role-fit and resume analysis still read raw evidence rows.
-◐ 22. Run JD extraction on 5–10 real job descriptions and fix prompts or normalization where skills are missed or invented.
-    - **Status:** Code done; one posting still to run. Ran 10 real software postings through the pipeline with the real model and scored them against skills written down beforehand: 96 of 141 (68%) before any change. The main fault was replies cut off partway (5 of 10) and saved as if complete; they are now detected, asked for again, and fail loudly if still incomplete, with lower reasoning effort so they fit. Also fixed: entries bundling several skills, one skill under several names, soft skills and candidate history listed as requirements, inferred skills resting on invented quotes, and prompt gaps. After the fixes, 100 of 113 (88%) on the 9 postings run so far (85 of 97 on eight, then 15 of 16 on the GitLab posting, which started at 2); **1 is still to be run**, held up by Groq's daily limit. These postings were also used to tune the fixes, so the score is optimistic for new ones. Known limits: some duty phrases and long "nice to have" sentences still come through, a skill is occasionally put in the wrong band or missed, and results vary a little between runs. Rerun with `app/scripts/eval_jd_extraction.py`.
+✅ 22. Run JD extraction on 5–10 real job descriptions and fix prompts or normalization where skills are missed or invented.
+    - **Status:** Done. Ran 10 real software postings through the pipeline with the real model and scored them against skills written down beforehand: 96 of 141 (68%) before any change. The main fault was replies cut off partway (5 of 10) and saved as if complete; they are now detected, asked for again, and fail loudly if still incomplete, with lower reasoning effort so they fit. Also fixed: entries bundling several skills, one skill under several names, soft skills and candidate history listed as requirements, inferred skills resting on invented quotes, and prompt gaps. After the fixes, 123 of 141 (87%) across all 10; the GitLab posting went from 2 of 16 to 15. Two of the ten (20 of 28 between them) were last measured just before the final two filters, because their rerun hit Groq's daily limit. These postings were also used to tune the fixes, so the score is optimistic for new ones. Known limits: some duty phrases and long "nice to have" sentences still come through, a skill is occasionally put in the wrong band or missed, and results vary a little between runs. Rerun with `app/scripts/eval_jd_extraction.py`.
 ✅ 23. Build the JD library: list, compare, delete, and mark one as the primary target that the planner and interview read.
     - **Status:** Done. The Job & Company Intel page is now the library: open, delete, tick two to four jobs to compare (match score per job, then one table of skills showing your standing and how each job asks for it), and set one as the primary target (migration `f1a7c3e9b5d2`). The planner uses a goal's own job, then the primary target, then the last compared job, and always works from your current evidence. Interview practice uses the job chosen for the session, then the primary target, then the active goal's job, and no longer mixes a typed role with another job's requirements; a corrected answer keeps its job. The primary target is listed first, so pages that default to the first job now default to it. Deleting a job removes its comparisons and tailoring advice and keeps goals, without the link. Verified by tests and a successful build; **not yet seen in a browser**.
 ✅ 24. Unify the skill-gap response models, and delete the orphaned jobs components (`JobAnalysisResults`, `JobDescriptionForm`, `PastAnalysesPanel`, `HistoryPopover`, `AnalyzingProgress`) after copying anything `SkillGapResults` lacks.
     - **Gate:** a real JD gives a match view where every "met" requirement links to evidence. ✅ Checked on 9 saved real postings against a sample record: all 19 met requirements carried their projects, experience, repos or LeetCode topics. Not checked in a browser; only GitHub items are clickable.
     - **Status:** Done. The skill-gap models live in one module with a shared base for the three kinds of match (stored comparisons are rebuilt once), and the unused response model is gone. The five components and the two only they used are deleted; the Skill Gap page gained strengths and risks, links to plan and practise for that job, and match scores in the job picker. The job list now shows a score only while it is current. **Added to this step:** LeetCode practice counts toward "data structures" and "algorithms": 100 solved problems across 5 topics meets the requirement, 30 across 3 meets it partly, and less is shown as weak evidence.
 
-## Stage E: LLM foundation (about 3–4 days)
+## Stage E: LLM foundation (about 3–4 days) — ◐ in progress
 
 This comes before the two large generation features, because they depend on it.
 
-25. Build one `llm_json(prompt, schema, fallback)` helper in `core/llm.py` with a timeout, bounded retries with backoff on 429 and 5xx, token and latency logging, and a clear error when the key is missing. Remove the commented-out clients and the Ollama prefill hack, or put them behind an explicit `LLM_PROVIDER` setting.
+✅ 25. Build one `llm_json(prompt, schema, fallback)` helper in `core/llm.py` with a timeout, bounded retries with backoff on 429 and 5xx, token and latency logging, and a clear error when the key is missing. Remove the commented-out clients and the Ollama prefill hack, or put them behind an explicit `LLM_PROVIDER` setting.
+    - **Status:** Done. All 25 model calls go through `llm_json`: 60-second timeout, two retries on rate limits, server errors and dropped connections, one more attempt for a reply that is unreadable or cut off (each call names the sections a finished reply has), a log line with tokens and time, error messages that are safe to show, and the caller's fallback. The commented-out clients and the Ollama workaround are removed; no provider setting was added. Fixed on the way: **interview practice and identity summaries named a model the Groq account doesn't offer**, so they could not succeed; a cut-off resume upload was saved as complete; a skill the model skipped, or a failed tagging call, was remembered as a real answer; provider error text could reach users; and the test suite could call the real model. Verified by tests. Against the real model, only question classification and answer planning have been tried (both accepted first time); **the other calls have not**, because the daily limit was reached.
 26. Add the `jobs` table and a status endpoint (`GET /jobs/{id}/status` under a new name that doesn't collide with the removed JD routes). Long LLM work returns 202 plus a job ID, and the frontend polls.
 27. Add an advisory lock so only one identity refresh runs per user at a time. Move `trigger_identity_refresh` onto a background job.
 28. Add a per-user daily LLM call budget with a clear error when it's reached.

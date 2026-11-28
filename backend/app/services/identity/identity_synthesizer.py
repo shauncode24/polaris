@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.inference import EngineeringIdentity
 from app.prompts.identity.identity_synthesis import IDENTITY_SYNTHESIS_SYSTEM_PROMPT
 from app.schemas.identity.engineering_identity import (
@@ -279,34 +279,21 @@ async def generate_engineering_identity(
     """
     facts = await build_identity_facts(db, user_id)
 
-    degraded = False
-    try:
-        llm_payload = _build_synthesis_payload(facts)
-        logger.debug("LLM payload JSON:\n%s", llm_payload)
-        logger.debug(
-            "Requesting Engineering Identity synthesis from LLM "
-            "(payload ~%d chars, full facts ~%d chars)...",
-            len(json.dumps(llm_payload)),
-            len(json.dumps(facts.model_dump(mode='json'))),
-        )
-        response = await chat_completion(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": IDENTITY_SYNTHESIS_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(llm_payload)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw Engineering Identity synthesis JSON:\n%s", content)
-        narrative = IdentityLLMOutput.model_validate(json.loads(content))
+    llm_payload = _build_synthesis_payload(facts)
+    logger.debug(
+        "Requesting Engineering Identity synthesis from LLM (payload ~%d chars, full facts ~%d chars)...",
+        len(json.dumps(llm_payload)), len(json.dumps(facts.model_dump(mode="json"))),
+    )
+    reply = await llm_json(
+        Prompt(IDENTITY_SYNTHESIS_SYSTEM_PROMPT, llm_payload), IdentityLLMOutput,
+        lambda: _fallback_narrative(facts), label="identity_synthesis", temperature=0.3,
+        expect=("headline", "summary", "strongest_signals", "biggest_gaps", "contradictions",
+                "recommended_focus", "freshness_note"),
+    )
+    narrative, degraded = reply.value, reply.degraded
+    if not degraded:
         narrative.strongest_signals = _validate_claims(narrative.strongest_signals)
         narrative.biggest_gaps = _validate_claims(narrative.biggest_gaps)
-    except Exception as e:
-        logger.warning("Engineering Identity synthesis degraded, using fallback: %s", e)
-        narrative = _fallback_narrative(facts)
-        degraded = True
 
     report = EngineeringIdentityReport(
         facts=facts,

@@ -1,10 +1,8 @@
-import json
-
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.structure import SkillAlias
 from app.schemas.shared.skill_classification import SkillClassificationBatch
 
@@ -167,29 +165,17 @@ async def _classify_via_llm(raw_strings: list[str]) -> dict[str, tuple[str | Non
     than one call per skill — keeps this cheap even for a resume with many
     unfamiliar terms.
     """
-    user_content = json.dumps(raw_strings)
-    response = await chat_completion(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": CLASSIFICATION_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0,
+    reply = await llm_json(
+        Prompt(CLASSIFICATION_SYSTEM_PROMPT, raw_strings), SkillClassificationBatch,
+        label="skill_classification", expect=("results",),
     )
-    content = response.choices[0].message.content
-    parsed = SkillClassificationBatch.model_validate(json.loads(content))
+    parsed = reply.value
 
     output: dict[str, tuple[str | None, bool]] = {}
     for item in parsed.results:
         output[item.raw] = (item.canonical, item.is_valid_skill)
 
-    # Defensive fallback: if the LLM dropped any input (skipped it in the
-    # response), treat it as invalid rather than crashing the ingestion.
-    for raw in raw_strings:
-        if raw not in output:
-            output[raw] = (None, False)
-
+    # Strings the model skipped stay absent, so nothing is remembered about them.
     return output
 
 
@@ -234,6 +220,9 @@ async def resolve_skills(raw_strings: set[str], db: AsyncSession) -> dict[str, s
     if unresolved:
         # Sorted so the same set of strings always produces the same request.
         classified = await _classify_via_llm(sorted(unresolved))
+
+        # Not a skill for now if the model skipped it; asked again next time.
+        results.update({raw: None for raw in unresolved if raw not in classified})
 
         for raw, (canonical, is_valid) in classified.items():
             key = raw.strip().lower()

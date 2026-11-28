@@ -19,6 +19,7 @@ from app.api.projects import router as projects_router
 from app.api.github import router as github_router
 from app.api.identity import router as identity_router
 from app.api.linkedin import router as linkedin_router
+from app.core.llm import LLMError
 from app.core.logging_config import configure_logging
 from app.core.settings import settings
 
@@ -116,6 +117,12 @@ app.include_router(projects_router)
 app.include_router(github_router)
 app.include_router(identity_router)
 app.include_router(linkedin_router)
+
+
+@app.exception_handler(LLMError)
+async def llm_error_handler(request: Request, error: LLMError) -> JSONResponse:
+    """AI features that have no fallback fail with a message the user can read."""
+    return JSONResponse(status_code=error.status_code, content={"detail": str(error)})
 
 
 @app.get("/health")

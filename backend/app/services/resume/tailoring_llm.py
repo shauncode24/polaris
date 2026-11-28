@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timezone
 
@@ -6,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.facts import Experience, Project
 from app.models.inference import ResumeTailoringReview, ProjectClaimAuditReview
 from app.prompts.resume.resume_tailoring import TAILORING_SYSTEM_PROMPT
@@ -189,30 +188,20 @@ async def generate_tailoring_report(db: AsyncSession, user_id, resume_id, job_in
         ],
     }
 
-    degraded = False
-    try:
-        logger.debug("Requesting resume tailoring recommendations from LLM...")
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": TAILORING_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(context)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw tailoring JSON:\n%s", content)
-        llm_output = TailoringLLMOutput.model_validate(json.loads(content))
-    except Exception as e:
-        logger.warning("Tailoring generation degraded, using fallback: %s", e)
-        llm_output = TailoringLLMOutput(
+    logger.debug("Requesting resume tailoring recommendations from LLM...")
+    reply = await llm_json(
+        Prompt(TAILORING_SYSTEM_PROMPT, context), TailoringLLMOutput,
+        lambda: TailoringLLMOutput(
             lead_items=[r["id"] for r in ranked[:2]],
             cut_bullets=[b["bullet_id"] for b in bullets_for_prompt if b["strength_score"] < 40][:3],
             emphasize_bullets=[b["bullet_id"] for b in bullets_for_prompt if b["matched_jd_skills"]][:3],
-            rationale="Narrative tailoring is temporarily unavailable — this is a deterministic fallback based on relevance ranking alone.",
-        )
-        degraded = True
+            rationale="Narrative tailoring is temporarily unavailable — this is a deterministic fallback "
+                      "based on relevance ranking alone.",
+        ),
+        label="resume_tailoring", expect=("lead_items", "cut_bullets", "emphasize_bullets", "rationale"),
+        temperature=0.3,
+    )
+    llm_output, degraded = reply.value, reply.degraded
 
     real_item_ids = {r["id"] for r in ranked}
     real_bullet_ids = {b["bullet_id"] for b in bullets_for_prompt}

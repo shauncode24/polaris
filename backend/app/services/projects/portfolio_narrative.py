@@ -16,7 +16,6 @@ Projects module and are never passed to github_reviewer.py's LLM call at
 all. That's what makes the two surfaces genuinely different reads rather
 than the same numbers narrated twice.
 """
-import json
 import logging
 from datetime import datetime, timezone
 
@@ -24,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.services.evidence.review import dedupe_visible
 from app.models.facts import Project
 from app.models.github_analysis import GithubProjectAnalysis
@@ -160,23 +159,7 @@ async def generate_portfolio_narrative(db: AsyncSession, user_id) -> PortfolioNa
         # what's read back once the user has enough synced repos.
         return report
 
-    degraded = False
-    try:
-        logger.info("Requesting portfolio-wide narrative from LLM...")
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": PORTFOLIO_NARRATIVE_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(facts)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw portfolio narrative JSON: %s", content)
-        llm_output = PortfolioNarrativeLLMOutput.model_validate(json.loads(content))
-    except Exception as e:
-        logger.warning("Portfolio narrative degraded, using fallback: %s", e)
+    def fallback() -> PortfolioNarrativeLLMOutput:
         tested_pct = round((facts["tested_projects"] / facts["total_verified_projects"]) * 100)
         fallback_parts = [
             f"{facts['tested_projects']} of {facts['total_verified_projects']} verified projects "
@@ -184,7 +167,7 @@ async def generate_portfolio_narrative(db: AsyncSession, user_id) -> PortfolioNa
         ]
         if facts.get("resume_linked_pct") is not None:
             fallback_parts.append(f"{facts['resume_linked_pct']}% of your projects are resume-linked.")
-        llm_output = PortfolioNarrativeLLMOutput(
+        return PortfolioNarrativeLLMOutput(
             eligible=True,
             narrative=" ".join(fallback_parts),
             testing_pattern=f"{tested_pct}% test coverage across verified projects.",
@@ -192,7 +175,14 @@ async def generate_portfolio_narrative(db: AsyncSession, user_id) -> PortfolioNa
             specialization="Narrative generation is temporarily unavailable.",
             biggest_weakness="Narrative generation is temporarily unavailable.",
         )
-        degraded = True
+
+    logger.info("Requesting portfolio-wide narrative from LLM...")
+    reply = await llm_json(
+        Prompt(PORTFOLIO_NARRATIVE_SYSTEM_PROMPT, facts), PortfolioNarrativeLLMOutput, fallback,
+        label="portfolio_narrative", temperature=0.3,
+        expect=("narrative", "testing_pattern", "collaboration_pattern", "specialization", "biggest_weakness"),
+    )
+    llm_output, degraded = reply.value, reply.degraded
 
     report = PortfolioNarrativeReport(
         **llm_output.model_dump(),

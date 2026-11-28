@@ -13,6 +13,8 @@ database the app's settings will point at.
 import os
 from urllib.parse import urlparse
 
+import httpx
+import pytest
 from cryptography.fernet import Fernet
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
@@ -28,6 +30,13 @@ if TEST_DATABASE_URL:
 else:
     os.environ["DATABASE_URL"] = "postgresql://test:test@localhost:5432/polaris_unavailable"
 
+# Tests never reach a real model: whatever .env holds is overridden, so a call
+# a test forgot to stub fails at once instead of spending the account's quota.
+os.environ["GROQ_API_KEY"] = "test-key-never-sent"
+os.environ["GROQ_BASE_URL"] = "http://llm.invalid/v1"
+os.environ["GROQ_MODEL"] = "openai/gpt-oss-120b"
+os.environ["LLM_MAX_RETRIES"] = "0"
+
 os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
 os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 # Every test request comes from one client, far faster than any real user.
@@ -35,3 +44,18 @@ os.environ.setdefault("RATE_LIMIT_REQUESTS", "100000")
 
 # Database-backed tests live under tests/api and need a real Postgres.
 collect_ignore = [] if TEST_DATABASE_URL else ["api"]
+
+
+@pytest.fixture(autouse=True)
+def offline_model(monkeypatch):
+    """A model call nobody stubbed fails immediately, without touching the
+    network.
+    """
+    from app.core import llm
+
+    def refuse(request):
+        raise httpx.ConnectError("tests don't call the model", request=request)
+
+    monkeypatch.setattr(llm, "client", llm.build_client(
+        max_retries=0, http_client=httpx.AsyncClient(transport=httpx.MockTransport(refuse)),
+    ))

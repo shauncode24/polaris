@@ -18,12 +18,11 @@ blueprint_library lookup — only ever needed the key), so this is
 additive, not a breaking signature change.
 """
 import hashlib
-import json
 import logging
 import os
 from uuid import uuid4
 
-from app.core.llm import chat_completion, MODEL as DEFAULT_MODEL
+from app.core.llm import LLMError, LLMReplyError, MODEL as DEFAULT_MODEL, Prompt, llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,7 @@ _VALID_COMPETENCIES = frozenset({
 })
 _VALID_CLASSIFICATION_CONFIDENCE = frozenset({"low", "medium", "high"})
 
-INTERVIEW_MODEL = os.environ.get("INTERVIEW_MODEL", "llama-3.3-70b-versatile")
+INTERVIEW_MODEL = os.environ.get("INTERVIEW_MODEL") or DEFAULT_MODEL
 INTERVIEW_TIMEOUT_SECONDS = float(os.environ.get("INTERVIEW_TIMEOUT_SECONDS", "45"))
 CLASSIFY_TIMEOUT_SECONDS = float(os.environ.get("INTERVIEW_CLASSIFY_TIMEOUT_SECONDS", "15"))
 
@@ -109,55 +108,23 @@ async def _call_llm_with_repair(
     system_prompt: str,
     payload: dict,
     model_cls,
+    expect: tuple[str, ...],
     temperature: float,
     max_tokens: int,
     trace_id: str,
     stage: str,
 ):
-    """One model call, with ONE cheap same-attempt repair fallback if
-    the response doesn't parse as JSON or doesn't validate against
-    `model_cls`. Far cheaper than a full regeneration, and handles the
-    common case (a stray trailing comma, a missing field) without
-    spending the outer retry loop's budget on it.
+    """One model call, with one cheap repair attempt if the response doesn't
+    parse or validate. Far cheaper than a full regeneration, and handles the
+    common case (a stray trailing comma, a missing field) without spending the
+    outer retry loop's budget on it.
     """
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": json.dumps(payload)},
-    ]
-    response = await chat_completion(
-        model=INTERVIEW_MODEL,
-        messages=messages,
-        response_format={"type": "json_object"},
-        temperature=temperature,
-        max_tokens=max_tokens,
-        timeout=INTERVIEW_TIMEOUT_SECONDS,
+    reply = await llm_json(
+        Prompt(system_prompt, payload), model_cls, label=f"interview_{stage}:{trace_id}",
+        expect=expect, temperature=temperature, max_tokens=max_tokens, model=INTERVIEW_MODEL,
+        timeout=INTERVIEW_TIMEOUT_SECONDS, repair=True,
     )
-    content = response.choices[0].message.content
-
-    try:
-        return model_cls.model_validate(json.loads(content))
-    except Exception as e:
-        logger.warning(
-            "[trace=%s] stage=%s response failed to parse/validate (%s) — attempting one repair call",
-            trace_id, stage, e,
-        )
-        repair_messages = messages + [
-            {"role": "assistant", "content": content},
-            {"role": "user", "content": (
-                f"That response could not be parsed/validated ({e}). Return ONLY the corrected, "
-                "complete, valid JSON object matching the required schema — no prose, no markdown fences."
-            )},
-        ]
-        response = await chat_completion(
-            model=INTERVIEW_MODEL,
-            messages=repair_messages,
-            response_format={"type": "json_object"},
-            temperature=0,
-            max_tokens=max_tokens,
-            timeout=INTERVIEW_TIMEOUT_SECONDS,
-        )
-        repaired_content = response.choices[0].message.content
-        return model_cls.model_validate(json.loads(repaired_content))
+    return reply.value
 
 
 async def classify_blueprint(question: str, trace_id: str | None = None) -> str:
@@ -166,20 +133,12 @@ async def classify_blueprint(question: str, trace_id: str | None = None) -> str:
     _classification_stats["total"] += 1
 
     try:
-        messages = [
-            {"role": "system", "content": BLUEPRINT_CLASSIFICATION_PROMPT},
-            {"role": "user", "content": json.dumps({"question": question, "blueprints": summaries})},
-        ]
-        response = await chat_completion(
-            model=INTERVIEW_MODEL,
-            messages=messages,
-            response_format={"type": "json_object"},
-            temperature=0,
-            max_tokens=MAX_CLASSIFY_TOKENS,
-            timeout=CLASSIFY_TIMEOUT_SECONDS,
+        reply = await llm_json(
+            Prompt(BLUEPRINT_CLASSIFICATION_PROMPT, {"question": question, "blueprints": summaries}),
+            BlueprintClassification, label=f"interview_classify:{trace_id}", expect=("blueprint_key",),
+            max_tokens=MAX_CLASSIFY_TOKENS, model=INTERVIEW_MODEL, timeout=CLASSIFY_TIMEOUT_SECONDS,
         )
-        content = response.choices[0].message.content
-        parsed = BlueprintClassification.model_validate(json.loads(content))
+        parsed = reply.value
 
         if parsed.blueprint_key not in BLUEPRINTS:
             logger.warning(
@@ -210,6 +169,14 @@ async def classify_blueprint(question: str, trace_id: str | None = None) -> str:
             logger.info("[metric=blueprint_classification] %s", metrics)
 
     return DEFAULT_BLUEPRINT
+
+
+def _stop_if_unreachable(error: Exception) -> None:
+    """Another attempt only helps when the model answered badly. When the
+    service is unreachable, limited or not set up, say so at once.
+    """
+    if isinstance(error, LLMError) and not isinstance(error, LLMReplyError):
+        raise InterviewGenerationError(str(error)) from error
 
 
 def _has_any_profile_evidence(context: dict) -> bool:
@@ -274,6 +241,7 @@ async def generate_answer_plan(
                 system_prompt=ANSWER_PLAN_SYSTEM_PROMPT,
                 payload=scoped_context,
                 model_cls=AnswerPlan,
+                expect=("question_type",),
                 temperature=0.4,
                 max_tokens=MAX_PLAN_TOKENS,
                 trace_id=trace_id,
@@ -284,6 +252,7 @@ async def generate_answer_plan(
                 "[trace=%s] stage=plan attempt=%d/%d failed (incl. repair): %s",
                 trace_id, attempt, MAX_PLAN_ATTEMPTS, e,
             )
+            _stop_if_unreachable(e)
             continue
 
         ground = grounding.validate_plan(plan, context)
@@ -335,6 +304,7 @@ async def generate_prose_from_plan(
                 system_prompt=PROSE_GENERATION_SYSTEM_PROMPT,
                 payload=payload,
                 model_cls=ProseOutput,
+                expect=("answer",),
                 temperature=0.5,
                 max_tokens=MAX_PROSE_TOKENS,
                 trace_id=trace_id,
@@ -350,6 +320,7 @@ async def generate_prose_from_plan(
                 "[trace=%s] stage=prose attempt=%d/%d failed (incl. repair): %s",
                 trace_id, attempt, MAX_PROSE_ATTEMPTS, e,
             )
+            _stop_if_unreachable(e)
             last_error = e
 
     raise InterviewGenerationError(f"Prose generation failed after {MAX_PROSE_ATTEMPTS} attempts: {last_error}")

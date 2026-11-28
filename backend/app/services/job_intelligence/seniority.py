@@ -15,11 +15,10 @@ trust" being misread as "125 years experience -> Staff"):
      refinement — an entry-level title/designation always wins, no
      matter what upstream logic concluded.
 """
-import json
 import logging
 import re
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.prompts.job_intelligence.seniority_llm import SENIORITY_LLM_SYSTEM_PROMPT
 from app.schemas.job_intelligence.job_intelligence import SeniorityLevel
 
@@ -134,18 +133,11 @@ async def refine_seniority_with_llm(raw_text: str, role_title: str | None) -> Se
     'unspecified' result.
     """
     try:
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": SENIORITY_LLM_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps({"role_title": role_title, "job_description": raw_text})},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
+        reply = await llm_json(
+            Prompt(SENIORITY_LLM_SYSTEM_PROMPT, {"role_title": role_title, "job_description": raw_text}),
+            dict, label="seniority", expect=("level",),
         )
-        content = response.choices[0].message.content
-        logger.debug("Raw seniority LLM-assist JSON:\n%s", content)
-        parsed_dict = json.loads(content)
+        parsed_dict = reply.value
 
         level = parsed_dict.get("level")
         if level not in _VALID_LEVELS:

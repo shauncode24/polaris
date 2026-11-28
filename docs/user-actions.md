@@ -8,7 +8,9 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 21.** Done.
 - [x] **Commit step 22.** Done.
 - [x] **Commit step 23.** Done.
-- [ ] **Commit step 24.**
+- [x] **Commit step 24.** Done.
+- [ ] **Commit step 25.**
+- [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
 - [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now six new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, and the primary target flag. Expect the 2 legacy goals to lose their job link if their job can't be matched.
 - [ ] **After migrating, re-sync GitHub once** (Profile page, GitHub card). Repo descriptions and URLs are only stored from the next sync on, and GitHub-only projects are only created by a sync or a resume upload.
@@ -27,12 +29,12 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [ ] **Hosting** (Render or Fly.io with managed Postgres, or one VPS). Needed for step 13 (staging) and Stage J.
 - [ ] **Password reset and email verification.** The app has email/password sign-in and no reset flow, so a forgotten password locks the user out. Choose: build it (needs a transactional email provider such as Resend or Postmark), or drop email/password and keep Google sign-in only.
 - [ ] **`services/projects/curation.py`.** Only tests use it, the app never calls it. Keep, wire in, or delete?
-- [ ] **LLM provider and monthly budget.** Currently Groq (`openai/gpt-oss-120b`). The tailored-resume and interview-kit stages will make many more LLM calls per user. The free tier is too small to launch on: 200,000 tokens a day and 8,000 a minute for the whole app, where analysing one job takes about 6,000 to 7,000. That is roughly 30 jobs a day for all users together, and a very long posting may not fit in the per-minute limit at all.
+- [ ] **LLM provider and monthly budget.** Currently Groq (`openai/gpt-oss-120b`). The tailored-resume and interview-kit stages will make many more LLM calls per user. The free tier is too small to launch on: 200,000 tokens a day and 8,000 a minute for the whole app, where analysing one job takes about 6,000 to 7,000. That is roughly 30 jobs a day for all users together, and a very long posting may not fit in the per-minute limit at all. One interview answer takes three calls, roughly 6,000 tokens, so about one a minute and 30 a day.
 
 ## Things only you can do
 
 - [ ] **Optional: add job descriptions you care about** (for example campus placement ones) as `.txt` files in `backend/eval/jd_extraction/jds/`, list the skills you expect in `gold.json` beside it, and ask me to run the check. It needs a local database; the command is at the top of `app/scripts/eval_jd_extraction.py`.
-- [ ] **Run the journey once by hand with a real `GROQ_API_KEY`** (Stage A, steps 3 and 4, which you skipped): register, upload a resume, sync GitHub, add a job, skill gap, tailoring, interview. Write what breaks into `docs/known-issues.md`. Everything I've verified so far used a stubbed or absent LLM, so real-model behaviour is untested.
+- [ ] **Run the journey once by hand with a real `GROQ_API_KEY`** (Stage A, steps 3 and 4, which you skipped): register, upload a resume, sync GitHub, add a job, skill gap, tailoring, interview. Write what breaks into `docs/known-issues.md`. Only job analysis and parts of interview practice have been checked against the real model.
 - [ ] **Repair CI** (Stage A, step 5, skipped): the workflow still runs on Windows with no Postgres, so the database-backed tests are skipped there. I can do this edit if you tell me to.
 - [ ] **Staging account and secrets** for the hosting choice above: `JWT_SECRET`, `ENCRYPTION_KEY`, `GROQ_API_KEY`, `GOOGLE_CLIENT_ID`. Never paste them into chat.
 - [ ] **Google OAuth console:** add the staging and production origins to the allowed origins.

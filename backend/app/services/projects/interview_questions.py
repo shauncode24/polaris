@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timezone
 
@@ -6,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.services.evidence.state import evidence_cutoff
 from app.models.inference import ProjectInterviewQuestionsReview
 from app.prompts.projects.project_interview_questions import PROJECT_INTERVIEW_QUESTIONS_SYSTEM_PROMPT
@@ -79,28 +78,19 @@ async def generate_interview_questions(project_context: dict) -> InterviewQuesti
     """Pure generation — no DB access. Callers that want caching should
     use generate_and_cache_interview_questions() below.
     """
-    degraded = False
-    try:
-        logger.debug("Requesting interview questions for '%s'...", project_context['name'])
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": PROJECT_INTERVIEW_QUESTIONS_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(project_context)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.4,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw interview questions JSON:\n%s", content)
-        parsed = InterviewQuestionsLLMOutput.model_validate(json.loads(content))
-        questions = parsed.questions
-        if not questions:
+    logger.debug("Requesting interview questions for '%s'...", project_context['name'])
+
+    def require_questions(payload: dict) -> dict:
+        if not payload.get("questions"):
             raise ValueError("Empty questions list")
-    except Exception as e:
-        logger.warning("Interview question generation degraded, using fallback: %s", e)
-        questions = _fallback_questions(project_context)
-        degraded = True
+        return payload
+
+    reply = await llm_json(
+        Prompt(PROJECT_INTERVIEW_QUESTIONS_SYSTEM_PROMPT, project_context), InterviewQuestionsLLMOutput,
+        lambda: InterviewQuestionsLLMOutput(questions=_fallback_questions(project_context)),
+        label="project_interview_questions", prepare=require_questions, temperature=0.4,
+    )
+    questions, degraded = reply.value.questions, reply.degraded
 
     return InterviewQuestionsReport(
         project_name=project_context.get("name", ""),

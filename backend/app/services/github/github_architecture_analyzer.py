@@ -9,10 +9,9 @@ never replaces or overrides it.
 Input is file PATHS ONLY, never file contents — keeps the call cheap
 and keeps the model from inferring quality it can't actually see.
 """
-import json
 import logging
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +63,11 @@ async def assess_architecture_depth(repo_name: str, technologies: list[str], fil
     payload = {"repo_name": repo_name, "technologies": technologies, "file_paths": sample_paths}
 
     try:
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": ARCHITECTURE_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(payload)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.2,
+        reply = await llm_json(
+            Prompt(ARCHITECTURE_SYSTEM_PROMPT, payload), dict,
+            label="github_architecture", expect=("depth_label",), temperature=0.2,
         )
-        content = response.choices[0].message.content
-        logger.debug("Architecture assessment for %s:\n%s", repo_name, content)
-        parsed = json.loads(content)
+        parsed = reply.value
         if parsed.get("depth_label") not in {"flat_script", "basic_structure", "layered", "well_architected"}:
             return None
         return {

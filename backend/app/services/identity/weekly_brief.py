@@ -1,11 +1,10 @@
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.inference import EngineeringIdentity, WeeklyBrief
 from app.prompts.identity.weekly_brief import WEEKLY_BRIEF_SYSTEM_PROMPT
 from app.schemas.identity.engineering_identity import IdentityFacts
@@ -174,24 +173,13 @@ async def generate_weekly_brief(db: AsyncSession, user_id) -> WeeklyBriefReport:
             biggest_leverage_move="Check back in about a week once there's a second snapshot to compare against.",
         )
     else:
-        try:
-            logger.debug("Requesting weekly brief narrative from LLM...")
-            response = await chat_completion(
-                model=MODEL,
-                messages=[
-                    {"role": "system", "content": WEEKLY_BRIEF_SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(facts.model_dump(mode="json"))},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.3,
-            )
-            content = response.choices[0].message.content
-            logger.debug("Raw weekly brief JSON:\n%s", content)
-            narrative = WeeklyBriefLLMOutput.model_validate(json.loads(content))
-        except Exception as e:
-            logger.warning("Weekly brief narrative degraded, using fallback: %s", e)
-            narrative = _fallback_narrative(facts)
-            degraded = True
+        logger.debug("Requesting weekly brief narrative from LLM...")
+        reply = await llm_json(
+            Prompt(WEEKLY_BRIEF_SYSTEM_PROMPT, facts.model_dump(mode="json")), WeeklyBriefLLMOutput,
+            lambda: _fallback_narrative(facts), label="weekly_brief", temperature=0.3,
+            expect=("headline", "whats_changed", "biggest_leverage_move"),
+        )
+        narrative, degraded = reply.value, reply.degraded
 
     report = WeeklyBriefReport(
         facts=facts, narrative=narrative,

@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
@@ -7,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.facts import Project
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import ProjectIntelligenceReview
@@ -124,33 +123,18 @@ async def generate_project_intelligence(
         "target_job_intelligence": target_job_intelligence,
     }
 
-    try:
-        print(
-            f"[TRACING] Requesting project intelligence for '{project_context['name']}' (framing={framing!r})...",
-            flush=True,
-        )
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": PROJECT_INTELLIGENCE_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(payload)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw project intelligence JSON:\n%s", content)
-        llm_output = ProjectIntelligenceLLMOutput.model_validate(json.loads(content))
-        degraded = False
-    except Exception as e:
-        logger.warning("Project intelligence degraded, using fallback: %s", e)
-        llm_output = ProjectIntelligenceLLMOutput(
+    logger.debug("Requesting project intelligence for '%s' (framing=%r)...", project_context["name"], framing)
+    reply = await llm_json(
+        Prompt(PROJECT_INTELLIGENCE_SYSTEM_PROMPT, payload), ProjectIntelligenceLLMOutput,
+        lambda: ProjectIntelligenceLLMOutput(
             framing=framing,
             explanation=f"Detailed explanation is temporarily unavailable for {project_context['name']}.",
             insufficient_context=not project_context["stack"] and not project_context["description"],
             context_note="Narrative generation failed; showing verified facts only.",
-        )
-        degraded = True
+        ),
+        label="project_intelligence", expect=("explanation", "insufficient_context"), temperature=0.3,
+    )
+    llm_output, degraded = reply.value, reply.degraded
 
     report = ProjectIntelligenceReport(
         **llm_output.model_dump(),

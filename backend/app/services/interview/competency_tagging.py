@@ -23,7 +23,6 @@ context_builder.py is what turns tags into a ranking.
 """
 from datetime import datetime, timezone
 import hashlib
-import json
 import logging
 
 from sqlalchemy import select
@@ -32,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.structure import CompetencyTagAlias
 from app.prompts.interview.competency_tagging import COMPETENCY_TAGGING_SYSTEM_PROMPT
 from app.schemas.interview.competency_tagging import CompetencyTagBatch
@@ -75,25 +74,16 @@ def _text_hash(text: str) -> str:
 
 async def _classify_via_llm(texts_by_key: dict[str, str]) -> dict[str, list[str]]:
     payload = [{"key": k, "text": t[:800]} for k, t in texts_by_key.items()]
-    response = await chat_completion(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": COMPETENCY_TAGGING_SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(payload)},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0,
+    reply = await llm_json(
+        Prompt(COMPETENCY_TAGGING_SYSTEM_PROMPT, payload), CompetencyTagBatch,
+        label="competency_tagging", expect=("results",),
     )
-    content = response.choices[0].message.content
-    parsed = CompetencyTagBatch.model_validate(json.loads(content))
+    parsed = reply.value
 
     out: dict[str, list[str]] = {}
     for item in parsed.results:
         out[item.key] = sorted({t for t in item.tags if t in CANONICAL_COMPETENCIES})
-    # Defensive fallback: never let a dropped key silently disappear —
-    # same rule skill_classifier._classify_via_llm applies.
-    for key in texts_by_key:
-        out.setdefault(key, [])
+    # Keys the model skipped stay absent, so they aren't remembered as untagged.
     return out
 
 
@@ -153,10 +143,13 @@ async def tag_or_backfill_items(db: AsyncSession, items: list[dict]) -> dict[str
             classified = await _classify_via_llm(batch)
         except Exception as e:
             logger.warning("Competency tagging LLM batch failed, leaving untagged: %s", e)
-            classified = {k: [] for k in batch_keys}
+            classified = {}
 
         for key in batch_keys:
-            tags = classified.get(key, [])
+            if key not in classified:
+                results[key] = []  # untagged for now; asked again next time
+                continue
+            tags = classified[key]
             results[key] = tags
             stmt = (
                 pg_insert(CompetencyTagAlias)

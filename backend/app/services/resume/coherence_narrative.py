@@ -11,7 +11,6 @@ should read it back via get_cached_coherence_report() instead of calling
 generate_coherence_report() again, unless the resume or the target role
 actually changed.
 """
-import json
 import logging
 from datetime import datetime, timezone
 
@@ -19,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.models.facts import Experience, Project
 from app.models.inference import ResumeCoherenceReview, ProjectClaimAuditReview
 from app.prompts.resume.resume_coherence import COHERENCE_SYSTEM_PROMPT
@@ -195,29 +194,19 @@ async def generate_coherence_report(
     projects = list(proj_result.scalars().all())
     claim_risk_projects = await _get_claim_risk_project_labels(db, projects)
 
-    degraded = False
-    try:
-        logger.debug("Requesting resume coherence narrative from LLM...")
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": COHERENCE_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps({
-                    "facts": facts.model_dump(),
-                    "dilution": dilution,
-                    "claim_risk_project_labels": claim_risk_projects,
-                })},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw coherence narrative JSON:\n%s", content)
-        narrative = CoherenceLLMOutput.model_validate(json.loads(content))
-    except Exception as e:
-        logger.warning("Coherence narrative degraded, using fallback: %s", e)
-        narrative = _fallback_narrative(facts, dilution)
-        degraded = True
+    logger.debug("Requesting resume coherence narrative from LLM...")
+    reply = await llm_json(
+        Prompt(COHERENCE_SYSTEM_PROMPT, {
+            "facts": facts.model_dump(),
+            "dilution": dilution,
+            "claim_risk_project_labels": claim_risk_projects,
+        }),
+        CoherenceLLMOutput, lambda: _fallback_narrative(facts, dilution),
+        label="resume_coherence", temperature=0.3,
+        expect=("argued_role", "positioning_statement", "strengths_for_this_story", "weakens_the_story",
+                "recommended_cuts", "recommendation"),
+    )
+    narrative, degraded = reply.value, reply.degraded
 
     # Never trust recommended_cuts blindly — must be real bullet_ids we
     # actually generated (same rule gap_analysis.py applies to priority_order).

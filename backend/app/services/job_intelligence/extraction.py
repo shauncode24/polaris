@@ -1,10 +1,7 @@
 # backend/app/services/job_intelligence/extraction.py
-import json
 import logging
 
-from openai import BadRequestError
-
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import LLMError, Prompt, llm_json
 from app.prompts.job_intelligence.extraction import JOB_AND_COMPANY_EXTRACTION_SYSTEM_PROMPT
 from app.schemas.job_intelligence.job_intelligence import ExtractedJobAndCompany
 
@@ -26,7 +23,6 @@ class JobIntelligenceExtractionError(Exception):
     """
 
 
-_ATTEMPTS = 2
 # The sections a finished reply always has. The schema defaults every one of
 # them to empty, so a reply that stops early would otherwise validate and
 # silently lose requirements.
@@ -38,29 +34,10 @@ def is_complete_reply(payload) -> bool:
     return isinstance(job, dict) and "company" in payload and all(key in job for key in _EXPECTED_JOB_KEYS)
 
 
-def _model_options() -> dict:
-    # Reasoning shares the reply's token allowance. At the default effort the
-    # gpt-oss models often ran out partway through the JSON.
-    return {"reasoning_effort": "low"} if "gpt-oss" in MODEL else {}
-
-
-async def _request_extraction(raw_text: str) -> ExtractedJobAndCompany:
-    response = await chat_completion(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": JOB_AND_COMPANY_EXTRACTION_SYSTEM_PROMPT},
-            {"role": "user", "content": raw_text},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0,
-        **_model_options(),
-    )
-    content = response.choices[0].message.content
-    logger.debug("Raw job+company extraction JSON:\n%s", content)
-    payload = json.loads(content)
+def _require_complete(payload: dict) -> dict:
     if not is_complete_reply(payload):
         raise ValueError("the reply stopped before every section was written")
-    return ExtractedJobAndCompany.model_validate(payload)
+    return payload
 
 
 async def extract_job_and_company(raw_text: str) -> ExtractedJobAndCompany:
@@ -69,20 +46,14 @@ async def extract_job_and_company(raw_text: str) -> ExtractedJobAndCompany:
     backend splits this into two independent profiles immediately after
     parsing; see job_intelligence/builder.py.
 
-    An unusable reply (cut off, not JSON, wrong shape) is asked for once
-    more. Anything else, such as a bad key or an outage, fails at once; the
-    client already retries rate limits and server errors.
+    A cut-off or unreadable reply is asked for once more (see core/llm.py).
     """
     logger.debug("Extracting job+company data from text (length: %d chars)...", len(raw_text))
-    for attempt in range(1, _ATTEMPTS + 1):
-        try:
-            return await _request_extraction(raw_text)
-        except Exception as e:
-            unusable_reply = isinstance(e, ValueError) or (
-                isinstance(e, BadRequestError) and e.code == "json_validate_failed"
-            )
-            if unusable_reply and attempt < _ATTEMPTS:
-                logger.warning("Job+company extraction reply unusable, retrying: %s", e)
-                continue
-            logger.warning("Job+company extraction failed: %s", e)
-            raise JobIntelligenceExtractionError(f"Job+company extraction LLM call failed: {e}") from e
+    try:
+        reply = await llm_json(
+            Prompt(JOB_AND_COMPANY_EXTRACTION_SYSTEM_PROMPT, raw_text), ExtractedJobAndCompany,
+            label="job_extraction", prepare=_require_complete,
+        )
+    except LLMError as e:
+        raise JobIntelligenceExtractionError(str(e)) from e
+    return reply.value

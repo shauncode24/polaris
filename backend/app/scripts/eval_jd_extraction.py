@@ -55,10 +55,9 @@ from app.core.database import AsyncSessionLocal  # noqa: E402
 from app.models.facts import User  # noqa: E402
 from app.models.structure import SkillAlias  # noqa: E402
 from app.services.evidence.matching import mentions_skill  # noqa: E402
-from app.services.job_intelligence import extraction, seniority  # noqa: E402
+from app.services.job_intelligence import extraction  # noqa: E402
 from app.services.job_intelligence.builder import build_job_intelligence  # noqa: E402
 from app.services.job_intelligence.cleanup import plain_text  # noqa: E402
-from app.services.resume import skill_classifier  # noqa: E402
 from sqlalchemy import delete  # noqa: E402
 
 
@@ -71,11 +70,11 @@ def _is_cut_off(content: str) -> bool:
 
 
 def _install_cache(fresh: bool) -> dict:
-    """Wraps the three LLM call sites the pipeline uses with a disk cache."""
+    """Wraps the app's one model request with a disk cache."""
     stats = {"called": 0, "cached": 0}
     cache = ROOT / "cache"
     cache.mkdir(parents=True, exist_ok=True)
-    llm.client = llm.client.with_options(max_retries=8, timeout=120)
+    llm.client = llm.build_client(max_retries=8, timeout=120)
     real = llm.chat_completion
 
     class _Reply:
@@ -96,8 +95,7 @@ def _install_cache(fresh: bool) -> dict:
             path.write_text(content, encoding="utf8")
         return response
 
-    for module in (extraction, seniority, skill_classifier):
-        module.chat_completion = cached_completion
+    llm.chat_completion = cached_completion
     return stats
 
 

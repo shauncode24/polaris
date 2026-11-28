@@ -1,14 +1,13 @@
-"""A reply that stops early must never be saved as if it were the whole job.
-Only the LLM call is stubbed.
+"""A job reply that stops early must never be saved as if it were the whole
+job. Only the model is stubbed.
 """
 import asyncio
-import json
 
-import httpx
 import pytest
-from openai import AuthenticationError, BadRequestError
+from openai import AuthenticationError
 
 from app.services.job_intelligence import extraction
+from tests.llm_stub import api_error, model  # noqa: F401 (model is a fixture)
 
 COMPLETE = {
     "job": {
@@ -23,79 +22,39 @@ COMPLETE = {
 CUT_OFF = {"job": {"required_skills": [{"skill": "Python"}]}}
 
 
-def _reply(content: str):
-    message = type("Message", (), {"content": content})()
-    return type("Reply", (), {"choices": [type("Choice", (), {"message": message})()]})()
-
-
-def _api_error(kind, status: int, code: str):
-    response = httpx.Response(status, request=httpx.Request("POST", "http://llm.test"))
-    return kind("failed", response=response, body={"code": code})
-
-
-@pytest.fixture
-def llm(monkeypatch):
-    """Feed the extraction a queue of replies or errors; records each call."""
-    queue, calls = [], []
-
-    async def complete(**kwargs):
-        calls.append(kwargs)
-        item = queue.pop(0)
-        if isinstance(item, Exception):
-            raise item
-        return _reply(item if isinstance(item, str) else json.dumps(item))
-
-    monkeypatch.setattr(extraction, "chat_completion", complete)
-    return queue, calls
-
-
 def extract():
     return asyncio.run(extraction.extract_job_and_company("A job"))
 
 
-@pytest.mark.parametrize("first", [
-    CUT_OFF,
-    '{"job": {"required_skills": [',
-    _api_error(BadRequestError, 400, "json_validate_failed"),
-], ids=["sections missing", "broken JSON", "provider rejected the JSON"])
-def test_an_unusable_reply_is_asked_for_again(llm, first):
-    queue, calls = llm
-    queue.extend([first, COMPLETE])
+def test_a_cut_off_reply_is_asked_for_again(model):
+    model.will(CUT_OFF, COMPLETE)
 
     result = extract()
 
     assert [s.skill for s in result.job.nice_to_have] == ["Rust"]
-    assert len(calls) == 2
+    assert len(model.requests) == 2
 
 
-def test_two_cut_off_replies_fail_instead_of_losing_requirements(llm):
-    queue, calls = llm
-    queue.extend([CUT_OFF, CUT_OFF])
-
-    with pytest.raises(extraction.JobIntelligenceExtractionError):
-        extract()
-    assert len(calls) == 2
-
-
-@pytest.mark.parametrize("error", [
-    _api_error(AuthenticationError, 401, "invalid_api_key"),
-    _api_error(BadRequestError, 400, "context_length_exceeded"),
-], ids=["bad key", "posting too long"])
-def test_errors_a_retry_cannot_fix_fail_at_once(llm, error):
-    queue, calls = llm
-    queue.extend([error, COMPLETE])
+@pytest.mark.parametrize("missing", ["required_skills", "implicit_skills", "nice_to_have",
+                                     "qualification_requirements"])
+def test_every_job_section_is_needed(model, missing):
+    partial = {"job": {k: v for k, v in COMPLETE["job"].items() if k != missing}, "company": {}}
+    model.will(partial, partial)
 
     with pytest.raises(extraction.JobIntelligenceExtractionError):
         extract()
-    assert len(calls) == 1
 
 
-@pytest.mark.parametrize("model,effort", [("openai/gpt-oss-120b", "low"), ("gemma3:4b", None)])
-def test_reasoning_effort_is_lowered_only_for_models_that_take_it(llm, monkeypatch, model, effort):
-    queue, calls = llm
-    queue.append(COMPLETE)
-    monkeypatch.setattr(extraction, "MODEL", model)
+def test_a_reply_without_the_company_is_incomplete(model):
+    partial = {"job": COMPLETE["job"]}
+    model.will(partial, partial)
 
-    extract()
+    with pytest.raises(extraction.JobIntelligenceExtractionError):
+        extract()
 
-    assert calls[0].get("reasoning_effort") == effort
+
+def test_the_failure_message_can_be_shown_to_the_user(model):
+    model.will(api_error(AuthenticationError, 401))
+
+    with pytest.raises(extraction.JobIntelligenceExtractionError, match="rejected its API key"):
+        extract()

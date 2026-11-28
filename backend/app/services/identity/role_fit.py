@@ -24,10 +24,9 @@ supposedly the same question:
     against (i.e. role-fit was HALF deterministic even when an LLM was
     involved) — that clamp is removed entirely by this fix.
 """
-import json
 import logging
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.schemas.identity.role_fit import RoleFitLLMOutput, RoleFitResult
 
 logger = logging.getLogger(__name__)
@@ -80,22 +79,13 @@ async def get_role_fit(skill_evidence: list[dict], scope: str) -> list[RoleFitRe
 
     payload = {"scope": scope, "skills": skill_evidence}
 
-    try:
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": ROLE_FIT_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(payload)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw role-fit LLM JSON (scope=%s):\n%s", scope, content)
-        parsed = RoleFitLLMOutput.model_validate(json.loads(content))
-    except Exception as e:
-        logger.warning("Role-fit LLM call degraded (scope=%s): %s", scope, e)
+    reply = await llm_json(
+        Prompt(ROLE_FIT_SYSTEM_PROMPT, payload), RoleFitLLMOutput, lambda: None,
+        label=f"role_fit:{scope}", expect=("role_fit",), temperature=0.3,
+    )
+    if reply.degraded:
         return _fallback_role_fit("Role-fit narrative is temporarily unavailable.")
+    parsed = reply.value
 
     # Never trust the LLM's role names blindly — same defensive pattern
     # used everywhere else in this codebase (gap_analysis's priority_order,

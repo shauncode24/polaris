@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -6,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import LLMError, Prompt, llm_json
 from app.models.facts import Experience, Project, Resume
 from app.models.inference import ResumeReview
 from app.prompts.resume.resume_review import (
@@ -71,40 +70,26 @@ async def _call_narrative_llm(context: dict) -> LLMNarrativeOutput:
         "ats_flags": context["ats_flags"],
     }
     try:
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": RESUME_NARRATIVE_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(light_context)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
+        reply = await llm_json(
+            Prompt(RESUME_NARRATIVE_SYSTEM_PROMPT, light_context), LLMNarrativeOutput,
+            label="resume_review_narrative", temperature=0.3,
+            expect=("summary", "strengths", "top_priority_fixes"),
         )
-        content = response.choices[0].message.content
-        logger.debug("Raw resume narrative JSON:\n%s", content)
-        return LLMNarrativeOutput.model_validate(json.loads(content))
-    except Exception as e:
+    except LLMError as e:
         raise ReviewGenerationError(f"Resume review narrative LLM call failed: {e}") from e
+    return reply.value
 
 
 async def _call_rewrites_llm_batch(bullets_batch: list[dict]) -> list[BulletRewriteSuggestion]:
     logger.debug("Requesting resume bullet rewrites for %d bullets...", len(bullets_batch))
     try:
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": RESUME_REWRITES_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(bullets_batch)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
+        reply = await llm_json(
+            Prompt(RESUME_REWRITES_SYSTEM_PROMPT, bullets_batch), LLMRewritesOutput,
+            label="resume_review_rewrites", expect=("rewrites",), temperature=0.3,
         )
-        content = response.choices[0].message.content
-        logger.debug("Raw resume rewrites batch JSON:\n%s", content)
-        parsed = LLMRewritesOutput.model_validate(json.loads(content))
-        return parsed.rewrites
-    except Exception as e:
+    except LLMError as e:
         raise ReviewGenerationError(f"Resume review rewrites LLM call failed: {e}") from e
+    return reply.value.rewrites
 
 
 async def _get_canonical_analysis(db: AsyncSession, resume_id) -> dict | None:

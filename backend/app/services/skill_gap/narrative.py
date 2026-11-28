@@ -7,10 +7,9 @@ learning-plan, resume, and interview data: those concerns belong to other
 modules (Career Planner, Resume, Interview). The LLM is only allowed to
 synthesise what is already computed here.
 """
-import json
 import logging
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.prompts.skill_gap.narrative import INTERPRETATION_SYSTEM_PROMPT
 from app.schemas.skill_gap.skill_gap import NarrativeAnalysis
 from app.services.evidence.supporting import evidence_labels
@@ -61,37 +60,25 @@ def build_narrative_context(
 
 async def generate_narrative_analysis(context: dict) -> NarrativeAnalysis:
     logger.debug("Requesting narrative interpretation from LLM...")
+
+    def tidy(payload: dict) -> dict:
+        # Normalise list fields in case the model returns a bare string, and
+        # drop any extra keys it invented (career planning etc.).
+        for key in ("role_focus", "strengths", "risks"):
+            value = payload.get(key, [])
+            payload[key] = [value] if isinstance(value, str) else value
+        allowed = ("executive_summary", "role_focus", "strengths", "risks")
+        return {key: payload[key] for key in allowed if key in payload}
+
     try:
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": INTERPRETATION_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(context)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-            max_tokens=1500,
+        reply = await llm_json(
+            Prompt(INTERPRETATION_SYSTEM_PROMPT, context), NarrativeAnalysis,
+            label="skill_gap_narrative", expect=("executive_summary", "risks"), prepare=tidy,
+            temperature=0.3, max_tokens=1500,
         )
-        content = response.choices[0].message.content
-        logger.debug("Raw narrative JSON:\n%s", content)
-        parsed_dict = json.loads(content)
-
-        # Normalise list fields in case LLM returns a bare string
-        for list_key in ["role_focus", "strengths", "risks"]:
-            if list_key in parsed_dict and isinstance(parsed_dict[list_key], str):
-                parsed_dict[list_key] = [parsed_dict[list_key]]
-            elif list_key not in parsed_dict:
-                parsed_dict[list_key] = []
-
-        # Drop any extra keys the LLM may have hallucinated (career planning etc.)
-        allowed_keys = {"executive_summary", "role_focus", "strengths", "risks"}
-        parsed_dict = {k: v for k, v in parsed_dict.items() if k in allowed_keys}
-
-        parsed = NarrativeAnalysis.model_validate(parsed_dict)
     except Exception as e:
         raise InterpretationError(f"Narrative LLM call failed: {e}") from e
-
-    return parsed
+    return reply.value
 
 
 def fallback_narrative(context: dict) -> NarrativeAnalysis:

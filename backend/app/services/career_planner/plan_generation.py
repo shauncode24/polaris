@@ -1,7 +1,6 @@
-import json
 import logging
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import LLMError, LLMReplyError, Prompt, llm_json
 from app.prompts.career_planner.career_planner import CAREER_PLANNER_SYSTEM_PROMPT
 from app.schemas.career_planner.career_plan import CareerPlanLLMOutput, DailyPlanItem
 
@@ -22,19 +21,11 @@ def _focused_topics_so_far(full_plan: list[DailyPlanItem]) -> list[str]:
 
 
 async def _call_llm_for_chunk(chunk_context: dict) -> dict[int, DailyPlanItem]:
-    response = await chat_completion(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": CAREER_PLANNER_SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(chunk_context)},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.4,
-        max_tokens=1200,
+    reply = await llm_json(
+        Prompt(CAREER_PLANNER_SYSTEM_PROMPT, chunk_context), CareerPlanLLMOutput,
+        label="career_plan", expect=("daily_plan",), temperature=0.4, max_tokens=1200,
     )
-    content = response.choices[0].message.content
-    logger.debug("Raw career plan chunk JSON:\n%s", content)
-    parsed = CareerPlanLLMOutput.model_validate(json.loads(content))
+    parsed = reply.value
     out = {}
     for item in parsed.daily_plan:
         item.source = "llm"
@@ -76,6 +67,11 @@ async def _generate_chunk(
             by_day = await _call_llm_for_chunk(chunk_context)
         except Exception as e:
             logger.warning("Days %s attempt %d/%d errored: %s", remaining, attempt, MAX_ATTEMPTS_PER_CHUNK, e)
+            # Another attempt only helps when the model answered badly. When
+            # the service is unreachable or limited, the client has already
+            # retried.
+            if isinstance(e, LLMError) and not isinstance(e, LLMReplyError):
+                break
             continue
 
         got = {d: by_day[d] for d in remaining if d in by_day}

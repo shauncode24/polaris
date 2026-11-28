@@ -1,11 +1,10 @@
-import json
 import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import LLMError, Prompt, llm_json
 from app.models.facts import Education, Experience
 from app.models.inference import SkillEvidence
 from app.models.linkedin import LinkedInProfile
@@ -33,19 +32,13 @@ class LinkedInExtractionError(Exception):
 async def extract_linkedin_profile(raw_text: str) -> ExtractedLinkedInProfile:
     logger.debug("Extracting LinkedIn profile data (length: %d chars)...", len(raw_text))
     try:
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": LINKEDIN_EXTRACTION_SYSTEM_PROMPT},
-                {"role": "user", "content": raw_text},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
+        reply = await llm_json(
+            Prompt(LINKEDIN_EXTRACTION_SYSTEM_PROMPT, raw_text), ExtractedLinkedInProfile,
+            label="linkedin_extraction", expect=("experience", "education", "skills"),
         )
-        content = response.choices[0].message.content
-        return ExtractedLinkedInProfile.model_validate(json.loads(content))
-    except Exception as e:
-        raise LinkedInExtractionError(f"LinkedIn extraction LLM call failed: {e}") from e
+    except LLMError as e:
+        raise LinkedInExtractionError(str(e)) from e
+    return reply.value
 
 
 async def _existing_experience_keys(db: AsyncSession, user_id) -> set[str]:

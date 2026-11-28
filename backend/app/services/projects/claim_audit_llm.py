@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timezone
 
@@ -6,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import chat_completion, MODEL
+from app.core.llm import Prompt, llm_json
 from app.services.evidence.state import evidence_cutoff
 from app.models.inference import ProjectClaimAuditReview
 from app.prompts.projects.project_claim_audit import CLAIM_AUDIT_SYSTEM_PROMPT
@@ -73,26 +72,15 @@ async def generate_claim_audit_narrative(
     db: AsyncSession, user_id, project_id, facts_dict: dict
 ) -> ClaimAuditReport:
     facts = ClaimAuditFacts(**facts_dict)
-    degraded = False
-    try:
-        logger.debug("Requesting claim-audit narrative for '%s'...", facts.project_name)
-        response = await chat_completion(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": CLAIM_AUDIT_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(facts_dict)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.2,
-        )
-        content = response.choices[0].message.content
-        logger.debug("Raw claim-audit JSON:\n%s", content)
-        narrative = ClaimAuditNarrative.model_validate(json.loads(content))
+    logger.debug("Requesting claim-audit narrative for '%s'...", facts.project_name)
+    reply = await llm_json(
+        Prompt(CLAIM_AUDIT_SYSTEM_PROMPT, facts_dict), ClaimAuditNarrative,
+        lambda: _fallback_narrative(facts), label="claim_audit", temperature=0.2,
+        expect=("headline", "talking_points", "fixes"),
+    )
+    narrative, degraded = reply.value, reply.degraded
+    if not degraded:
         narrative.risk_level = facts.risk_level  # deterministic fact — never LLM-decided
-    except Exception as e:
-        logger.warning("Claim-audit narrative degraded, using fallback: %s", e)
-        narrative = _fallback_narrative(facts)
-        degraded = True
 
     report = ClaimAuditReport(facts=facts, narrative=narrative, analysis_degraded=degraded)
     await _persist_claim_audit_report(db, user_id, project_id, report)
