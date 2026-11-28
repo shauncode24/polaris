@@ -29,6 +29,7 @@ from app.main import app  # noqa: E402
 from app.models.background import BackgroundJob  # noqa: E402
 from app.models.facts import Education, Experience, Project, Resume, User  # noqa: E402
 from app.models.goals import Goal  # noqa: E402
+from app.models.interview_kit import InterviewKit, InterviewQuestion  # noqa: E402
 from app.models.inference import (  # noqa: E402
     EngineeringIdentity,
     InterviewResponse,
@@ -105,6 +106,16 @@ async def _seed() -> dict:
         db.add_all([gap, goal, response, identity, background_job])
         await db.flush()
 
+        kit = InterviewKit(user_id=alice.id, job_intelligence_id=job.id, version=1, seniority="mid")
+        db.add(kit)
+        await db.flush()
+        question = InterviewQuestion(
+            kit_id=kit.id, position=0, category="behavioral", topic="Ownership", text="alice-private-headline",
+            skills=[], competencies=["ownership"], origin="outline",
+        )
+        db.add(question)
+        await db.flush()
+
         db.add_all([
             ProjectClaimAuditReview(
                 user_id=alice.id, project_id=project.id,
@@ -125,7 +136,7 @@ async def _seed() -> dict:
             "project_id": project.id, "job_id": job.id, "goal_id": goal.id,
             "experience_id": experience.id, "education_id": education.id,
             "session_id": session_id, "response_id": response.id, "identity_id": identity.id,
-            "background_job_id": background_job.id,
+            "background_job_id": background_job.id, "question_id": question.id,
         }
     await engine.dispose()
     return ids

@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,8 @@ from app.schemas.interview.interview_response import (
     InterviewResponseOutput,
     InterviewSessionSummary,
 )
-from app.services.interview import grounding
+from app.schemas.interview.practice import KitProgress, PracticeAnswer, PracticeAttemptView
+from app.services.interview import grounding, practice
 from app.services.interview.context_builder import build_interview_context
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.job_intelligence.library import get_primary_job_id
@@ -360,3 +361,56 @@ async def get_interview_session_thread(
     if not rows:
         raise HTTPException(status_code=404, detail="Session not found.")
     return [r.response_json for r in rows]
+
+
+_QUESTION_NOT_FOUND = "Question not found."
+
+
+@router.post("/questions/{question_id}/attempts", response_model=PracticeAttemptView)
+async def practise_question(
+    question_id: UUID,
+    payload: PracticeAnswer,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Reviews the user's answer to a question of one of their interview kits."""
+    user_id = current_user.id
+    if await practice.find_question(db, user_id, question_id) is None:
+        raise HTTPException(status_code=404, detail=_QUESTION_NOT_FOUND)
+
+    async def work(job_db: AsyncSession):
+        attempt = await practice.review_answer(job_db, user_id, question_id, payload.answer)
+        if attempt is None:  # the question was deleted meanwhile
+            raise HTTPException(status_code=404, detail=_QUESTION_NOT_FOUND)
+        return attempt
+
+    # Not refused when the day's AI calls are used up: the answer is still saved
+    # and checked against the record, and says it has no score.
+    return await run_in_background(
+        user_id, "practice_review", work, inputs=(question_id, payload.answer), needs_model=False,
+    )
+
+
+@router.get("/questions/{question_id}/attempts", response_model=list[PracticeAttemptView])
+async def list_practice_attempts(
+    question_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    attempts = await practice.list_attempts(db, current_user.id, question_id)
+    if attempts is None:
+        raise HTTPException(status_code=404, detail=_QUESTION_NOT_FOUND)
+    return attempts
+
+
+@router.get("/kits/{job_intelligence_id}/progress", response_model=KitProgress)
+async def get_practice_progress(
+    job_intelligence_id: UUID,
+    version: int | None = Query(None, ge=1),
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    progress = await practice.kit_progress(db, current_user.id, job_intelligence_id, version)
+    if progress is None:
+        raise HTTPException(status_code=404, detail="Interview kit not found.")
+    return progress

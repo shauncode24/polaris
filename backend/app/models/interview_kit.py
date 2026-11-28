@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -57,3 +57,22 @@ class InterviewQuestion(Base):
     # none qualified. Empty and NULL until matched against the record.
     evidence_refs: Mapped[list] = mapped_column(JSONB, default=list)
     thin_evidence: Mapped[bool | None] = mapped_column(Boolean)
+
+
+class PracticeAttempt(Base):
+    """One answer the user practised for a question, with the feedback on it
+    (`AttemptFeedback` in schemas/interview/practice.py).
+    """
+    __tablename__ = "practice_attempts"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    question_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_questions.id", ondelete="CASCADE"), index=True
+    )
+    answer: Mapped[str] = mapped_column(Text)
+    feedback_json: Mapped[dict] = mapped_column(JSONB)
+    score: Mapped[float | None] = mapped_column(Float)  # 0 to 1; NULL when not reviewed
+    created_at: Mapped[datetime] = created_at_col()
