@@ -13,6 +13,7 @@ from app.models.job_intelligence import (
     GapAnalysisResultRow,
     JobIntelligenceProfileRow,
 )
+from app.models.tailored_resume import TailoredResume
 from app.schemas.job_intelligence.library import ComparedJob, ComparedSkill, JobComparison
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.skill_gap.category_breakdown import compute_overall_match
@@ -75,7 +76,7 @@ async def delete_job(db: AsyncSession, user_id, job_id: UUID) -> bool:
         update(Goal).where(Goal.user_id == user_id, Goal.job_intelligence_id == job_id)
         .values(job_intelligence_id=None)
     )
-    for model in (ResumeTailoringReview, GapAnalysisResultRow):
+    for model in (ResumeTailoringReview, TailoredResume, GapAnalysisResultRow):
         await db.execute(delete(model).where(model.user_id == user_id, model.job_intelligence_id == job_id))
     await db.delete(row)
     await db.flush()

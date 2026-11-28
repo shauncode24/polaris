@@ -9,3 +9,4 @@ from app.models.job_intelligence import *  # noqa
 from app.models.linkedin import *  # noqa
 from app.models.background import *  # noqa
 from app.models.usage import *  # noqa
+from app.models.tailored_resume import *  # noqa

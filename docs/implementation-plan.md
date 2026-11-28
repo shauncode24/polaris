@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 28. Unmarked steps (29 to 71, plus 6 and 13) are not started.
+Updated after step 29. Unmarked steps (30 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -15,16 +15,16 @@ Updated after step 28. Unmarked steps (29 to 71, plus 6 and 13) are not started.
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
-| F. Tailored resume | not started | 29 to 37 |
+| F. Tailored resume | ◐ in progress | 29 done; 30 to 37 not started |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**23 of 71 steps done, 1 partial, 2 skipped, 45 not started** (43 of them in Stages F to K).
+**24 of 71 steps done, 1 partial, 2 skipped, 44 not started** (42 of them in Stages F to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 463 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 489 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -42,7 +42,7 @@ Recommended choice in bold.
 |---|---|---|---|
 | Hosting | **Render or Fly.io with managed Postgres**, or one VPS with Compose | Steps 13 and 58 to 67 | open |
 | LLM provider | **Keep Groq, behind a provider setting**, or switch | Steps 25 and 31 | Groq kept (step 25); budget and daily limit still open |
-| Resume export | **One structured resume JSON rendered to DOCX (`python-docx`) and PDF (WeasyPrint on an HTML template)** | Steps 29 to 36 | open |
+| Resume export | **One structured resume JSON rendered to DOCX (`python-docx`) and PDF (ReportLab)** | Steps 29 to 36 | ReportLab chosen for PDF |
 | Background work | **FastAPI tasks plus a `jobs` table**; Celery/RQ only if needed | Steps 26 and 27 | open |
 | Legacy `JobDescription` rows | **Migrate any worth keeping, then drop the table** | Step 7 | ✅ done |
 | Transactional email (password reset) | **A hosted provider such as Resend or Postmark** | Step 46 | open |
@@ -128,18 +128,19 @@ This comes before the two large generation features, because they depend on it.
 ✅ 28. Add a per-user daily LLM call budget with a clear error when it's reached.
     - **Status:** Done. Each user gets 100 model calls per UTC day (`LLM_DAILY_CALLS_PER_USER`; 0 removes the limit), counted in the `llm_usage` table where every call is made, so requests, background jobs and identity refreshes all count. Calls the service never answered are given back. At the limit, new AI work is refused with a message saying so; saved results, page loads and the GitHub and LeetCode syncs still work. **Known limit:** work that starts with calls left but runs out partway fails with the same message in most features; a skill gap, career plan or resume review may instead finish with its non-AI fallback, marked as such. The limit counts calls, not tokens. Verified by tests; not tried in a browser.
 
-## Stage F: Pillar 3, tailored resume (about 2–2.5 weeks)
+## Stage F: Pillar 3, tailored resume (about 2–2.5 weeks) — ◐ in progress
 
 New tables: `TailoredResume` (user, JD, version, structured JSON, status, created_at), with `evidence_refs` on each line.
 
-29. Define the structured resume schema: header, summary, experience (role, company, dates, bullets), projects, education, skills. Every bullet carries `source_ids`.
+✅ 29. Define the structured resume schema: header, summary, experience (role, company, dates, bullets), projects, education, skills. Every bullet carries `source_ids`.
+    - **Status:** Done. `TailoredResumeDocument` in `schemas/resume/tailored.py`; the references are called `sources` (kind, row id, bullet number) and every line, entry and skill needs at least one. Each line keeps the original wording, an AI rewrite, the user's decision and any edit; **a rewrite appears only once accepted**. Table `tailored_resumes` stores numbered versions per job, and deleting a job deletes them (`services/resume/tailored_store.py`). Nothing generates or shows a resume yet. Not yet checked: that referenced rows exist and belong to the user (needed before the editor can send a document, steps 32 and 34).
 30. Selection: reuse `rank_items_for_jd` over the whole evidence record (resume, GitHub, LinkedIn), keeping the claim-risk penalty.
 31. Bullet rewriting: the LLM rewrites each selected bullet toward the JD's language, given only that bullet's source facts, through `llm_json`.
 32. Grounding gate: every number, technology and claim in a rewritten bullet must exist in its source facts. Violations are dropped or flagged "needs your confirmation". Reuse the approach in `services/interview/grounding.py`.
 33. Deterministic fallback: if the LLM fails, return the original bullets ordered by relevance with a notice.
 34. Editor UI: original against rewritten, per-bullet accept, reject or edit, section reordering, evidence shown for each line.
 35. Scoring: before and after keyword coverage and ATS checks, using the `analysis` engine on the generated resume.
-36. Export: DOCX through `python-docx`, PDF through an HTML template and WeasyPrint, in an ATS-safe single-column layout. Store a version per JD. Prove the PDF export inside the Docker image now, not at deployment.
+36. Export: DOCX through `python-docx`, PDF through ReportLab, both in an ATS-safe single-column layout built from the same structured resume. Bundle a font file so accented names and symbols display correctly. Store a version per JD. Prove the PDF export inside the Docker image now, not at deployment.
 37. Retire the advisory tailoring report: fold its ranking into the generator and remove the old endpoint and `ResumeTailoring` component.
     - **Gate:** zero unflagged unsupported claims across 10 profile and JD test pairs (an automated test diffs facts against sources), and the output still works with the LLM stubbed to fail.
 
@@ -179,7 +180,7 @@ New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evid
 
 ## Stage J: Deployment (about 1 week)
 
-58. Production images: multi-stage frontend served by nginx; backend with no `--reload`, a non-root user, gunicorn with uvicorn workers, and WeasyPrint system libraries.
+58. Production images: multi-stage frontend served by nginx; backend with no `--reload`, a non-root user, gunicorn with uvicorn workers.
 59. Add the database service to `docker-compose.yml` for local use. Separate dev, staging and production configuration. CORS accepts a list of origins.
 60. Managed Postgres with backups enabled, a restore tested once, and connection limits set. Run `alembic upgrade head` as a release step, with a written rollback note.
 61. Secrets in the platform's secret store (`JWT_SECRET`, `ENCRYPTION_KEY`, `GROQ_API_KEY`, `GOOGLE_CLIENT_ID`, email provider key), a written rotation procedure, and no `.env` in any image. Note that changing `ENCRYPTION_KEY` invalidates stored GitHub tokens.
@@ -226,7 +227,7 @@ New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evid
 | Merging confidence modules changes scores | Characterization tests before the merge (step 16) |
 | Dropping tables or migrating JD rows loses data | Back up and review row counts before each destructive migration |
 | Scope creep from secondary features | Frozen; touch only to unbreak or delete |
-| WeasyPrint system dependencies in Docker | Prove PDF export in the Docker image during step 36 |
+| Characters missing from the exported PDF | Bundle a font file and prove PDF export in the Docker image during step 36 |
 
 ## Explicitly deferred (not required for launch)
 

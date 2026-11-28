@@ -13,10 +13,11 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 26.** Done.
 - [x] **Commit the password fix.** Done. Run `uv sync` from `backend/` on any other machine that runs the app.
 - [x] **Commit step 27.** Done.
-- [ ] **Commit step 28.**
+- [x] **Commit step 28.** Done.
+- [ ] **Commit step 29.**
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
-- [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now eight new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, the background jobs table and the daily usage table (most AI features fail without the last two). Expect the 2 legacy goals to lose their job link if their job can't be matched.
+- [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now nine new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, the background jobs table, the daily usage table and the tailored resumes table (most AI features fail without the last two). Expect the 2 legacy goals to lose their job link if their job can't be matched.
 - [ ] **After migrating, re-sync GitHub once** (Profile page, GitHub card). Repo descriptions and URLs are only stored from the next sync on, and GitHub-only projects are only created by a sync or a resume upload.
 - [ ] **Re-sync LeetCode once.** Solved problems only count toward "data structures" and "algorithms" from the next sync on.
 - [ ] **Upload your resume again once.** Evidence rows saved by earlier uploads can be attached to the wrong role (a bug fixed in step 21). A fresh upload replaces them: older rows stop counting.
