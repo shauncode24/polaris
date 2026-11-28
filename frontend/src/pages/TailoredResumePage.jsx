@@ -5,7 +5,9 @@ import { listJobIntelligenceProfiles } from '../api/jobIntelligence'
 import { changeTailoredResume, generateTailoredResume, getTailoredResume } from '../api/tailoredResume'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
+import ContactHeader from '../components/resume/tailored/ContactHeader'
 import ResumeSections from '../components/resume/tailored/ResumeSections'
+import ScorePanel from '../components/resume/tailored/ScorePanel'
 import './TailoredResumePage.css'
 
 function jobLabel(job) {
@@ -16,21 +18,6 @@ function jobLabel(job) {
 function allLines(document) {
   const entries = [...document.experience, ...document.projects, ...document.education]
   return [...(document.summary ? [document.summary] : []), ...entries.flatMap((entry) => entry.bullets)]
-}
-
-function ContactHeader({ header }) {
-  const details = [header.email, header.phone, header.location].filter(Boolean)
-  return (
-    <header className="tr-contact">
-      <h2>{header.full_name}</h2>
-      <p>
-        {details.join(' · ')}
-        {header.links.map((link) => (
-          <span key={link.url}> · <a href={link.url} target="_blank" rel="noreferrer">{link.label}</a></span>
-        ))}
-      </p>
-    </header>
-  )
 }
 
 export default function TailoredResumePage() {
@@ -107,7 +94,8 @@ export default function TailoredResumePage() {
     }
   }
 
-  // Saves a change to the version on screen; resolves to whether it worked.
+  // Saves a change to the version on screen; resolves to whether it worked. An
+  // error is shown beside what `lineId` names: a line, or the contact details.
   async function save(changes, lineId = null) {
     const request = shown.current
     setSaving(true)
@@ -224,6 +212,7 @@ export default function TailoredResumePage() {
                 </div>
               )}
               {resume.document.notice && <div className="tr-banner">{resume.document.notice}</div>}
+              <ScorePanel score={resume.score} />
               <p className="tr-hint">
                 {waiting === 0
                   ? 'No suggestions are waiting for you.'
@@ -233,7 +222,12 @@ export default function TailoredResumePage() {
 
               {/* Remounted per version, so no half-finished edit carries over. */}
               <article className="tr-card tr-paper" key={`${jobId}-${resume.version}`}>
-                <ContactHeader header={resume.document.header} />
+                <ContactHeader
+                  header={resume.document.header}
+                  busy={busy}
+                  error={lineError?.id === 'contact' ? lineError.message : null}
+                  onChange={(contact) => save({ contact }, 'contact')}
+                />
                 <ResumeSections
                   document={resume.document}
                   evidence={resume.evidence}

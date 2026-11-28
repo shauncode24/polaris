@@ -27,41 +27,7 @@ from app.models.github_analysis import GithubProjectAnalysis
 from app.models.linkedin import LinkedInProfile
 from app.schemas.resume.tailored import ResumeLine, SourceRef, TailoredResumeDocument
 from app.services.resume.selection import description_lines
-
-# Spellings of one and the same name, the first standing for the rest. Only
-# exact equivalents belong here: not a product for an activity ("Git" for
-# "version control"), not a narrower or broader term, not a plural for a
-# singular, and not a spelling that is also an ordinary word ("node", "rest").
-_SAME_NAME = (
-    ("postgresql", "postgres"),
-    ("mongodb", "mongo"),
-    ("kubernetes", "k8s"),
-    ("javascript", "js"),
-    ("react.js", "react", "reactjs", "react js"),
-    ("vue.js", "vuejs", "vue js", "vue"),
-    ("node.js", "nodejs", "node js"),
-    ("next.js", "nextjs"),
-    ("express.js", "expressjs"),
-    ("three.js", "threejs"),
-    ("spring boot", "spring-boot", "springboot"),
-    ("fastapi", "fast api"),
-    ("scikit-learn", "scikit learn", "sklearn"),
-    ("c++", "cpp"),
-    ("c#", "c sharp"),
-    ("amazon web services", "aws"),
-    ("google cloud platform", "gcp"),
-    ("amazon s3", "aws s3"),
-    ("ci/cd", "ci-cd", "cicd", "ci cd"),
-    ("elasticsearch", "elastic search"),
-    ("machine learning", "ml"),
-    ("object-oriented programming", "object oriented programming", "oop"),
-    ("microservices", "micro services", "micro-services"),
-    ("microservice", "micro service", "micro-service"),
-    ("restful apis", "rest apis"),
-    ("restful api", "rest api"),
-    ("%", "percent", "per cent"),
-)
-_NAME_OF = {spelling: names[0] for names in _SAME_NAME for spelling in names}
+from app.services.resume.skill_names import NAME_OF
 
 _NUMBER_WORDS = {
     word: str(number) for number, word in enumerate(
@@ -73,7 +39,7 @@ _NUMBER_WORDS = {
 _IGNORED = {"a", "an", "and"}
 
 _SPELLINGS = "|".join(
-    r"\s+".join(map(re.escape, spelling.split(" "))) for spelling in sorted(_NAME_OF, key=len, reverse=True)
+    r"\s+".join(map(re.escape, spelling.split(" "))) for spelling in sorted(NAME_OF, key=len, reverse=True)
 )
 _TOKEN = re.compile(
     # A listed spelling standing on its own, not part of a longer word.
@@ -100,7 +66,7 @@ def _tokens(text: str) -> list[_Token]:
         lower = " ".join(shown.lower().split())
         # Written small, "react" is the verb rather than the library.
         if match.lastgroup == "name" and shown != "react":
-            tokens.append(_Token(_NAME_OF[lower], shown))
+            tokens.append(_Token(NAME_OF[lower], shown))
         elif match.lastgroup == "figure":
             # Commas between thousands only: "1,5" is not 15.
             tokens.append(_Token(re.sub(r",(?=\d{3}(?!\d))", "", lower), shown, is_figure=True))

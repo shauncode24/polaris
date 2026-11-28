@@ -5,6 +5,8 @@ terms exist in the vocabulary.
 """
 import re
 
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
+from app.services.job_intelligence.requirements import requirements_from_profile
 from app.services.resume.analysis.shared_signals import TECH_KEYWORD_POOL
 
 DEFAULT_SW_KEYWORDS = TECH_KEYWORD_POOL  # kept as a name for backward compat
@@ -17,6 +19,14 @@ def _normalize(text: str) -> str:
 def _keyword_present(kw: str, norm_text: str) -> bool:
     escaped = re.escape(kw)
     return bool(re.search(r"(?<![a-zA-Z0-9#\+])" + escaped + r"(?![a-zA-Z0-9#\+])", norm_text))
+
+
+def job_keywords(job: JobIntelligenceProfile) -> set[str]:
+    """What a resume for this job is checked for: its required and implied
+    skills, as the job words them.
+    """
+    requirements = requirements_from_profile(job)
+    return {skill.lower() for skill in requirements["raw_required"] + requirements["raw_implicit"] if skill}
 
 
 def analyze_keywords(

@@ -39,9 +39,11 @@ from app.services.evidence.confidence import (
 )
 from app.services.evidence.matching import known_canonicals, mentions_any, skill_aliases
 from app.services.evidence.review import dedupe_visible
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.resume.claim_risk import apply_claim_risk_penalty, claim_risk_by_project_id
 from app.services.resume.dates import is_ongoing
+from app.services.resume.skill_names import same_name
 from app.services.resume.tailoring_ranking import TYPE_WEIGHTS, rank_items_for_jd
 
 MAX_EXPERIENCES = 4
@@ -118,7 +120,9 @@ def _header(user: User) -> Header:
     links = []
     if user.github_username:
         links.append(Link(label="GitHub", url=f"https://github.com/{user.github_username}"))
-    return Header(full_name=full_name or "Your name", email=user.email, links=links)
+    if user.linkedin_url:
+        links.append(Link(label="LinkedIn", url=user.linkedin_url))
+    return Header(full_name=full_name or "Your name", email=user.email, phone=user.phone, links=links)
 
 
 async def _rows(db: AsyncSession, model, user_id) -> list:
@@ -235,7 +239,8 @@ async def select_for_job(db: AsyncSession, user_id, job_intelligence_id) -> Sele
         projects=[project_entry(p) for p in chosen_projects],
         education=[education_entry(e) for e in education if e.institution.strip()],
         skills=await _skills(
-            db, user_id, evidence, wanted, [*chosen_experiences, *chosen_projects], stack_of, canonical_of,
+            db, user_id, evidence, wanted, _job_wordings(job),
+            [*chosen_experiences, *chosen_projects], stack_of, canonical_of,
         ),
     )
     selected = chosen_roles | {r["id"] for r in chosen}
@@ -245,7 +250,25 @@ async def select_for_job(db: AsyncSession, user_id, job_intelligence_id) -> Sele
     )
 
 
-async def _skills(db, user_id, evidence, wanted, chosen_rows, stack_of, canonical_of) -> list[SkillEntry]:
+def _job_wordings(job: JobIntelligenceProfile) -> dict[str, list[str]]:
+    """canonical skill -> how the job writes it, required wording first."""
+    wordings: dict[str, list[str]] = {}
+    for skill in [*job.enriched_required_skills, *job.enriched_implicit_skills, *job.enriched_nice_to_have]:
+        if skill.raw.strip():
+            wordings.setdefault(skill.canonical, []).append(skill.raw.strip())
+    return wordings
+
+
+def _skill_name(name: str, job_wordings: list[str]) -> str:
+    """The job's spelling of this name if it has one, since screening software
+    matches the job's wording. A different term is never swapped in.
+    """
+    return next((wording for wording in job_wordings if same_name(wording, name)), name)
+
+
+async def _skills(
+    db, user_id, evidence, wanted, job_wordings, chosen_rows, stack_of, canonical_of,
+) -> list[SkillEntry]:
     """The skills to list: what the job asks for first, then the best
     evidenced. LeetCode practice alone lists a skill only if the job asks.
     """
@@ -275,7 +298,7 @@ async def _skills(db, user_id, evidence, wanted, chosen_rows, stack_of, canonica
 
     chosen = sorted(listed, key=order)[:MAX_SKILLS]
 
-    # Named as the user writes it where possible.
+    # Named as the user writes it where possible, in the job's spelling of that name.
     written: dict[str, str] = {}
     for row in chosen_rows:
         for name in stack_of(row):
@@ -291,8 +314,9 @@ async def _skills(db, user_id, evidence, wanted, chosen_rows, stack_of, canonica
         for row in listed[canonical]:  # strongest first
             row_id = None if row.source_type == "leetcode_tag" else row.source_id
             sources.setdefault((row.source_type, row_id), SourceRef(kind=row.source_type, id=row_id))
+        name = written.get(canonical) or stored.get(canonical) or canonical.replace("_", " ")
         entries.append(SkillEntry(
-            name=written.get(canonical) or stored.get(canonical) or canonical.replace("_", " "),
+            name=_skill_name(name, job_wordings.get(canonical, [])),
             canonical=canonical, sources=list(sources.values())[:MAX_SOURCES_PER_SKILL],
         ))
     return entries

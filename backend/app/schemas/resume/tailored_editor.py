@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.schemas.resume.tailored import Decision, Section, SourceKind, TailoredResumeDocument
+from app.schemas.resume.tailored_score import ResumeScore
 
 # Generous: a project description written as one paragraph is a single line.
 MAX_LINE_LENGTH = 2000
@@ -37,6 +38,7 @@ class SavedResume(BaseModel):
     stale: bool  # the evidence has changed since this was generated
     document: TailoredResumeDocument
     evidence: dict[str, CitedEvidence]  # by source key: "kind:id:bullet", blanks for none
+    score: ResumeScore
 
 
 class ResumeEditorView(BaseModel):
@@ -53,6 +55,15 @@ class LineChange(BaseModel):
     confirm_flags: bool = False  # required to accept a rewrite that has warnings
 
 
+class ContactChange(BaseModel):
+    """Contact details, kept for later resumes too. Fields that aren't sent
+    stay as they are; null or blank removes one.
+    """
+    phone: str | None = Field(default=None, max_length=40)
+    linkedin_url: str | None = Field(default=None, max_length=200)
+
+
 class ResumeChanges(BaseModel):
     lines: list[LineChange] = Field(default=[], max_length=100)
     section_order: list[Section] | None = None
+    contact: ContactChange | None = None

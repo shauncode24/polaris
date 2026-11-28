@@ -3,9 +3,11 @@ from typing import get_args
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.resume.tailored import Section, SourceRef, TailoredResumeDocument
+from app.models.facts import User
+from app.schemas.resume.tailored import Link, Section, SourceRef, TailoredResumeDocument
 from app.schemas.resume.tailored_editor import (
     CitedEvidence,
+    ContactChange,
     EditorJob,
     ResumeChanges,
     ResumeEditorView,
@@ -13,7 +15,9 @@ from app.schemas.resume.tailored_editor import (
 )
 from app.services.evidence.state import evidence_cutoff
 from app.services.job_intelligence.builder import get_job_intelligence
+from app.services.resume.contact import linkedin_profile_url, phone_number
 from app.services.resume.grounding import cited_rows, ground_line, row_bullets
+from app.services.resume.tailored_score import score_resume
 from app.services.resume.tailored_store import document_of, get_version, list_versions, save_document
 
 
@@ -93,6 +97,7 @@ async def editor_view(db: AsyncSession, user_id, job_intelligence_id, version: i
             version=row.version, status=row.status, created_at=row.created_at,
             stale=cutoff is not None and row.created_at < cutoff,
             document=document, evidence=await cited_evidence(db, user_id, document),
+            score=await score_resume(db, user_id, job, document),
         )
     return ResumeEditorView(
         job=EditorJob(id=str(job_intelligence_id), role=job.role, company=job.company),
@@ -101,9 +106,34 @@ async def editor_view(db: AsyncSession, user_id, job_intelligence_id, version: i
     )
 
 
-def apply_changes(document: TailoredResumeDocument, changes: ResumeChanges) -> None:
-    """Applies the user's choices to `document`. Raises `ResumeChangeError`,
-    possibly after changing some of it, so a failed document must be discarded.
+_CONTACT_FIELDS = {"phone": phone_number, "linkedin_url": linkedin_profile_url}
+
+
+def _apply_contact(document: TailoredResumeDocument, contact: ContactChange) -> dict:
+    """Puts the sent contact details in the header. Returns them as stored."""
+    saved = {}
+    for field, read in _CONTACT_FIELDS.items():
+        if field not in contact.model_fields_set:
+            continue
+        try:
+            saved[field] = read(getattr(contact, field))
+        except ValueError as e:
+            raise ResumeChangeError(str(e))
+    header = document.header
+    if "phone" in saved:
+        header.phone = saved["phone"]
+    if "linkedin_url" in saved:
+        url = saved["linkedin_url"]
+        header.links = [link for link in header.links if link.label != "LinkedIn"]
+        if url:
+            header.links.append(Link(label="LinkedIn", url=url))
+    return saved
+
+
+def apply_changes(document: TailoredResumeDocument, changes: ResumeChanges) -> dict:
+    """Applies the user's choices to `document`, and returns the contact details
+    to keep on their account. Raises `ResumeChangeError`, possibly after
+    changing some of it, so a failed document must be discarded.
     """
     lines = {line.id: line for line in document.lines()}
     for change in changes.lines:
@@ -127,6 +157,8 @@ def apply_changes(document: TailoredResumeDocument, changes: ResumeChanges) -> N
             raise ResumeChangeError("The section order must list every section once.")
         document.section_order = changes.section_order
 
+    return _apply_contact(document, changes.contact) if changes.contact else {}
+
 
 async def change_resume(
     db: AsyncSession, user_id, job_intelligence_id, version: int, changes: ResumeChanges,
@@ -140,9 +172,13 @@ async def change_resume(
         return None
     document = document_of(row)
     try:
-        apply_changes(document, changes)
+        contact = apply_changes(document, changes)
     except ResumeChangeError:
         await db.rollback()
         raise
-    await save_document(db, row, document)
+    if contact:
+        user = await db.get(User, user_id)
+        for field, value in contact.items():
+            setattr(user, field, value)
+    await save_document(db, row, document)  # commits both
     return await editor_view(db, user_id, job_intelligence_id, version)

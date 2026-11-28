@@ -11,7 +11,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.job_intelligence.builder import get_job_intelligence
-from app.services.job_intelligence.requirements import requirements_from_profile
 from app.models.facts import Experience, Project, Education, Resume, GithubSnapshot, LeetcodeSnapshot, Certificate
 from app.models.structure import Skill
 from app.models.inference import ResumeAnalysis
@@ -21,7 +20,7 @@ from app.services.resume.analysis.parsing     import analyze_parsing
 from app.services.resume.analysis.formatting  import analyze_formatting
 from app.services.resume.analysis.content     import analyze_content
 from app.services.resume.analysis.metrics     import analyze_metrics
-from app.services.resume.analysis.keywords    import analyze_keywords
+from app.services.resume.analysis.keywords    import analyze_keywords, job_keywords
 from app.services.resume.analysis.evidence    import analyze_evidence
 from app.services.resume.analysis.scoring     import get_grade, get_label, get_grade_color
 from app.services.resume.analysis.suggestions import generate_suggestions
@@ -112,12 +111,7 @@ async def run_analysis(
         job = await get_job_intelligence(db, user_id, job_id)
         if job is None:
             raise ValueError("Job not found.")
-        requirements = requirements_from_profile(job)
-        jd_keywords = {
-            skill.lower()
-            for skill in requirements["raw_required"] + requirements["raw_implicit"]
-            if skill
-        } or None
+        jd_keywords = job_keywords(job) or None
 
     structure  = analyze_structure(raw_text)
     parsing    = analyze_parsing(raw_text)

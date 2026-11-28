@@ -95,7 +95,12 @@ TECH_KEYWORD_POOL: frozenset[str] = frozenset({
 # depending on which module asked. Same fix philosophy as the metric/verb
 # detectors above.
 EMAIL_PATTERN = re.compile(r"[\w.\-]+@[\w.\-]+\.\w+")
-PHONE_PATTERN = re.compile(r"(\+?\d{1,3}[\s.\-]?)?\(?\d{3,4}\)?[\s.\-]?\d{3,4}[\s.\-]?\d{3,4}")
+# 9 to 15 digits, grouped in any way by up to two spaces, dots, hyphens or
+# brackets at a time. Nine, so that years ("2019-2023") and dates don't count;
+# two at a time, so that "2019 - 2023 ..." doesn't either.
+PHONE_PATTERN = re.compile(
+    r"(?<!\w)(?<!\d\.)\+?\(?\d(?:(?:[^\S\r\n]|[.()\-\u2010-\u2013]){0,2}\d){8,14}(?!\d)"
+)
 LINKEDIN_PATTERN = re.compile(r"linkedin\.com/(in/)?[\w\-]+", re.IGNORECASE)
 GITHUB_PATTERN = re.compile(r"github\.com/[\w\-]+", re.IGNORECASE)
 
