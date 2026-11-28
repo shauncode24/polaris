@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 import logging
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import decrypt_secret, encrypt_secret
@@ -57,19 +58,25 @@ async def trigger_github_sync(
     current_user.github_token = encrypt_secret(token)
     await db.commit()
 
-    try:
-        result = await sync_github(db, current_user, username, token)
-    except GithubSyncError as e:
-        return JSONResponse(status_code=502, content={"status": "error", "reason": str(e)})
+    user_id = current_user.id
 
-    await reconcile_projects(db, current_user.id)
-    await touch_evidence(db, current_user.id)
-    await persist_engineering_snapshot(db, current_user.id, "github sync")
-    # Freshness fix — same trigger point as the proven
-    # LeetcodeEngineeringSnapshot pattern above.
-    await trigger_identity_refresh(db, current_user.id, "github sync")
+    # The token stays in memory: it is never written to the jobs table.
+    async def work(job_db: AsyncSession):
+        user = await job_db.get(User, user_id)
+        try:
+            result = await sync_github(job_db, user, username, token)
+        except GithubSyncError as e:
+            raise HTTPException(status_code=502, detail=str(e))
 
-    return result
+        await reconcile_projects(job_db, user_id)
+        await touch_evidence(job_db, user_id)
+        await persist_engineering_snapshot(job_db, user_id, "github sync")
+        # Freshness fix — same trigger point as the proven
+        # LeetcodeEngineeringSnapshot pattern above.
+        await trigger_identity_refresh(job_db, user_id, "github sync")
+        return result
+
+    return await run_in_background(user_id, "github_sync", work, inputs=(username,))
 
 
 @router.post("/leetcode")
@@ -179,15 +186,15 @@ async def get_leetcode_workspace(
 
 
 @router.post("/leetcode/review")
-async def run_leetcode_portfolio_review(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    from fastapi import HTTPException
+async def run_leetcode_portfolio_review(current_user: User = Depends(get_current_user)):
     from app.services.leetcode.leetcode_reviewer import generate_leetcode_portfolio_review
 
-    try:
-        report = await generate_leetcode_portfolio_review(db, current_user.id)
-        return report
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    user_id = current_user.id
+
+    async def work(job_db: AsyncSession):
+        try:
+            return await generate_leetcode_portfolio_review(job_db, user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    return await run_in_background(user_id, "leetcode_review", work)

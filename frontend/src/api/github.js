@@ -1,5 +1,5 @@
 // frontend/src/api/github.js
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 export { syncGithub } from './profile'
 
@@ -22,7 +22,7 @@ export function getGithubWorkspace(token) {
 }
 
 export function runGithubPortfolioReview(token) {
-  return fetch(`${API_BASE_URL}/github/review`, {
+  return apiFetch(`${API_BASE_URL}/github/review`, {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)

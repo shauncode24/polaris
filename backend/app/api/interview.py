@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.goals import Goal
@@ -23,6 +24,7 @@ from app.services.interview.response_generation import (
     classify_blueprint,
     generate_interview_response,
 )
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.models.facts import User
 import logging
@@ -118,19 +120,31 @@ def _degraded_error_detail(trace_id: str, message: str) -> dict:
 
 
 @router.post("/ask", response_model=InterviewResponseOutput)
-async def ask_interview_question(payload: InterviewAskRequest, current_user: User = Depends(get_current_user), db=Depends(get_db)):
+async def ask_interview_question(payload: InterviewAskRequest, current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
+    try:
+        session_id = UUID(payload.session_id) if payload.session_id else uuid4()
+        parent_response_id = UUID(payload.parent_response_id) if payload.parent_response_id else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id or parent_response_id.")
+
+    async def work(job_db: AsyncSession):
+        return await _answer_question(job_db, user_id, payload, session_id, parent_response_id)
+
+    return await run_in_background(user_id, "interview_answer", work, inputs=(payload.model_dump(mode="json"),))
+
+
+async def _answer_question(
+    db: AsyncSession, user_id, payload: InterviewAskRequest, session_id: UUID, parent_response_id: UUID | None,
+) -> InterviewResponseOutput:
     trace_id = str(uuid4())
     logger.info("[trace=%s] Received interview question: %r", trace_id, payload.question)
-    user = current_user
-
-    session_id = UUID(payload.session_id) if payload.session_id else uuid4()
-    parent_response_id = UUID(payload.parent_response_id) if payload.parent_response_id else None
 
     job_intelligence_id = payload.job_intelligence_id
     job_context_source = None
     target_role, target_company = payload.target_role, payload.target_company
     if not job_intelligence_id:
-        job, job_context_source = await _auto_attach_job(db, user.id, target_role, target_company)
+        job, job_context_source = await _auto_attach_job(db, user_id, target_role, target_company)
         if job is not None:
             job_intelligence_id = job.id
             target_role = target_role or job.role
@@ -144,7 +158,7 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
     blueprint_key = await classify_blueprint(payload.question, trace_id=trace_id)
 
     context = await build_interview_context(
-        db, user.id, payload.question, target_role, target_company,
+        db, user_id, payload.question, target_role, target_company,
         job_intelligence_id=job_intelligence_id,
         session_id=str(session_id),
         correction=payload.correction,
@@ -164,7 +178,7 @@ async def ask_interview_question(payload: InterviewAskRequest, current_user: Use
     )
 
     response_row = InterviewResponse(
-        user_id=user.id,
+        user_id=user_id,
         question=payload.question,
         question_type=output.question_type,
         response_json=output_full.model_dump(mode="json"),
@@ -200,23 +214,38 @@ async def correct_interview_response(
     carries a plain-language 'suggested_action' pointing the user to the
     real first-class edit path instead.
     """
-    trace_id = str(uuid4())
-
     try:
         parent_id = UUID(payload.parent_response_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid parent_response_id.")
 
+    user_id = current_user.id
+    parent = await _find_response(db, user_id, parent_id)
+
+    async def work(job_db: AsyncSession):
+        return await _rewrite_answer(job_db, user_id, parent.id, payload.correction)
+
+    return await run_in_background(
+        user_id, "interview_correction", work, inputs=(parent_id, payload.correction),
+    )
+
+
+async def _find_response(db: AsyncSession, user_id, response_id: UUID) -> InterviewResponse:
     result = await db.execute(
         select(InterviewResponse).where(
-            InterviewResponse.id == parent_id,
-            InterviewResponse.user_id == current_user.id,
+            InterviewResponse.id == response_id,
+            InterviewResponse.user_id == user_id,
         )
     )
-    parent = result.scalar_one_or_none()
-    if parent is None:
+    response = result.scalar_one_or_none()
+    if response is None:
         raise HTTPException(status_code=404, detail="Original response not found.")
+    return response
 
+
+async def _rewrite_answer(db: AsyncSession, user_id, parent_id: UUID, correction: str) -> InterviewResponseOutput:
+    trace_id = str(uuid4())
+    parent = await _find_response(db, user_id, parent_id)
     parent_rj = parent.response_json or {}
     target_role = parent_rj.get("target_role")
     target_company = parent_rj.get("target_company")
@@ -231,10 +260,10 @@ async def correct_interview_response(
     blueprint_key = await classify_blueprint(parent.question, trace_id=trace_id)
 
     context = await build_interview_context(
-        db, current_user.id, parent.question, target_role, target_company,
+        db, user_id, parent.question, target_role, target_company,
         job_intelligence_id=job_intelligence_id,
         session_id=str(session_id),
-        correction=payload.correction,
+        correction=correction,
         blueprint_key=blueprint_key,
     )
 
@@ -245,7 +274,7 @@ async def correct_interview_response(
         raise HTTPException(status_code=502, detail=_degraded_error_detail(trace_id, str(e)))
 
     suggested_action = None
-    if grounding.looks_like_durable_correction(payload.correction):
+    if grounding.looks_like_durable_correction(correction):
         suggested_action = (
             "This looks like it corrects a durable fact about your background (e.g. a role or "
             "ownership claim) rather than just this answer's wording. This correction only updates "
@@ -261,7 +290,7 @@ async def correct_interview_response(
     )
 
     response_row = InterviewResponse(
-        user_id=current_user.id,
+        user_id=user_id,
         question=parent.question,
         question_type=output.question_type,
         response_json=output_full.model_dump(mode="json"),

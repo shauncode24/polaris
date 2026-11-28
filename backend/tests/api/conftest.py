@@ -6,10 +6,12 @@ two users are seeded: `alice`, who owns data, and `bob`, who owns nothing.
 """
 import asyncio
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -23,6 +25,7 @@ from app.core.database import get_db  # noqa: E402
 from app.core.security import create_access_token  # noqa: E402
 from app.core.settings import settings  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.background import BackgroundJob  # noqa: E402
 from app.models.facts import Education, Experience, Project, Resume, User  # noqa: E402
 from app.models.goals import Goal  # noqa: E402
 from app.models.inference import (  # noqa: E402
@@ -33,6 +36,7 @@ from app.models.inference import (  # noqa: E402
     ResumeTailoringReview,
 )
 from app.models.job_intelligence import GapAnalysisResultRow, JobIntelligenceProfileRow  # noqa: E402
+from app.services.background import jobs as background_jobs  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
@@ -94,7 +98,11 @@ async def _seed() -> dict:
         identity = EngineeringIdentity(
             user_id=alice.id, facts_json={}, narrative_json={}, created_at=now,
         )
-        db.add_all([gap, goal, response, identity])
+        background_job = BackgroundJob(
+            user_id=alice.id, kind="resume_review", dedupe_key="resume_review:seeded", status="succeeded",
+            result_json={"summary": "alice-private-headline"}, created_at=now, heartbeat_at=now, finished_at=now,
+        )
+        db.add_all([gap, goal, response, identity, background_job])
         await db.flush()
 
         db.add_all([
@@ -121,6 +129,7 @@ async def _seed() -> dict:
             "project_id": project.id, "job_id": job.id, "goal_id": goal.id,
             "experience_id": experience.id, "education_id": education.id,
             "session_id": session_id, "response_id": response.id, "identity_id": identity.id,
+            "background_job_id": background_job.id,
         }
     await engine.dispose()
     return ids
@@ -135,6 +144,30 @@ def seeded() -> dict:
     return asyncio.run(_seed())
 
 
+class WaitingClient(TestClient):
+    """Waits for background jobs as the frontend does: a 202 is replaced by
+    the finished job's status and body. `start` returns the 202 itself.
+    """
+
+    def request(self, method, url, **kwargs):
+        response = super().request(method, url, **kwargs)
+        if response.status_code != 202:
+            return response
+        job_id = response.json()["job_id"]
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            job = super().request("GET", f"/background-jobs/{job_id}", headers=kwargs.get("headers")).json()
+            if job["status"] == "succeeded":
+                return httpx.Response(200, json=job["result"])
+            if job["status"] == "failed":
+                return httpx.Response(job["error_status"], json={"detail": job["error_detail"]})
+            time.sleep(0.02)
+        raise AssertionError(f"background job {job_id} did not finish")
+
+    def start(self, method, url, **kwargs):
+        return super().request(method, url, **kwargs)
+
+
 @pytest.fixture(scope="session")
 def client(seeded):
     engine = _new_engine()
@@ -145,9 +178,11 @@ def client(seeded):
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
+    real_factory, background_jobs.session_factory = background_jobs.session_factory, factory
+    with WaitingClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+    background_jobs.session_factory = real_factory
 
 
 def _auth(user_id) -> dict:

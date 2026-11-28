@@ -1,5 +1,5 @@
 // frontend/src/api/jobIntelligence.js
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -18,7 +18,7 @@ function authHeaders(token) {
 }
 
 export function analyzeJobIntelligenceText(token, { rawText, company, role }) {
-  return fetch(`${API_BASE_URL}/job-intelligence/analyze`, {
+  return apiFetch(`${API_BASE_URL}/job-intelligence/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({
@@ -35,7 +35,7 @@ export function analyzeJobIntelligencePdf(token, file, { company, role } = {}) {
   if (company) formData.append('company', company)
   if (role) formData.append('role', role)
 
-  return fetch(`${API_BASE_URL}/job-intelligence/analyze-pdf`, {
+  return apiFetch(`${API_BASE_URL}/job-intelligence/analyze-pdf`, {
     method: 'POST',
     headers: authHeaders(token),
     body: formData,

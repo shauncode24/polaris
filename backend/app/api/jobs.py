@@ -9,6 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
@@ -40,28 +41,16 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 logger = logging.getLogger(__name__)
 
 
-async def _get_or_build_gap_result_for_job_intelligence(
-    db: AsyncSession,
-    user: User,
-    job_intelligence,
-    company_intelligence,
-    regenerate: bool,
+async def _build_gap_result(
+    db: AsyncSession, user_id, job_intelligence, company_intelligence,
 ) -> GapAnalysisResultRow:
-    """Runs the Comparison Engine + narrative over an existing job
-    profile. Reads back the latest stored result instead when it is still
-    current and the caller didn't ask to regenerate. Never re-extracts the
-    job description itself.
+    """Runs the Comparison Engine + narrative over an existing job profile
+    and saves the result. Never re-extracts the job description itself.
     """
     job_intelligence_uuid = UUID(job_intelligence.id)
-
-    if not regenerate:
-        cached = await get_latest_gap_result(db, user.id, job_intelligence_uuid)
-        if cached is not None and await is_current_gap_result(db, user.id, cached):
-            return cached
-
     target_profile = build_target_profile(job_intelligence, company_intelligence)
 
-    report = await analyze_skill_gap(db, user.id, target_profile.job_intelligence)
+    report = await analyze_skill_gap(db, user_id, target_profile.job_intelligence)
     logger.debug(
         "Gap analysis (job_intelligence_id=%s) complete: %d have, %d partial, %d missing.",
         job_intelligence_uuid, len(report.have), len(report.partial), len(report.missing),
@@ -92,7 +81,7 @@ async def _get_or_build_gap_result_for_job_intelligence(
         degraded = True
 
     gap_result_row = GapAnalysisResultRow(
-        user_id=user.id,
+        user_id=user_id,
         job_intelligence_id=job_intelligence_uuid,
         company_intelligence_id=(
             UUID(company_intelligence.id) if company_intelligence and company_intelligence.id else None
@@ -108,9 +97,22 @@ async def _get_or_build_gap_result_for_job_intelligence(
     await db.commit()
     await db.refresh(gap_result_row)
 
-    await trigger_identity_refresh(db, user.id, "job description analysis")
+    await trigger_identity_refresh(db, user_id, "job description analysis")
 
     return gap_result_row
+
+
+def _gap_page(job_intelligence, company_intelligence, gap_row) -> SkillGapForJobResponse:
+    return SkillGapForJobResponse(
+        job_intelligence=job_intelligence,
+        company_intelligence=company_intelligence,
+        report=gap_row.report_json,
+        category_breakdown=[CategoryScore(**c) for c in gap_row.category_breakdown_json.get("items", [])],
+        overall_match=OverallMatch(**gap_row.overall_match_json),
+        analysis=NarrativeAnalysis(**gap_row.narrative_json),
+        analysis_degraded=gap_row.analysis_degraded,
+        generated_at=gap_row.created_at.isoformat(),
+    )
 
 
 @router.get("/by-intelligence/{job_intelligence_id}", response_model=SkillGapForJobResponse)
@@ -123,26 +125,26 @@ async def get_skill_gap_for_job_intelligence(
     """Compare the current user's evidence against one of their parsed
     jobs (from GET /job-intelligence). Every met requirement carries the
     items that support it; every gap carries a severity.
+
+    Answers at once with the stored comparison while it is still current.
+    Otherwise (or with `regenerate`) answers 202 with a background job.
     """
-    job_intelligence = await get_job_intelligence(db, current_user.id, job_intelligence_id)
+    user_id = current_user.id
+    job_intelligence = await get_job_intelligence(db, user_id, job_intelligence_id)
     if job_intelligence is None:
         raise HTTPException(status_code=404, detail="Job intelligence profile not found")
 
     company_intelligence = await get_company_intelligence_by_source_hash(
-        db, current_user.id, job_intelligence.source_text_hash,
+        db, user_id, job_intelligence.source_text_hash,
     )
 
-    gap_row = await _get_or_build_gap_result_for_job_intelligence(
-        db, current_user, job_intelligence, company_intelligence, regenerate,
-    )
+    if not regenerate:
+        cached = await get_latest_gap_result(db, user_id, job_intelligence_id)
+        if cached is not None and await is_current_gap_result(db, user_id, cached):
+            return _gap_page(job_intelligence, company_intelligence, cached)
 
-    return SkillGapForJobResponse(
-        job_intelligence=job_intelligence,
-        company_intelligence=company_intelligence,
-        report=gap_row.report_json,
-        category_breakdown=[CategoryScore(**c) for c in gap_row.category_breakdown_json.get("items", [])],
-        overall_match=OverallMatch(**gap_row.overall_match_json),
-        analysis=NarrativeAnalysis(**gap_row.narrative_json),
-        analysis_degraded=gap_row.analysis_degraded,
-        generated_at=gap_row.created_at.isoformat(),
-    )
+    async def work(job_db: AsyncSession):
+        gap_row = await _build_gap_result(job_db, user_id, job_intelligence, company_intelligence)
+        return _gap_page(job_intelligence, company_intelligence, gap_row)
+
+    return await run_in_background(user_id, "skill_gap", work, inputs=(job_intelligence_id,))

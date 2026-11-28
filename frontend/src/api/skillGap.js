@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -26,7 +26,7 @@ export function listParsedJobs(token) {
 
 export function getSkillGapForJob(token, jobIntelligenceId, { regenerate = false } = {}) {
   const qs = regenerate ? '?regenerate=true' : ''
-  return fetch(`${API_BASE_URL}/jobs/by-intelligence/${jobIntelligenceId}${qs}`, {
+  return apiFetch(`${API_BASE_URL}/jobs/by-intelligence/${jobIntelligenceId}${qs}`, {
     headers: { ...authHeaders(token) },
   }).then(handle)
 }

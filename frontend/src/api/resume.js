@@ -1,5 +1,5 @@
 // frontend/src/api/resume.js
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -35,7 +35,7 @@ export async function fetchResumePdf(token) {
 export function uploadResume(file, token) {
   const formData = new FormData()
   formData.append('file', file)
-  return fetch(`${API_BASE_URL}/resume/upload`, {
+  return apiFetch(`${API_BASE_URL}/resume/upload`, {
     method: 'POST',
     headers: authHeaders(token),
     body: formData,
@@ -43,7 +43,7 @@ export function uploadResume(file, token) {
 }
 
 export function runResumeReview(token) {
-  return fetch(`${API_BASE_URL}/resume/review`, {
+  return apiFetch(`${API_BASE_URL}/resume/review`, {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)
@@ -54,7 +54,7 @@ export function runResumeAnalysis(token, jobIntelligenceId = null) {
   if (jobIntelligenceId) {
     url.searchParams.append('job_intelligence_id', jobIntelligenceId)
   }
-  return fetch(url.toString(), {
+  return apiFetch(url.toString(), {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)
@@ -64,13 +64,13 @@ export function getResumeCoherence(token, targetRole = null, regenerate = false)
   const url = new URL(`${API_BASE_URL}/resume/coherence`)
   if (targetRole) url.searchParams.append('target_role', targetRole)
   if (regenerate) url.searchParams.append('regenerate', 'true')
-  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
+  return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
 export function getResumeTailoring(token, jobIntelligenceId, regenerate = false) {
   const url = new URL(`${API_BASE_URL}/resume/tailor/${jobIntelligenceId}`)
   if (regenerate) url.searchParams.append('regenerate', 'true')
-  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
+  return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
 export function getResumeEvolution(token) {

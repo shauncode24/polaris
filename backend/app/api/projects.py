@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import GithubSnapshot, Project, User
@@ -112,7 +113,12 @@ async def get_portfolio_narrative(
         cached = await get_latest_portfolio_narrative(db, current_user.id)
         if cached is not None:
             return cached
-    return await generate_portfolio_narrative(db, current_user.id)
+    user_id = current_user.id
+
+    async def work(job_db: AsyncSession):
+        return await generate_portfolio_narrative(job_db, user_id)
+
+    return await run_in_background(user_id, "portfolio_narrative", work)
 
 
 @router.get("/{project_id}/claim-audit", response_model=ClaimAuditReport)
@@ -154,16 +160,20 @@ async def get_project_claim_audit(
         quality_score=verified.get("quality_score"),
         activity_score=verified.get("activity_score"),
     )
-    report = await generate_claim_audit_narrative(db, current_user.id, project_id, facts)
+    user_id = current_user.id
 
-    # Freshness fix (Important, Engineering Identity audit): a Claim
-    # Audit run can change claim_risk_details, which top_skills'
-    # confidence is now reconciled against — this was previously the
-    # one signal in IdentityFacts most related to the confidence/
-    # contradiction problem that never triggered a refresh at all.
-    await trigger_identity_refresh(db, current_user.id, "claim audit")
+    async def work(job_db: AsyncSession):
+        report = await generate_claim_audit_narrative(job_db, user_id, project_id, facts)
 
-    return report
+        # Freshness fix (Important, Engineering Identity audit): a Claim
+        # Audit run can change claim_risk_details, which top_skills'
+        # confidence is now reconciled against — this was previously the
+        # one signal in IdentityFacts most related to the confidence/
+        # contradiction problem that never triggered a refresh at all.
+        await trigger_identity_refresh(job_db, user_id, "claim audit")
+        return report
+
+    return await run_in_background(user_id, "claim_audit", work, inputs=(project_id,))
 
 @router.get("/{project_id}/intelligence", response_model=ProjectIntelligenceReport)
 async def get_project_intelligence(
@@ -179,13 +189,23 @@ async def get_project_intelligence(
     """The Project Intelligence agent — optionally grounded in a real
     Job Intelligence profile (job_intelligence_id) instead of relying
     purely on the free-text framing string (design doc §6.2)."""
-    try:
-        return await generate_project_intelligence(
-            db, current_user.id, project_id, framing, comparison_target,
-            job_intelligence_id=job_intelligence_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    user_id = current_user.id
+    if await build_project_context(db, user_id, project_id) is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    async def work(job_db: AsyncSession):
+        try:
+            return await generate_project_intelligence(
+                job_db, user_id, project_id, framing, comparison_target,
+                job_intelligence_id=job_intelligence_id,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    return await run_in_background(
+        user_id, "project_intelligence", work,
+        inputs=(project_id, framing, comparison_target, job_intelligence_id),
+    )
 
 
 @router.get("/{project_id}/interview-questions", response_model=InterviewQuestionsReport)
@@ -203,7 +223,12 @@ async def get_project_interview_questions(
     context = await build_project_context(db, current_user.id, project_id)
     if context is None:
         raise HTTPException(status_code=404, detail="Project not found")
-    return await generate_and_cache_interview_questions(db, current_user.id, project_id, context)
+    user_id = current_user.id
+
+    async def work(job_db: AsyncSession):
+        return await generate_and_cache_interview_questions(job_db, user_id, project_id, context)
+
+    return await run_in_background(user_id, "project_questions", work, inputs=(project_id,))
 
 
 @router.get("/link-suggestions")

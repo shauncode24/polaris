@@ -1,5 +1,5 @@
 // frontend/src/api/career.js
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -46,7 +46,7 @@ export function deleteGoal(token, goalId) {
 }
 
 export function generatePlan(token, goalId) {
-  return fetch(`${API_BASE_URL}/goals/${goalId}/plan`, {
+  return apiFetch(`${API_BASE_URL}/goals/${goalId}/plan`, {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)

@@ -1,5 +1,5 @@
 // frontend/src/api/interview.js
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 /**
  * Parses backend responses, handling both:
@@ -41,7 +41,7 @@ export function askInterviewQuestion(
   token,
   { question, targetRole, targetCompany, jobIntelligenceId, sessionId, parentResponseId, correction }
 ) {
-  return fetch(`${API_BASE_URL}/interview/ask`, {
+  return apiFetch(`${API_BASE_URL}/interview/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({
@@ -57,7 +57,7 @@ export function askInterviewQuestion(
 }
 
 export function correctInterviewResponse(token, { parentResponseId, correction }) {
-  return fetch(`${API_BASE_URL}/interview/correct`, {
+  return apiFetch(`${API_BASE_URL}/interview/correct`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({

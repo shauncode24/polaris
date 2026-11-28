@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
@@ -42,10 +43,13 @@ async def get_engineering_identity(
 
 
 @router.post("/refresh", response_model=EngineeringIdentityReport)
-async def refresh_engineering_identity(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
-    return await generate_engineering_identity(db, current_user.id)
+async def refresh_engineering_identity(current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
+
+    async def work(job_db: AsyncSession):
+        return await generate_engineering_identity(job_db, user_id)
+
+    return await run_in_background(user_id, "identity_refresh", work)
 
 
 @router.get("/history", response_model=list[EngineeringIdentityReport])
@@ -116,10 +120,13 @@ async def get_weekly_brief(
 
 
 @router.post("/weekly-brief/refresh", response_model=WeeklyBriefReport)
-async def refresh_weekly_brief(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
-):
-    try:
-        return await generate_weekly_brief(db, current_user.id)
-    except InsufficientHistoryError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+async def refresh_weekly_brief(current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
+
+    async def work(job_db: AsyncSession):
+        try:
+            return await generate_weekly_brief(job_db, user_id)
+        except InsufficientHistoryError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    return await run_in_background(user_id, "weekly_brief", work)

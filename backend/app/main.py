@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.background_jobs import router as background_jobs_router
 from app.api.resume import router as resume_router
 from app.api.sync import router as sync_router
 from app.api.jobs import router as jobs_router
@@ -117,6 +118,7 @@ app.include_router(projects_router)
 app.include_router(github_router)
 app.include_router(identity_router)
 app.include_router(linkedin_router)
+app.include_router(background_jobs_router)
 
 
 @app.exception_handler(LLMError)

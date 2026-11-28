@@ -1,11 +1,22 @@
 """A small, fixed evidence scenario for pinning confidence behaviour."""
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.facts import Project, User
 from app.models.inference import SkillEvidence
 from app.models.structure import Skill
+
+
+async def _skill(db, name: str, category: str) -> Skill:
+    """Skills are shared by all users, so another test may have created it."""
+    skill = await db.scalar(select(Skill).where(Skill.canonical_name == name))
+    if skill is None:
+        skill = Skill(name=name, canonical_name=name, category=category)
+        db.add(skill)
+        await db.flush()
+    return skill
 
 
 async def seed_dana(engine) -> dict:
@@ -23,11 +34,11 @@ async def seed_dana(engine) -> dict:
         db.add(dana)
         await db.flush()
         project = Project(user_id=dana.id, name="Dana Project", stack=["python"], description="d")
-        python = Skill(name="python", canonical_name="python", category="language")
-        docker = Skill(name="docker", canonical_name="docker", category="devops")
-        go = Skill(name="go", canonical_name="go", category="language")
-        rust = Skill(name="rust", canonical_name="rust", category="language")
-        db.add_all([project, python, docker, go, rust])
+        python, docker, go, rust = [
+            await _skill(db, name, category)
+            for name, category in (("python", "language"), ("docker", "devops"), ("go", "language"), ("rust", "language"))
+        ]
+        db.add(project)
         await db.flush()
         db.add_all([
             SkillEvidence(user_id=dana.id, skill_id=python.id, source_type="project",

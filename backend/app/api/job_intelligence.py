@@ -1,3 +1,4 @@
+import hashlib
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -5,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.settings import settings
@@ -33,11 +35,22 @@ class JobIntelligenceRequest(BaseModel):
     role: str | None = None
 
 
+async def _analyze_in_background(user_id, raw_text: str, company: str | None, role: str | None):
+    async def work(job_db: AsyncSession):
+        try:
+            job_profile, company_profile = await build_job_intelligence(job_db, user_id, raw_text, company, role)
+        except JobIntelligenceExtractionError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        return build_target_profile(job_profile, company_profile)
+
+    text_hash = hashlib.sha256(raw_text.encode()).hexdigest()
+    return await run_in_background(user_id, "job_analysis", work, inputs=(text_hash, company, role))
+
+
 @router.post("/analyze", response_model=TargetProfile)
 async def analyze_job_intelligence(
     payload: JobIntelligenceRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     """Returns the full TargetProfile (Job Intelligence + Company
     Intelligence) from the single combined extraction call — this is
@@ -54,13 +67,7 @@ async def analyze_job_intelligence(
             detail=f"raw_text exceeds the maximum allowed length of {settings.max_paste_text_chars} characters.",
         )
 
-    try:
-        job_profile, company_profile = await build_job_intelligence(
-            db, current_user.id, payload.raw_text, payload.company, payload.role,
-        )
-    except JobIntelligenceExtractionError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    return build_target_profile(job_profile, company_profile)
+    return await _analyze_in_background(current_user.id, payload.raw_text, payload.company, payload.role)
 
 
 @router.post("/analyze-pdf", response_model=TargetProfile)
@@ -69,7 +76,6 @@ async def analyze_job_intelligence_pdf(
     company: str | None = Form(None),
     role: str | None = Form(None),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     raw_bytes = await file.read()
 
@@ -94,11 +100,7 @@ async def analyze_job_intelligence_pdf(
     if len(raw_text) > settings.max_paste_text_chars:
         raw_text = raw_text[: settings.max_paste_text_chars]
 
-    try:
-        job_profile, company_profile = await build_job_intelligence(db, current_user.id, raw_text, company, role)
-    except JobIntelligenceExtractionError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    return build_target_profile(job_profile, company_profile)
+    return await _analyze_in_background(current_user.id, raw_text, company, role)
 
 
 # Declared before "/{job_intelligence_id}", which would otherwise capture it.

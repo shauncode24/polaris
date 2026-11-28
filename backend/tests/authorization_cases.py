@@ -27,6 +27,7 @@ class Case:
 
 
 CASES = [
+    Case("GET", "/background-jobs/{background_job_id}", owner_status=200),
     Case("GET", "/job-intelligence/{job_id}", owner_status=200),
     Case("GET", "/jobs/by-intelligence/{job_id}"),
     Case("GET", "/job-intelligence/compare?ids={job_id}&ids={job_id}"),

@@ -1,3 +1,4 @@
+import hashlib
 import io
 from urllib.parse import quote
 
@@ -6,6 +7,7 @@ from fastapi.responses import Response
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.settings import settings
@@ -110,33 +112,43 @@ async def upload_resume(
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="No extractable text found in the uploaded file.")
 
-    try:
-        result = await ingest_resume(raw_text, db, current_user, filename=file.filename, pdf_bytes=pdf_bytes)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    user_id = current_user.id
 
-    # Decisions the user already made about these items on earlier uploads
-    # (hidden, confirmed, edited) apply to the new rows; then projects are
-    # lined up with the user's GitHub repos.
-    await carry_over_reviews(db, current_user.id, UUID(result["resume_id"]))
-    await reconcile_projects(db, current_user.id)
-    await touch_evidence(db, current_user.id)
+    async def work(job_db: AsyncSession):
+        user = await job_db.get(User, user_id)
+        try:
+            result = await ingest_resume(raw_text, job_db, user, filename=file.filename, pdf_bytes=pdf_bytes)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
-    # Freshness fix: keep Engineering Identity current the instant new
-    # resume data lands, instead of only on a manual POST /identity/refresh.
-    await trigger_identity_refresh(db, current_user.id, "resume upload")
-    return result
+        # Decisions the user already made about these items on earlier uploads
+        # (hidden, confirmed, edited) apply to the new rows; then projects are
+        # lined up with the user's GitHub repos.
+        await carry_over_reviews(job_db, user_id, UUID(result["resume_id"]))
+        await reconcile_projects(job_db, user_id)
+        await touch_evidence(job_db, user_id)
+
+        # Freshness fix: keep Engineering Identity current the instant new
+        # resume data lands, instead of only on a manual POST /identity/refresh.
+        await trigger_identity_refresh(job_db, user_id, "resume upload")
+        return result
+
+    return await run_in_background(
+        user_id, "resume_upload", work, inputs=(hashlib.sha256(raw_bytes).hexdigest(), file.filename),
+    )
+
 
 @router.post("/review")
-async def review_resume(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        report = await generate_resume_review(db, current_user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return report
+async def review_resume(current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
+
+    async def work(job_db: AsyncSession):
+        try:
+            return await generate_resume_review(job_db, user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    return await run_in_background(user_id, "resume_review", work)
 
 
 @router.post("/analyze")
@@ -146,27 +158,28 @@ async def analyze_resume(
     db=Depends(get_db),
 ):
     """Run the full deterministic Resume Analysis Engine and persist the result."""
+    user_id = current_user.id
     if job_intelligence_id is not None:
         try:
             parsed_job_id = UUID(job_intelligence_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid job_intelligence_id.")
-        if await get_job_intelligence(db, current_user.id, parsed_job_id) is None:
+        if await get_job_intelligence(db, user_id, parsed_job_id) is None:
             raise HTTPException(status_code=404, detail="Job not found.")
-    try:
+
+    async def work(job_db: AsyncSession):
         from app.services.resume.analysis.engine import run_analysis
-        report = await run_analysis(
-            db,
-            current_user.id,
-            job_intelligence_id=job_intelligence_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    # This is the endpoint that actually produces resume_score/grade —
-    # the field IdentityFacts reads — so it gets its own refresh trigger
-    # distinct from the raw upload above.
-    await trigger_identity_refresh(db, current_user.id, "resume analysis")
-    return report
+        try:
+            report = await run_analysis(job_db, user_id, job_intelligence_id=job_intelligence_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        # This is the endpoint that actually produces resume_score/grade —
+        # the field IdentityFacts reads — so it gets its own refresh trigger
+        # distinct from the raw upload above.
+        await trigger_identity_refresh(job_db, user_id, "resume analysis")
+        return report
+
+    return await run_in_background(user_id, "resume_analysis", work, inputs=(job_intelligence_id,))
 
 
 @router.get("/download")
@@ -411,7 +424,12 @@ async def get_resume_coherence(
         if cached is not None:
             return cached
 
-    return await generate_coherence_report(db, current_user.id, resume.id, target_role)
+    user_id, resume_id = current_user.id, resume.id
+
+    async def work(job_db: AsyncSession):
+        return await generate_coherence_report(job_db, user_id, resume_id, target_role)
+
+    return await run_in_background(user_id, "resume_coherence", work, inputs=(resume_id, target_role))
 
 
 @router.get("/tailor/{job_intelligence_id}", response_model=TailoringReport)
@@ -436,10 +454,17 @@ async def get_resume_tailoring(
         if cached is not None:
             return cached
 
-    try:
-        return await generate_tailoring_report(db, current_user.id, resume.id, job_intelligence_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    user_id, resume_id = current_user.id, resume.id
+
+    async def work(job_db: AsyncSession):
+        try:
+            return await generate_tailoring_report(job_db, user_id, resume_id, job_intelligence_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    return await run_in_background(
+        user_id, "resume_tailoring", work, inputs=(resume_id, job_intelligence_id),
+    )
 
 @router.get("/evolution", response_model=EvolutionReport)
 async def get_resume_evolution(

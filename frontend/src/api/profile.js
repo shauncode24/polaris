@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -15,7 +15,7 @@ function authHeaders(token) {
 export function uploadResume(file, token) {
   const formData = new FormData()
   formData.append('file', file)
-  return fetch(`${API_BASE_URL}/resume/upload`, {
+  return apiFetch(`${API_BASE_URL}/resume/upload`, {
     method: 'POST',
     headers: authHeaders(token),
     body: formData,
@@ -23,7 +23,7 @@ export function uploadResume(file, token) {
 }
 
 export function syncGithub(token, { username, githubToken } = {}) {
-  return fetch(`${API_BASE_URL}/sync/github`, {
+  return apiFetch(`${API_BASE_URL}/sync/github`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({ username: username || null, token: githubToken || null }),
@@ -59,7 +59,7 @@ export function getLeetcodeWorkspace(token) {
 }
 
 export function runLeetcodePortfolioReview(token) {
-  return fetch(`${API_BASE_URL}/sync/leetcode/review`, {
+  return apiFetch(`${API_BASE_URL}/sync/leetcode/review`, {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)

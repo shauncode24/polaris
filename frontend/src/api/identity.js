@@ -1,5 +1,5 @@
 // frontend/src/api/identity.js
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -23,7 +23,7 @@ export async function getEngineeringIdentity(token) {
 }
 
 export function refreshEngineeringIdentity(token) {
-  return fetch(`${API_BASE_URL}/identity/refresh`, {
+  return apiFetch(`${API_BASE_URL}/identity/refresh`, {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)
@@ -40,7 +40,7 @@ export function getWeeklyBrief(token) {
 }
 
 export function refreshWeeklyBrief(token) {
-  return fetch(`${API_BASE_URL}/identity/weekly-brief/refresh`, {
+  return apiFetch(`${API_BASE_URL}/identity/weekly-brief/refresh`, {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)

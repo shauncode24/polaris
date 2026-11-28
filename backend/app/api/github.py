@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
@@ -61,17 +62,18 @@ async def get_github_workspace(
 
 
 @router.post("/review")
-async def run_github_portfolio_review(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
+async def run_github_portfolio_review(current_user: User = Depends(get_current_user)):
     """Runs the LLM career-analysis layer on top of the deterministic
     GitHub analysis. Requires a completed GitHub sync first — this never
     calls the GitHub API itself, it only reasons over facts code has
     already extracted and verified (see github_knowledge.py).
     """
-    try:
-        report = await generate_github_portfolio_review(db, current_user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return report
+    user_id = current_user.id
+
+    async def work(job_db: AsyncSession):
+        try:
+            return await generate_github_portfolio_review(job_db, user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    return await run_in_background(user_id, "github_review", work)

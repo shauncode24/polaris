@@ -1,5 +1,5 @@
 // frontend/src/api/linkedin.js
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -14,7 +14,7 @@ function authHeaders(token) {
 }
 
 export function ingestLinkedInProfile(token, rawText) {
-  return fetch(`${API_BASE_URL}/linkedin/ingest`, {
+  return apiFetch(`${API_BASE_URL}/linkedin/ingest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({ raw_text: rawText }),

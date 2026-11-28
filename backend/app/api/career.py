@@ -5,8 +5,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db, AsyncSessionLocal
+from app.core.database import get_db
 from app.models.goals import Goal
 from app.models.inference import CareerPlan
 from app.models.job_intelligence import JobIntelligenceProfileRow
@@ -15,6 +16,7 @@ from app.schemas.career_planner.career_plan import (
 )
 from app.services.career_planner.context_builder import build_career_plan_context
 from app.services.career_planner.plan_generation import generate_career_plan
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.models.facts import User
 from uuid import UUID as UUIDType
@@ -119,14 +121,24 @@ async def delete_goal(goal_id: UUID, current_user: User = Depends(get_current_us
 
 @router.post("/{goal_id}/plan", response_model=CareerPlanResponse)
 async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get_current_user), db=Depends(get_db)):
-    user = current_user
+    user_id = current_user.id
 
-    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user.id))
-    goal = result.scalar_one_or_none()
+    result = await db.execute(select(Goal).where(Goal.id == goal_id, Goal.user_id == user_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    async def work(job_db: AsyncSession):
+        return await _build_and_save_plan(job_db, user_id, goal_id)
+
+    return await run_in_background(user_id, "career_plan", work, inputs=(goal_id,))
+
+
+async def _build_and_save_plan(db: AsyncSession, user_id, goal_id: UUID) -> CareerPlanResponse:
+    goal = await db.scalar(select(Goal).where(Goal.id == goal_id, Goal.user_id == user_id))
     if goal is None:
         raise HTTPException(status_code=404, detail="Goal not found")
 
-    context = await build_career_plan_context(db, user.id, goal)
+    context = await build_career_plan_context(db, user_id, goal)
     await db.close()  # Release the connection back to the pool before starting slow LLM calls
 
     llm_output, degraded = await generate_career_plan(context)
@@ -146,8 +158,8 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
     )
 
     plan_row = CareerPlan(
-        user_id=user.id,
-        goal_id=goal.id,
+        user_id=user_id,
+        goal_id=goal_id,
         plan_json={
             "daily_plan": [d.model_dump() for d in llm_output.daily_plan],
             "check_ins": check_ins,
@@ -158,10 +170,9 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
         },
         created_at=datetime.now(timezone.utc),
     )
-    async with AsyncSessionLocal() as write_db:
-        write_db.add(plan_row)
-        await write_db.commit()
-        await write_db.refresh(plan_row)
+    db.add(plan_row)
+    await db.commit()
+    await db.refresh(plan_row)
 
     logger.info(
         "Career plan generated and persisted (plan_id=%s, degraded=%s)", plan_row.id, degraded
@@ -169,7 +180,7 @@ async def generate_plan_for_goal(goal_id: UUID, current_user: User = Depends(get
 
     return CareerPlanResponse(
         plan_id=str(plan_row.id),
-        goal_id=str(goal.id),
+        goal_id=str(goal_id),
         days_available=context["days_available"],
         relevant_domains=context.get("relevant_domains", []),
         daily_plan=llm_output.daily_plan,

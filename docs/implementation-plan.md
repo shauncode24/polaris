@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 25. Unmarked steps (26 to 71, plus 6 and 13) are not started.
+Updated after step 26. Unmarked steps (27 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -14,7 +14,7 @@ Updated after step 25. Unmarked steps (26 to 71, plus 6 and 13) are not started.
 | B. Consolidate and make the data trustworthy | ✅ done except step 13 | 7 to 12 done (committed in `82bac8a`); 13 not started |
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
-| E. LLM foundation | ◐ in progress | 25 done; 26 to 28 not started |
+| E. LLM foundation | ◐ in progress | 25 and 26 done; 27 and 28 not started |
 | F. Tailored resume | not started | 29 to 37 |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
@@ -22,9 +22,9 @@ Updated after step 25. Unmarked steps (26 to 71, plus 6 and 13) are not started.
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**20 of 71 steps done, 1 partial, 2 skipped, 48 not started** (46 of them in Stages E to K).
+**21 of 71 steps done, 1 partial, 2 skipped, 47 not started** (45 of them in Stages E to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 387 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 424 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -121,7 +121,8 @@ This comes before the two large generation features, because they depend on it.
 
 ✅ 25. Build one `llm_json(prompt, schema, fallback)` helper in `core/llm.py` with a timeout, bounded retries with backoff on 429 and 5xx, token and latency logging, and a clear error when the key is missing. Remove the commented-out clients and the Ollama prefill hack, or put them behind an explicit `LLM_PROVIDER` setting.
     - **Status:** Done. All 25 model calls go through `llm_json`: 60-second timeout, two retries on rate limits, server errors and dropped connections, one more attempt for a reply that is unreadable or cut off (each call names the sections a finished reply has), a log line with tokens and time, error messages that are safe to show, and the caller's fallback. The commented-out clients and the Ollama workaround are removed; no provider setting was added. Fixed on the way: **interview practice and identity summaries named a model the Groq account doesn't offer**, so they could not succeed; a cut-off resume upload was saved as complete; a skill the model skipped, or a failed tagging call, was remembered as a real answer; provider error text could reach users; and the test suite could call the real model. Verified by tests. Against the real model, only question classification and answer planning have been tried (both accepted first time); **the other calls have not**, because the daily limit was reached.
-26. Add the `jobs` table and a status endpoint (`GET /jobs/{id}/status` under a new name that doesn't collide with the removed JD routes). Long LLM work returns 202 plus a job ID, and the frontend polls.
+✅ 26. Add the `jobs` table and a status endpoint (`GET /jobs/{id}/status` under a new name that doesn't collide with the removed JD routes). Long LLM work returns 202 plus a job ID, and the frontend polls.
+    - **Status:** Done. Table `background_jobs`, status route `GET /background-jobs/{id}`. Job analysis, skill gap, career plan, interview answers and corrections, resume upload, review, analysis, coherence and tailoring, GitHub sync and review, LeetCode review, LinkedIn import, the project reports, identity refresh and weekly brief now answer 202 and finish in the background; stored results and input errors are still answered at once. The frontend waits through one shared helper (`apiFetch`), so the pages did not change. Jobs run inside the server process (no separate worker): a restart fails the running ones, which are then reported as interrupted; an identical request joins the running job; a job is stopped after 15 minutes; finished jobs are cleared after a day. Still answered in the request: the resume page's role-fit call when no analysis is stored, and the identity refresh after a LeetCode sync or project link (step 27). Verified by tests and by running the frontend helper against a local server; **not tried in a browser**.
 27. Add an advisory lock so only one identity refresh runs per user at a time. Move `trigger_identity_refresh` onto a background job.
 28. Add a per-user daily LLM call budget with a clear error when it's reached.
 

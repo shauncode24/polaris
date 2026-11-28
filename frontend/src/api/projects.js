@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './client'
+import { API_BASE_URL, apiFetch } from './client'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -33,13 +33,13 @@ export function getGoalAwareRanking(token) {
 export function getPortfolioNarrative(token, regenerate = false) {
   const url = new URL(`${API_BASE_URL}/projects/portfolio-narrative`)
   if (regenerate) url.searchParams.append('regenerate', 'true')
-  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
+  return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
 export function getProjectClaimAudit(token, projectId, regenerate = false) {
   const url = new URL(`${API_BASE_URL}/projects/${projectId}/claim-audit`)
   if (regenerate) url.searchParams.append('regenerate', 'true')
-  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
+  return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
 export function getProjectIntelligence(token, projectId, { framing, comparisonTarget, regenerate = false } = {}) {
@@ -47,13 +47,13 @@ export function getProjectIntelligence(token, projectId, { framing, comparisonTa
   if (framing) url.searchParams.append('framing', framing)
   if (comparisonTarget) url.searchParams.append('comparison_target', comparisonTarget)
   if (regenerate) url.searchParams.append('regenerate', 'true')
-  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
+  return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
 export function getProjectInterviewQuestions(token, projectId, regenerate = false) {
   const url = new URL(`${API_BASE_URL}/projects/${projectId}/interview-questions`)
   if (regenerate) url.searchParams.append('regenerate', 'true')
-  return fetch(url.toString(), { headers: authHeaders(token) }).then(handle)
+  return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
 export function getLinkSuggestions(token) {

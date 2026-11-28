@@ -1,6 +1,9 @@
+import hashlib
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.facts import User
@@ -20,7 +23,6 @@ router = APIRouter(prefix="/linkedin", tags=["linkedin"])
 async def ingest_linkedin(
     payload: LinkedInIngestRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     """Ingests user-pasted LinkedIn profile text (never scraped — see
     Phase 4 scope). Reconciles into the same Experience/Education/
@@ -28,14 +30,21 @@ async def ingest_linkedin(
     the canonical Polaris Identity as evidence rather than as a
     parallel, competing identity source.
     """
-    try:
-        result = await ingest_linkedin_profile(db, current_user, payload.raw_text)
-    except LinkedInExtractionError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    user_id = current_user.id
 
-    await touch_evidence(db, current_user.id)
-    await trigger_identity_refresh(db, current_user.id, "linkedin ingestion")
-    return result
+    async def work(job_db: AsyncSession):
+        user = await job_db.get(User, user_id)
+        try:
+            result = await ingest_linkedin_profile(job_db, user, payload.raw_text)
+        except LinkedInExtractionError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+        await touch_evidence(job_db, user_id)
+        await trigger_identity_refresh(job_db, user_id, "linkedin ingestion")
+        return result
+
+    text_hash = hashlib.sha256(payload.raw_text.encode()).hexdigest()
+    return await run_in_background(user_id, "linkedin_import", work, inputs=(text_hash,))
 
 
 @router.get("/workspace", response_model=LinkedInWorkspace)
