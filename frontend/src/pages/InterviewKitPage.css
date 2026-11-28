@@ -1,0 +1,333 @@
+.ik-layout {
+  display: flex;
+  min-height: 100svh;
+  background: var(--bg);
+}
+
+.ik-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ik-content {
+  width: 100%;
+  max-width: 920px;
+  padding: 24px 28px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ik-title { font-size: 22px; }
+
+.ik-hint { font-size: 13px; color: var(--text); font-weight: 400; }
+
+.ik-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.ik-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ik-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  border-left: 3px solid var(--warning);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.ik-banner--error {
+  background: var(--danger-soft);
+  border-left-color: var(--danger);
+}
+
+/* Controls */
+.ik-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ik-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+[data-theme="dark"] .ik-btn--primary { color: #0d1117; }
+
+.ik-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ik-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ik-toolbar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.ik-toolbar label:first-child {
+  flex: 1;
+  min-width: 220px;
+}
+
+.ik-toolbar select,
+.ik-history select,
+.ik-practice textarea {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.ik-toolbar select { width: 100%; }
+.ik-history select { max-width: 100%; }
+
+/* Progress */
+.ik-progress__head {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.ik-progress__bar {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.ik-progress__bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.ik-progress__categories {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.ik-progress__categories li {
+  display: flex;
+  flex-direction: column;
+}
+
+.ik-progress__categories li span:first-child { color: var(--ink); font-weight: 600; }
+
+/* Tabs */
+.ik-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ik-tab {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text);
+}
+
+.ik-tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.ik-tab span {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+/* Questions */
+.ik-questions,
+.ik-study,
+.ik-study__gaps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ik-question h3,
+.ik-study h3 { font-size: 15px; }
+
+.ik-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ik-chip {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.ik-chip--evidence,
+.ik-chip--link {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ik-chip--warning,
+.ik-chip--moderate { background: var(--warning-soft); }
+.ik-chip--critical { background: var(--danger-soft); }
+.ik-chip--done { background: var(--success-soft); }
+.ik-chip--link:hover { text-decoration: underline; }
+
+/* Outline and practice */
+.ik-outline,
+.ik-practice,
+.ik-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.ik-outline,
+.ik-practice {
+  width: 100%;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.ik-question > div[hidden] { display: none; }
+.ik-question > div:not([class]) { width: 100%; }
+
+.ik-outline__story {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.ik-outline__story a { color: var(--accent); font-weight: 600; }
+
+.ik-outline dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ik-outline dt { font-weight: 700; color: var(--ink); }
+.ik-outline dd { margin: 0; }
+
+.ik-fact,
+.ik-outline dd.ik-fact {
+  color: var(--ink);
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  margin-top: 4px;
+}
+
+.ik-warning {
+  color: var(--ink);
+  border-left: 3px solid var(--warning);
+  padding-left: 10px;
+}
+
+.ik-list {
+  list-style: disc;
+  padding-left: 18px;
+}
+
+.ik-practice form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ik-practice textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.ik-answered summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.ik-answered p { white-space: pre-wrap; color: var(--ink); margin-top: 6px; }
+
+.ik-verdicts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ik-verdict {
+  display: flex;
+  gap: 10px;
+}
+
+.ik-verdict strong { color: var(--ink); }
+.ik-verdict q { display: block; color: var(--ink); font-style: italic; }
+.ik-verdict__mark { font-weight: 700; width: 14px; flex-shrink: 0; }
+.ik-verdict--true .ik-verdict__mark { color: var(--success); }
+.ik-verdict--false .ik-verdict__mark { color: var(--danger); }
+
+@media (max-width: 640px) {
+  .ik-content { padding: 16px 14px 32px; }
+}

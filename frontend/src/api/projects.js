@@ -56,12 +56,6 @@ export function getProjectInterviewQuestions(token, projectId, regenerate = fals
   return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
-export function getLinkSuggestions(token) {
-  return fetch(`${API_BASE_URL}/projects/link-suggestions`, {
-    headers: authHeaders(token),
-  }).then(handle)
-}
-
 export function confirmProjectLink(token, projectId, repoName) {
   return fetch(`${API_BASE_URL}/projects/${projectId}/link`, {
     method: 'POST',

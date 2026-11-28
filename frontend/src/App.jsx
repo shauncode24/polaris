@@ -20,6 +20,7 @@ import LeetCodePage from './pages/LeetCodePage'
 import IdentityPage from './pages/IdentityPage'
 import JobIntelligencePage from './pages/JobIntelligencePage'
 import TailoredResumePage from './pages/TailoredResumePage'
+import InterviewKitPage from './pages/InterviewKitPage'
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
               <Route path="/identity" element={<ProtectedRoute><IdentityPage /></ProtectedRoute>} />
               <Route path="/job-intelligence" element={<ProtectedRoute><JobIntelligencePage /></ProtectedRoute>} />
               <Route path="/tailored-resume" element={<ProtectedRoute><TailoredResumePage /></ProtectedRoute>} />
+              <Route path="/interview-kit" element={<ProtectedRoute><InterviewKitPage /></ProtectedRoute>} />
             </Routes>
           </BrowserRouter>
           </PolarisIdentityProvider>

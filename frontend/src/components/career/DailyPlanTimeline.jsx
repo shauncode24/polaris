@@ -1,6 +1,19 @@
 import { useState } from 'react'
 import './DailyPlanTimeline.css'
 
+// The study plan's LeetCode topics this day names.
+function TopicLinks({ links }) {
+  if (!links?.length) return null
+  return (
+    <p className="day-card__links">
+      LeetCode:
+      {links.map((link) => (
+        <a key={link.topic} href={link.url} target="_blank" rel="noopener noreferrer">{link.topic}</a>
+      ))}
+    </p>
+  )
+}
+
 function DayCard({ item, expanded, onToggle, isToday }) {
   return (
     <li className={`day-card ${isToday ? 'day-card--today' : ''}`}>
@@ -21,6 +34,7 @@ function DayCard({ item, expanded, onToggle, isToday }) {
             {item.estimated_time && <span>⏱ {item.estimated_time}</span>}
             {item.deliverable && <span>✓ {item.deliverable}</span>}
           </div>
+          <TopicLinks links={item.links} />
           {item.rationale && <p className="day-card__rationale">{item.rationale}</p>}
           {item.source === 'fallback' && (
             <p className="day-card__fallback-note">Auto-filled after the plan generator couldn't reach this day.</p>
@@ -48,6 +62,7 @@ function DailyPlanTimeline({ dailyPlan, checkIns, daysAvailable }) {
             {today.tasks.map((t, i) => <li key={i}>{t}</li>)}
           </ul>
         )}
+        <TopicLinks links={today.links} />
         <div className="daily-plan__today-meta">
           {today.estimated_time && <span>⏱ {today.estimated_time}</span>}
           {today.deliverable && <span>✓ {today.deliverable}</span>}

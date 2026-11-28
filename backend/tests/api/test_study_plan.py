@@ -112,7 +112,7 @@ def test_each_gap_says_why_and_what_to_do(seeded):
         "kubernetes": "Nothing in your record shows it.",
     }
     assert "restore it" in gap(plan, "redis").action
-    assert "Build or write up work" in gap(plan, "docker").action
+    assert "Build or write up more work" in gap(plan, "docker").action
     assert "Learn it" in gap(plan, "kubernetes").action
 
 

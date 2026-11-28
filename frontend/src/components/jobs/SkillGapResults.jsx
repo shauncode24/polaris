@@ -273,7 +273,7 @@ function NextSteps({ job }) {
         <Link to={`/tailored-resume?jobId=${job.id}`} className="sg-next__link">
           Tailor your resume →
         </Link>
-        <Link to={`/interview?jobId=${job.id}`} className="sg-next__link">
+        <Link to={`/interview-kit?jobId=${job.id}`} className="sg-next__link">
           Practise interview questions →
         </Link>
       </div>

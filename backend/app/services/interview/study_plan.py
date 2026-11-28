@@ -42,11 +42,11 @@ _NOTHING = (
 )
 _TOO_LITTLE = (
     "Your record shows too little of it to count.",
-    "Build or write up work that uses it, so you have an example to talk about.",
+    "Build or write up more work that uses it, so there is more to show and talk about.",
 )
 _THIN = (
     "Your record shows it only thinly.",
-    "Build or write up work that uses it, so you have an example to talk about.",
+    "Build or write up more work that uses it, so there is more to show and talk about.",
 )
 _PRACTISE = "Solve problems in these topics, least practised first, then sync LeetCode."
 

@@ -54,6 +54,16 @@ async def save_new_kit(
     return await get_kit(db, user_id, job_intelligence_id, kit.version)
 
 
+async def list_versions(db: AsyncSession, user_id, job_intelligence_id) -> list[int]:
+    """The version numbers of the user's kit for a job, newest first."""
+    result = await db.scalars(
+        select(InterviewKit.version)
+        .where(InterviewKit.user_id == user_id, InterviewKit.job_intelligence_id == job_intelligence_id)
+        .order_by(InterviewKit.version.desc())
+    )
+    return list(result)
+
+
 async def get_kit(
     db: AsyncSession, user_id, job_intelligence_id, version: int | None = None,
 ) -> SavedKit | None:

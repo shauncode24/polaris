@@ -68,6 +68,7 @@ function useNavGroups() {
     {
       label: 'Interview',
       items: [
+        { key: 'interview-kit', label: 'Interview Kit', icon: IconClipboardList, to: '/interview-kit' },
         { key: 'interview-agent', label: 'Interview Response Agent', icon: IconChat, to: '/interview' },
         { key: 'mock-interviewer', label: 'Mock Interviewer', icon: IconMic },
         { key: 'interview-readiness', label: 'Interview Readiness Analyzer', icon: IconWorkflow, locked: true },

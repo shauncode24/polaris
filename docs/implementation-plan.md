@@ -6,25 +6,25 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 42. Unmarked steps (43 to 71, plus 6 and 13) are not started.
+Updated after step 43. Unmarked steps (44 to 71, plus 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
-| A. Baseline and safety net | ◐ partly done | 1, 2 done; 5 partial; 3, 4 skipped; 6 not started |
+| A. Baseline and safety net | ◐ partly done | 1, 2, 6 done; 5 partial; 3, 4 skipped |
 | B. Consolidate and make the data trustworthy | ✅ done except step 13 | 7 to 12 done (committed in `82bac8a`); 13 not started |
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
 | F. Tailored resume | ✅ done | 29 to 37 |
-| G. Interview kit and practice | ◐ in progress | 38 to 42 done; 43 not started |
+| G. Interview kit and practice | ✅ done | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**37 of 71 steps done, 1 partial, 2 skipped, 31 not started** (29 of them in Stages G to K).
+**39 of 71 steps done, 1 partial, 2 skipped, 29 not started** (28 of them in Stages H to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 1061 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 1077 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -61,8 +61,8 @@ Recommended choice in bold.
 ◐ 5. Repair CI (`.github/workflows/tests.yml`): Linux runner, Postgres service, dummy values for `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, run `alembic upgrade head` before tests, and add a frontend job running `npm ci` and `npm run build`. Delete `tests/test_placeholder.py`.
    - **Gate:** CI is green on a clean clone. ◐ CI not run; the test suite no longer depends on env vars.
    - **Status:** Partly done. Test setup no longer needs env vars (`tests/conftest.py` supplies safe defaults), so CI should stop failing for that reason. The workflow itself is unchanged: still Windows, no Postgres service, no frontend job, and `tests/test_placeholder.py` still exists.
-6. Write the journey test skeleton in `backend/tests/journey/test_core_journey.py`: async client, test database, stubbed `chat_completion`, with the steps that don't work yet marked `xfail`. Every later step extends this test.
-   - **Status:** Not started. Not started. The pieces it needs now exist: `tests/api/` has a seeded test database, an authenticated client and the migration rebuild.
+✅ 6. Write the journey test skeleton in `backend/tests/journey/test_core_journey.py`: async client, test database, stubbed `chat_completion`, with the steps that don't work yet marked `xfail`. Every later step extends this test.
+   - **Status:** Done with step 43, as a complete test rather than a skeleton, at `tests/api/journey/` so that it shares the database fixtures. No step is marked `xfail`.
 
 ## Stage B: Consolidate and make the data trustworthy (1–1.5 weeks) — ✅ done, except step 13
 
@@ -80,7 +80,7 @@ Recommended choice in bold.
 ✅ 11. Treat a malformed token `sub` as 401. Wrap all three PDF-parsing call sites so a corrupt file returns 400, and run parsing off the event loop. Sanitize the download filename. Stop logging emails.
     - **Status:** Done. Committed in `82bac8a`.
 ✅ 12. Delete confirmed dead backend code: `services/resume/ats_checks.py` and its import, `core/config.py`, `services/career_planner/practice_modes.py`, the ORM models `AgentFeedback`, `GoalEvent`, `ReadinessScore`, `Embedding`, `CapabilityRequirement` (with a migration dropping their tables), `models/retrieval.py` and the unused pgvector dependency, `backend/ollama/`, and the other unreferenced definitions the audit listed. Review each remaining unused definition before deleting.
-    - **Gate:** the authorization matrix and the JD steps of the journey test pass in CI, and a JD added in the UI appears in every picker. ◐ Authorization matrix passes locally (not in CI); the journey test does not exist yet. The JD flow is fixed in code but not seen in the UI.
+    - **Gate:** the authorization matrix and the JD steps of the journey test pass in CI, and a JD added in the UI appears in every picker. ◐ Authorization matrix and journey test (written in step 43) pass locally, not in CI. The JD flow is fixed in code but not seen in the UI.
     - **Status:** Done. Committed in `82bac8a`, with two deviations: the `pgvector` dependency stays because the first migration imports it, and `services/projects/curation.py` (used only by tests) and `app/scripts/clear_db.py` (truncates every table in the configured database) were left for you to decide.
 13. Stand up a staging environment now, even if rough, and deploy to it from CI, so deployment problems surface early. (The production work remains in Stage H.)
     - **Status:** Not started. Not started. Needs your hosting choice and an account (`docs/user-actions.md`).
@@ -152,7 +152,7 @@ New tables: `TailoredResume` (user, JD, version, structured JSON, status, create
     - **Status:** Done. The endpoint `/resume/tailor/{job}`, its report, prompt, schemas and the `ResumeTailoring` panel are removed, the ranking now lives in `services/resume/selection.py`, and the Resume page links to the Tailored Resume page. Migration `f2c7d4e9a1b3` drops the cache table `resume_tailoring_reviews` (the downgrade restores it empty).
     - **Gate:** zero unflagged unsupported claims across 10 profile and JD test pairs (an automated test diffs facts against sources), and the output still works with the LLM stubbed to fail. ✅ `tests/api/test_resume_gate.py`: ten made-up profile and job pairs, a stand-in model that tries nine ways of overstating, and a separate checker that compares every fact on each resume and in each download with the database; all ten also pass with the model unreachable or answering nonsense. **The first run failed on four profiles:** skills were listed under names from the table shared by all users, so a resume could show another person's spelling, or keep a skill since removed from an item. Fixed: a skill is now named as a source it cites names it, and is left off when the record no longer says it. Switching off the rewrite check also makes the gate fail. **What it doesn't show:** the pairs are made up, no real model was used, and the word-for-word rule it checks can't judge punctuation.
 
-## Stage G: Pillar 4, interview kit and practice (about 1.5–2 weeks) — ◐ in progress
+## Stage G: Pillar 4, interview kit and practice (about 1.5–2 weeks) — ✅ done (not yet tried with a real profile)
 
 New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evidence refs, gap flag), `PracticeAttempt` (answer, feedback, score).
 
@@ -166,8 +166,9 @@ New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evid
     - **Status:** Done. `POST /interview/questions/{id}/attempts` reviews an answer and saves it (table `practice_attempts`, migration `c5f0a7b2d4e6`), `GET` on the same path lists the attempts, and `GET /interview/kits/{job}/progress` gives, per category, the questions practised and their average score, and the weakest area (`services/interview/practice.py`). **Instead of `/interview/ask`, chosen with you:** that pipeline takes only a question and writes its own answer, so it is unchanged and practice has its own review. One model call says which headings of the question's answer outline the answer covers and what to improve; a heading counts only with a quote that is really in the answer, the score is the share of headings so counted, and a remark bringing in a figure or technology found nowhere else is dropped. Without a model, including a used-up daily limit, the answer is saved unscored. **Rules, with no model** (`record_check.py`), warn about figures and technologies in the answer that the user's record doesn't show. A question's score is its latest scored attempt; the weakest area is the category answered least well, counting an unanswered question as nothing. Verified by tests with a stand-in model, and by reviewing 5 made-up answers with the real model: the full one scored 100%, the vague, off-topic and "mark everything covered" ones 0, and an invented one 2 of 6 headings, with its figures and one technology warned about; that run showed that a technology named in the question wasn't warned about, which is fixed and covered by tests. **Limits:** the score measures which parts were covered, not how well or whether they are true; claims made in words, such as an employer or "I led the team", aren't checked; a figure that is anywhere in the record passes, whichever work it belongs to; some technologies named by ordinary words are only recognised written with a capital mid-sentence, and "C" not at all; "how would you" questions are judged against headings that expect a real example. No page, and no route yet to create or read a kit, so it can't be tried in the app. **For step 43:** add routes for `generate_interview_kit` with `save_new_kit`, for the kit with `answer_outlines`, and for `remap_kit`.
 ✅ 42. Study plan for gaps, feeding the career planner and linking to LeetCode topics.
     - **Status:** Done. `build_study_plan` in `services/interview/study_plan.py` (route `GET /interview/study-plan/{job}`) lists the job's skills the record shows too little of, by the skill gap's own matching, most pressing first, each with why, what to do and the interview kit questions about it; then questions with no example, answers scored under half, and the weakest category. No model calls, nothing saved, no migration. **LeetCode:** data structures and algorithms gaps get five of their topics, least practised first, with the number solved; a skill that is itself a topic, SQL and concurrency get theirs; other skills get none. **Career planner:** a goal with a job now sends its study plan (cut to 12 gaps) to the model, which is told to follow its order, may plan outside the goal's usual subjects for a gap, and must not name particular problems; the response and saved plan carry the study plan, and each day that speaks of LeetCode links the topics it names (set by code; links from the model are ignored). Without the model, days work through the gaps first. Verified by tests with a stand-in model, and by two 6-day plans for a made-up profile with the real model: both followed the gaps; the first named a problem by title and gave one practice day no LeetCode task, so the prompt was tightened, and the second did neither. **Limits:** the LeetCode link format couldn't be checked (the site refuses automated fetches); the days' text is the model's and isn't checked against the record; a plan of a few days can't give many gaps a day each; the planner page shows neither the study plan nor the links yet. **For step 43:** show the study plan and the links.
-43. Kit UI: category tabs, evidence chips, practice flow, progress bar. Mount or delete `InterviewToolkitPanel` and the other orphaned project components.
-    - **Gate:** the whole journey test passes with a stubbed LLM, from sources to a tailored resume and an interview kit.
+✅ 43. Kit UI: category tabs, evidence chips, practice flow, progress bar. Mount or delete `InterviewToolkitPanel` and the other orphaned project components.
+    - **Status:** Done. A new Interview Kit page (`/interview-kit`, in the sidebar; the Skill Gap page's practice link now opens it): generate a kit for a saved job, a tab per category and one for the study plan, evidence chips or "Thin evidence" on each question, the answer outline, practice with feedback and earlier attempts, a progress bar with the weakest area, and "Match again" when the profile has changed. New routes: `GET` and `POST /interview/kits/{job}`, and `POST .../versions/{n}/evidence` (`services/interview/kit_view.py`). The career planner now shows each day's LeetCode links. **Orphaned project components:** all five deleted (their jobs are done by the kit, the project details panel, the project list and the profile page's link confirmation). Verified by tests, a frontend build and a headless-browser run against a throwaway database with a stand-in model (light, dark and a 600px window); **not tried with the real model on this page or with your own profile**. **Limits:** the study plan appears on this page only, not on the planner; a draft answer is lost on leaving the page or changing job or version; at 600px the sidebar still takes about a quarter of the width (step 57); the main script is 647 kB (step 55).
+    - **Gate:** the whole journey test passes with a stubbed LLM, from sources to a tailored resume and an interview kit. ✅ `tests/api/journey/test_core_journey.py`: a new account uploads a resume, syncs GitHub and LeetCode, pastes LinkedIn, reviews the profile, adds a job, reads the fit, generates, approves and exports a resume, generates a kit, practises, and gets a study plan and career plan, all through the real routes. The model, GitHub and LeetCode are stand-ins, and it runs locally, not in CI (step 5).
 
 ## Stage H: Hardening and account basics (about 1.5 weeks)
 
