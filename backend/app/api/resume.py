@@ -44,15 +44,15 @@ from app.services.projects.reconcile import reconcile_projects
 router = APIRouter(prefix="/resume", tags=["resume"])
 
 
-def _content_disposition(filename: str) -> str:
-    """Builds an `inline` Content-Disposition header from a user-supplied
+def _content_disposition(filename: str, disposition: str = "inline") -> str:
+    """Builds a Content-Disposition header from a user-supplied
     filename. The plain `filename` is reduced to safe ASCII (no quotes,
     slashes or control characters, so it can't break out of the header),
     and the original name is passed percent-encoded in `filename*`.
     """
     safe = "".join(c if (c.isascii() and (c.isalnum() or c in "._- ")) else "_" for c in filename).strip()
     safe = safe or "resume.pdf"
-    return f"inline; filename=\"{safe}\"; filename*=UTF-8''{quote(filename, safe='')}"
+    return f"{disposition}; filename=\"{safe}\"; filename*=UTF-8''{quote(filename, safe='')}"
 
 
 def _is_pdf(raw_bytes: bytes) -> bool:

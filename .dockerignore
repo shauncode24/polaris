@@ -1,0 +1,11 @@
+# The images install their own dependencies, and secrets are passed in at run time.
+**/.env
+**/.venv
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/dist
+.git

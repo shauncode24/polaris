@@ -358,6 +358,8 @@
   background: var(--accent-soft);
 }
 
+.tr-download { gap: 8px; }
+
 /* Score */
 .tr-score {
   align-items: stretch;

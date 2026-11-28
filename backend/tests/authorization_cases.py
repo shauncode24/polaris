@@ -44,6 +44,7 @@ CASES = [
     Case("GET", "/tailored-resumes/{job_id}?version=1"),
     Case("POST", "/tailored-resumes/{job_id}"),
     Case("PATCH", "/tailored-resumes/{job_id}/versions/{resume_version}", json={"lines": []}),
+    Case("GET", "/tailored-resumes/{job_id}/versions/{resume_version}/export?format=pdf"),
     Case("POST", "/resume/analyze?job_intelligence_id={job_id}"),
     Case("GET", "/interview/sessions/{session_id}", owner_status=200),
     Case("POST", "/interview/correct", json={"parent_response_id": "{response_id}", "correction": "x"}),

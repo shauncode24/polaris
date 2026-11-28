@@ -5,7 +5,6 @@ Both are measured by the same rules, on the text a screening system would read.
 Only wording that is on the resume counts, so a suggestion changes the score
 once it is accepted. No model calls, and nothing is saved.
 """
-from datetime import date
 from types import SimpleNamespace
 
 from sqlalchemy import select
@@ -13,65 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import Education, Experience, Project, Resume
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
-from app.schemas.resume.tailored import ResumeLine, TailoredResumeDocument
+from app.schemas.resume.tailored import TailoredResumeDocument
 from app.schemas.resume.tailored_score import KeywordCoverage, ResumeScore, ScoreCard, UploadedResume
 from app.services.resume.analysis.ats_scorer_v2 import analyze_ats_v2
 from app.services.resume.analysis.keywords import analyze_keywords, job_keywords
-
-# Headings and separators are plain ASCII: the checks count anything else
-# against a resume.
-_HEADINGS = {
-    "summary": "Summary", "experience": "Experience", "projects": "Projects",
-    "education": "Education", "skills": "Skills",
-}
-
-
-def _date_text(written: str | None, day: date | None) -> str:
-    return written or (day.strftime("%b %Y") if day else "")
-
-
-def _dates(entry, ongoing: bool = False) -> str:
-    start = _date_text(entry.start_date_text, entry.start_date)
-    end = _date_text(entry.end_date_text, entry.end_date) or ("Present" if ongoing else "")
-    return " - ".join(filter(None, [start, end]))
-
-
-def _bullets(lines: list[ResumeLine]) -> list[str]:
-    return [f"- {line.text}" for line in lines if line.text]
-
-
-def plain_text(document: TailoredResumeDocument) -> str:
-    """The resume as text, in the document's section order."""
-    header = document.header
-    contact = [header.email, header.phone, header.location, *(link.url for link in header.links)]
-    sections = {
-        "summary": [document.summary.text] if document.summary and document.summary.text else [],
-        "experience": [
-            part
-            for e in document.experience
-            for part in [f"{e.role}, {e.company}", _dates(e), *_bullets(e.bullets)]
-        ],
-        "projects": [
-            part
-            for p in document.projects
-            for part in [p.name, p.url, ", ".join(p.technologies), *_bullets(p.bullets)]
-        ],
-        "education": [
-            part
-            for e in document.education
-            for part in [
-                e.institution, ", ".join(filter(None, [e.degree, e.field_of_study])),
-                _dates(e, e.is_current), *_bullets(e.bullets),
-            ]
-        ],
-        "skills": [", ".join(skill.name for skill in document.skills)] if document.skills else [],
-    }
-    out = [header.full_name, " | ".join(filter(None, contact))]
-    for name in document.section_order:
-        if sections[name]:
-            out += ["", _HEADINGS[name], *filter(None, sections[name])]
-    return "\n".join(out)
-
+from app.services.resume.render import plain_text
 
 def _score(text: str, keywords: set[str], experiences, projects, education, skills=None) -> ScoreCard:
     ats = analyze_ats_v2(
@@ -89,7 +34,10 @@ def _score(text: str, keywords: set[str], experiences, projects, education, skil
     )
 
 
-def _score_document(document: TailoredResumeDocument, keywords: set[str]) -> ScoreCard:
+def score_document(document: TailoredResumeDocument, keywords: set[str], text: str | None = None) -> ScoreCard:
+    """The tailored resume's score; `text` is its wording as read back from an
+    exported file, to score that instead.
+    """
     # The checks read the shape of stored rows, so the document is given that shape.
     experiences = [
         SimpleNamespace(
@@ -106,7 +54,7 @@ def _score_document(document: TailoredResumeDocument, keywords: set[str]) -> Sco
         for p in document.projects
     ]
     return _score(
-        plain_text(document), keywords, experiences, projects, document.education,
+        plain_text(document) if text is None else text, keywords, experiences, projects, document.education,
         {skill.name for skill in document.skills} or None,
     )
 
@@ -118,7 +66,7 @@ async def score_resume(
     same job. `before` is None when the user has uploaded none.
     """
     keywords = job_keywords(job)
-    result = ResumeScore(after=_score_document(document, keywords))
+    result = ResumeScore(after=score_document(document, keywords))
 
     upload = await db.scalar(
         select(Resume).where(Resume.user_id == user_id).order_by(Resume.created_at.desc()).limit(1)

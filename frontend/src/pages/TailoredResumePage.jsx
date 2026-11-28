@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { listJobIntelligenceProfiles } from '../api/jobIntelligence'
-import { changeTailoredResume, generateTailoredResume, getTailoredResume } from '../api/tailoredResume'
+import {
+  changeTailoredResume, downloadTailoredResume, generateTailoredResume, getTailoredResume,
+} from '../api/tailoredResume'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ContactHeader from '../components/resume/tailored/ContactHeader'
+import DownloadCard from '../components/resume/tailored/DownloadCard'
 import ResumeSections from '../components/resume/tailored/ResumeSections'
 import ScorePanel from '../components/resume/tailored/ScorePanel'
 import './TailoredResumePage.css'
@@ -213,6 +216,13 @@ export default function TailoredResumePage() {
               )}
               {resume.document.notice && <div className="tr-banner">{resume.document.notice}</div>}
               <ScorePanel score={resume.score} />
+              <DownloadCard
+                key={`download-${jobId}-${resume.version}`}
+                waiting={waiting}
+                evidence={resume.evidence}
+                busy={busy}
+                onDownload={(format) => downloadTailoredResume(token, current.job.id, resume.version, format)}
+              />
               <p className="tr-hint">
                 {waiting === 0
                   ? 'No suggestions are waiting for you.'

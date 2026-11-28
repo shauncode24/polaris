@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 35. Unmarked steps (36 to 71, plus 6 and 13) are not started.
+Updated after step 36. Unmarked steps (37 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -15,16 +15,16 @@ Updated after step 35. Unmarked steps (36 to 71, plus 6 and 13) are not started.
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
-| F. Tailored resume | ◐ in progress | 29 to 35 done; 36 and 37 not started |
+| F. Tailored resume | ◐ in progress | 29 to 36 done; 37 not started |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**30 of 71 steps done, 1 partial, 2 skipped, 38 not started** (36 of them in Stages F to K).
+**31 of 71 steps done, 1 partial, 2 skipped, 37 not started** (35 of them in Stages F to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 748 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 791 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -146,7 +146,8 @@ New tables: `TailoredResume` (user, JD, version, structured JSON, status, create
     - **Status:** Done. A new Tailored Resume page (`/tailored-resume`, in the sidebar and linked from the Skill Gap page): generate for a saved job, compare each suggestion with the original, accept, reject, undo or edit each line, move sections, and open the evidence behind any line, entry or skill. A flagged suggestion can only be accepted after confirming it is accurate, which the server enforces. The notice from step 33 and an out-of-date warning are shown; each generation is a new version and earlier ones stay available. New routes under `/tailored-resumes/{job}`. **Instead of step 32's plan:** the browser sends only the user's choices, never a document, so original wording, sources and flags can't be altered from outside and nothing needs `unsupported_sources` on the way in (it still has no caller). Generating works with the daily limit used up, giving the user's own wording. Verified by tests, a frontend build, and a headless-browser run against a throwaway database with a stand-in model (light, dark and a 600px window); **not tried with the real model or your own profile**. **Not editable:** name, email and location, entry headings, the skills list and bullet order, and a bullet can't be removed from the resume (phone and LinkedIn were added after step 35).
 ✅ 35. Scoring: before and after keyword coverage and ATS checks, using the `analysis` engine on the generated resume.
     - **Status:** Done. The Tailored Resume page compares the resume with the latest uploaded one: how many of the job's required and implied skills each names (and which were gained or lost), the engine's ATS score with its six parts, and the warnings on the tailored one. `services/resume/tailored_score.py` renders the document as plain text and runs the existing ATS and keyword checks on both. No model calls, nothing saved; the score changes as suggestions are accepted or lines edited. Verified by tests, a frontend build and a headless-browser run on made-up data. **Limits:** keywords match only in the job's wording ("Postgres" doesn't count for "PostgreSQL"); the ATS rules are the engine's heuristics, not a real screening system. **Fixed afterwards:** a listed skill now takes the job's spelling when both are the same name (the list from step 32, now `services/resume/skill_names.py`; a different term is never swapped in; project technologies keep the user's spelling, and saved versions change only when generated again). Phone number and LinkedIn link can be edited under the name; they are checked, saved to the account (migration `e1b6c3d8f5a2`) and used for later versions. The ATS phone rule now finds numbers it missed, such as `+91 98765 43210` and `+44 20 7946 0958`, and needs at least 9 digits, so scores of uploaded resumes can change too. **For step 36:** the tailored side is scored from plain text, not from the exported file; check that text extracted from the export scores the same.
-36. Export: DOCX through `python-docx`, PDF through ReportLab, both in an ATS-safe single-column layout built from the same structured resume. Bundle a font file so accented names and symbols display correctly. Store a version per JD. Prove the PDF export inside the Docker image now, not at deployment.
+✅ 36. Export: DOCX through `python-docx`, PDF through ReportLab, both in an ATS-safe single-column layout built from the same structured resume. Bundle a font file so accented names and symbols display correctly. Store a version per JD. Prove the PDF export inside the Docker image now, not at deployment.
+    - **Status:** Done. The Tailored Resume page downloads the open version as PDF or Word (`GET /tailored-resumes/{job}/versions/{n}/export`). Both, and the score, are built from the same text blocks (`services/resume/render.py`), so they hold the same words in the same order; text read back from either file scores the same as the editor shows. Only approved wording is exported, and the page says when suggestions are still waiting or cited items have been removed or hidden. The PDF embeds DejaVu Sans (`app/assets/fonts`, with its licence). Versions per job were already stored (step 29); files are made on request and not kept. A `.dockerignore` was added. Verified by tests, a headless-browser run, the export tests and a sample PDF inside the backend image with networking off, and a LibreOffice rendering of the Word file; **not opened in Microsoft Word**, and the frontend image was not rebuilt. **Limits:** the PDF refuses, with a message, characters the font lacks (Chinese, Devanagari and other scripts, emoji) and right-to-left text, while the Word file takes them; A4 only; editing a version after downloading it changes what that version downloads, so what was sent isn't kept.
 37. Retire the advisory tailoring report: fold its ranking into the generator and remove the old endpoint and `ResumeTailoring` component.
     - **Gate:** zero unflagged unsupported claims across 10 profile and JD test pairs (an automated test diffs facts against sources), and the output still works with the LLM stubbed to fail.
 

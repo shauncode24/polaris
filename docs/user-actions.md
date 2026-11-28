@@ -21,7 +21,9 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 32.** Done.
 - [x] **Commit step 33.** Done.
 - [x] **Commit step 34.** Done.
-- [ ] **Commit step 35.**
+- [x] **Commit step 35.** Done, with the skill spelling and contact detail fixes.
+- [ ] **Commit step 36.**
+- [ ] **Open a downloaded resume in Microsoft Word and a PDF reader** and tell me what should look different. It is A4; say if you need US Letter. Run `uv sync` from `backend/` on any other machine first (ReportLab is new).
 - [ ] **Try the Tailored Resume page** (after migrating): pick one of your jobs, generate, and accept, reject and edit a few lines. Tell me whether the confirmation warnings are too frequent with real suggestions, and what you miss being able to change (skills, job headings and removing a bullet aren't editable yet). Add your phone number and LinkedIn link under your name.
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
