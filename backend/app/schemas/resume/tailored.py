@@ -136,6 +136,9 @@ class TailoredResumeDocument(BaseModel):
     education: list[EducationEntry] = []
     skills: list[SkillEntry] = []
     section_order: list[Section] = Field(default_factory=lambda: list(get_args(Section)))
+    # What the user should know about how this was generated, such as that the
+    # model failed. Not part of the resume.
+    notice: str | None = None
 
     def lines(self) -> list[ResumeLine]:
         entries = [*self.experience, *self.projects, *self.education]

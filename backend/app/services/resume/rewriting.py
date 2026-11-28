@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import LLMBudgetError, LLMError, LLMReplyError, Prompt, llm_json
+from app.core.llm import LLMError, LLMReplyError, Prompt, llm_json
 from app.prompts.resume.bullet_rewriting import BULLET_REWRITE_SYSTEM_PROMPT
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 from app.schemas.resume.tailored import ResumeLine, TailoredResumeDocument
@@ -29,6 +29,9 @@ from app.services.resume.grounding import ground_line
 _MAX_GROWTH = 1.5
 _GROWTH_ALLOWANCE = 80  # characters; lets a very short bullet grow
 _ANSWER_TOKENS = 400
+# After this many bullets in a row with unusable replies, the rest are not worth
+# the user's calls.
+_MAX_UNUSABLE_IN_A_ROW = 3
 
 _BULLET_MARK = re.compile(r"^(?:[-*•·‣▪]|\d+[.)])\s+")
 
@@ -103,9 +106,10 @@ async def rewrite_bullets(
     project bullets that mention what the job asks for. None when the user has
     no such job.
 
-    A bullet whose reply can't be used keeps only its original wording. If the
-    model can't be used at all, the remaining bullets are not tried. Either way
-    `problem` says why. Running out of the day's calls raises `LLMBudgetError`.
+    A bullet whose reply can't be used keeps only its original wording. The
+    remaining bullets are not tried once the model can't be used (including
+    when the day's calls run out), or after several unusable replies in a row.
+    Either way `problem` says why, and the rewrites already made are kept.
     """
     job = await get_job_intelligence(db, user_id, job_intelligence_id)
     if job is None:
@@ -117,7 +121,7 @@ async def rewrite_bullets(
     lines: list[ResumeLine] = [
         line for entry in [*result.experience, *result.projects] for line in entry.bullets
     ]
-    problem = None
+    problem, unusable = None, 0
     for line in lines:
         original = (line.original or "").strip()
         terms = _job_terms(original, names, aliases)
@@ -125,14 +129,15 @@ async def rewrite_bullets(
             continue
         try:
             rewrite = await _rewrite(original, terms)
-        except LLMBudgetError:
-            raise
         except LLMReplyError as e:
-            problem = str(e)
+            problem, unusable = str(e), unusable + 1
+            if unusable == _MAX_UNUSABLE_IN_A_ROW:
+                break
             continue
         except LLMError as e:
             problem = str(e)
             break
+        unusable = 0
         if not _same_wording(rewrite, original):
             line.rewrite, line.decision = rewrite, "pending"  # a new suggestion, not yet decided on
             ground_line(line)

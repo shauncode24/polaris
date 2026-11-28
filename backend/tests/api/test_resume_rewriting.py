@@ -1,7 +1,7 @@
 """Rewording a tailored resume's bullets. Real database; stand-in model."""
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 from openai import RateLimitError
@@ -220,18 +220,46 @@ def test_a_missing_key_is_reported_without_any_request(seeded, model, monkeypatc
     assert model.requests == []
 
 
-def test_running_out_of_calls_is_not_hidden(seeded, model, monkeypatch):
-    user, job, document = resume(["Tuned Postgres queries."])
+def test_running_out_of_calls_stops_the_run_and_keeps_what_was_written(seeded, model, monkeypatch):
+    user, job, document = resume(["Tuned Postgres queries.", "Backed up Postgres.", "Upgraded Postgres."])
+    days = iter([date.today(), None])  # one call left
 
-    async def none_left(_user_id):
-        return None
-    monkeypatch.setattr(llm_budget, "reserve", none_left)
+    async def reserve(_user_id):
+        return next(days)
+    monkeypatch.setattr(llm_budget, "reserve", reserve)
+    model.will({"rewrite": "Optimised PostgreSQL queries."})
     token = llm_budget.current_user.set(user.id)
     try:
-        with pytest.raises(llm.LLMBudgetError):
-            rewrite(user, job, document)
+        result = rewrite(user, job, document)
     finally:
         llm_budget.current_user.reset(token)
+
+    assert [line.rewrite for line in result.document.experience[0].bullets] == [
+        "Optimised PostgreSQL queries.", None, None]
+    assert "today's limit" in result.problem
+    assert len(model.requests) == 1
+
+
+def test_unusable_replies_in_a_row_stop_the_run(seeded, model):
+    user, job, document = resume([f"Tuned Postgres cluster {name}." for name in "abcde"])
+    model.will(*["nonsense"] * 6)  # two attempts at each of three bullets
+
+    result = rewrite(user, job, document)
+
+    assert len(model.requests) == 6
+    assert "unreadable" in result.problem
+
+
+def test_a_usable_reply_starts_the_count_again(seeded, model):
+    user, job, document = resume([f"Tuned Postgres cluster {name}." for name in "abcde"])
+    two_bad_bullets = ["nonsense"] * 4
+    model.will(*two_bad_bullets, {"rewrite": "Tuned PostgreSQL cluster c."}, *two_bad_bullets)
+
+    result = rewrite(user, job, document)
+
+    assert len(model.requests) == 9
+    assert [bool(line.rewrite) for line in result.document.experience[0].bullets] == [
+        False, False, True, False, False]
 
 
 def test_every_rewrite_is_checked_against_its_bullet(seeded, model):

@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 32. Unmarked steps (33 to 71, plus 6 and 13) are not started.
+Updated after step 33. Unmarked steps (34 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -15,16 +15,16 @@ Updated after step 32. Unmarked steps (33 to 71, plus 6 and 13) are not started.
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
-| F. Tailored resume | ◐ in progress | 29 to 32 done; 33 to 37 not started |
+| F. Tailored resume | ◐ in progress | 29 to 33 done; 34 to 37 not started |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**27 of 71 steps done, 1 partial, 2 skipped, 41 not started** (39 of them in Stages F to K).
+**28 of 71 steps done, 1 partial, 2 skipped, 40 not started** (38 of them in Stages F to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 634 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 648 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -140,7 +140,8 @@ New tables: `TailoredResume` (user, JD, version, structured JSON, status, create
     - **Status:** Done. `rewrite_bullets` in `services/resume/rewriting.py` makes one call per experience or project bullet. A call holds the bullet's own wording and the job's names for the skills that bullet already mentions: no role, company, other bullet or other requirement. Rewrites are stored as pending suggestions, so the resume keeps the original wording until the user accepts one. A bullet that mentions none of the job's skills is not sent, since there is no job wording to move it toward; education lines are not rewritten and no summary is written. An unusable reply skips that bullet, an unavailable model stops the run, both are reported in `problem` (for step 33's notice), and the daily limit raises as elsewhere. Nothing calls it yet. Verified by tests and by rewriting 13 made-up bullets with the real model. **For step 32:** after the prompt was tightened, the model still named something the bullet didn't in 3 of the 13 ("version control" became "Git", "containerised" became "Dockerized", "data warehouse" became "Redshift"; the last two pairings were made up for the test). The gate must compare against the bullet's literal wording: matching by skill name would pass "Git", because "version control" counts as Git. It also saw one rewrite read worse than its original.
 ✅ 32. Grounding gate: every number, technology and claim in a rewritten bullet must exist in its source facts. Violations are dropped or flagged "needs your confirmation". Reuse the approach in `services/interview/grounding.py`.
     - **Status:** Done. `services/resume/grounding.py`, deterministic, applied to every rewrite as it is made. It compares the rewrite with the bullet's literal words, not with skill names. A figure the bullet doesn't state removes the rewrite. Any other word added or left out, a changed symbol (`~`, `+`, `$`), or the same words in a new order, is kept and flagged in the line's `flags`, in words for the user. Only listed spellings of one name pass ("Postgres" and "PostgreSQL", "AWS" and "Amazon Web Services"). `unsupported_sources` checks that everything a document cites exists, is the user's and is not hidden, and that each line's original is the cited bullet. Of the 10 changed rewrites saved from step 31's real-model runs, 3 passed and 7 were flagged, including every unsupported one; at least one flagged rewrite was a fair paraphrase. **Limits:** fair paraphrases and reorderings are flagged too, so most real rewording will ask for confirmation; ordinary punctuation, hyphens, slashes and capital letters are not compared; entry headings, technologies and skill names are not compared with their sources. **For step 34:** run `ground_line` on every line and `unsupported_sources` on any document the browser sends (nothing calls the latter yet), and make accepting a flagged rewrite an explicit confirmation.
-33. Deterministic fallback: if the LLM fails, return the original bullets ordered by relevance with a notice.
+✅ 33. Deterministic fallback: if the LLM fails, return the original bullets ordered by relevance with a notice.
+    - **Status:** Done. `generate_tailored_resume` in `services/resume/generation.py` chooses the evidence, asks for rewrites, and never raises a model failure: the resume keeps the user's wording, the bullets most relevant to the job first, and a new `notice` field on the document says what happened and why. It covers a missing key, rate limits, server errors, timeouts, unreadable replies and a used-up daily limit. Rewrites made before a failure are kept, and the notice then says only some bullets were reworded. **Changed from step 31:** running out of the day's calls partway no longer raises, so those rewrites aren't lost; and three unusable replies in a row now end the run. Nothing calls it, saves its result or shows the notice yet (step 34). Verified by tests with a stand-in model.
 34. Editor UI: original against rewritten, per-bullet accept, reject or edit, section reordering, evidence shown for each line.
 35. Scoring: before and after keyword coverage and ATS checks, using the `analysis` engine on the generated resume.
 36. Export: DOCX through `python-docx`, PDF through ReportLab, both in an ATS-safe single-column layout built from the same structured resume. Bundle a font file so accented names and symbols display correctly. Store a version per JD. Prove the PDF export inside the Docker image now, not at deployment.
