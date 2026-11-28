@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis, getResumeCoherence, getResumeTailoring, getResumeEvolution } from '../api/resume'
-import { listParsedJobs } from '../api/skillGap'
+import { getResumeWorkspace, uploadResume, runResumeReview, runResumeAnalysis, getResumeCoherence, getResumeEvolution } from '../api/resume'
 import Sidebar from '../components/layout/Sidebar'
 import TopBar from '../components/layout/TopBar'
 import ResumeHeader from '../components/resume/ResumeHeader'
@@ -15,7 +15,6 @@ import SkillsCoveragePanel from '../components/resume/SkillsCoveragePanel'
 import ResumeVsJobsPanel from '../components/resume/ResumeVsJobsPanel'
 import ResumeEvolution from '../components/resume/ResumeEvolution'
 import ResumeCoherence from '../components/resume/ResumeCoherence'
-import ResumeTailoring from '../components/resume/ResumeTailoring'
 import './ResumePage.css'
 
 export default function ResumePage() {
@@ -38,12 +37,6 @@ export default function ResumePage() {
   const [coherenceLoading, setCoherenceLoading] = useState(false)
   const [coherenceError, setCoherenceError] = useState(null)
 
-  // Tailoring
-  const [tailoring, setTailoring] = useState(null)
-  const [tailoringLoading, setTailoringLoading] = useState(false)
-  const [tailoringError, setTailoringError] = useState(null)
-  const [jobs, setJobs] = useState([])
-
   async function loadWorkspace() {
     try {
       const data = await getResumeWorkspace(token)
@@ -64,17 +57,9 @@ export default function ResumePage() {
     }
   }
 
-  async function loadJobs() {
-    try {
-      const data = await listParsedJobs(token)
-      setJobs(Array.isArray(data) ? data : data?.items ?? [])
-    } catch (_) {}
-  }
-
   useEffect(() => {
     loadWorkspace()
     loadEvolution()
-    loadJobs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
@@ -128,19 +113,6 @@ export default function ResumePage() {
       setCoherenceError(e.message)
     } finally {
       setCoherenceLoading(false)
-    }
-  }
-
-  async function handleFetchTailoring(jobId, regenerate = false) {
-    setTailoringLoading(true)
-    setTailoringError(null)
-    try {
-      const data = await getResumeTailoring(token, jobId, regenerate)
-      setTailoring(data)
-    } catch (e) {
-      setTailoringError(e.message)
-    } finally {
-      setTailoringLoading(false)
     }
   }
 
@@ -267,6 +239,16 @@ export default function ResumePage() {
 
               <ResumeVsJobsPanel resume_vs_jobs={workspace.resume_vs_jobs} />
 
+              <div className="resume-tailor">
+                <div>
+                  <h2>Tailor your resume to a job</h2>
+                  <p>Build a resume for one of your saved jobs from your own evidence, then download it.</p>
+                </div>
+                <Link to="/tailored-resume" className="resume-hero__btn resume-hero__btn--primary">
+                  Open Tailored Resume
+                </Link>
+              </div>
+
               {/* Tier 3 — advanced / on-demand intelligence */}
               <div className="resume-advanced">
                 <ResumeAnalysisPanel
@@ -281,14 +263,6 @@ export default function ResumePage() {
                   data={coherence}
                   loading={coherenceLoading}
                   error={coherenceError}
-                />
-
-                <ResumeTailoring
-                  jobs={jobs}
-                  onFetch={handleFetchTailoring}
-                  data={tailoring}
-                  loading={tailoringLoading}
-                  error={tailoringError}
                 />
 
                 <ResumeEvolution evolution={evolution} />

@@ -29,10 +29,8 @@ from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, 
 
 from uuid import UUID
 from app.schemas.resume.resume_coherence import CoherenceReport
-from app.schemas.resume.resume_tailoring import TailoringReport
 from app.schemas.resume.resume_evolution import EvolutionReport
 from app.services.resume.coherence_narrative import generate_coherence_report, get_cached_coherence_report
-from app.services.resume.tailoring_llm import generate_tailoring_report, get_cached_tailoring_report
 from app.services.resume.evolution import build_evolution_report
 
 from app.services.identity.identity_refresh import trigger_identity_refresh
@@ -435,40 +433,6 @@ async def get_resume_coherence(
 
     return await run_in_background(user_id, "resume_coherence", work, inputs=(resume_id, target_role))
 
-
-@router.get("/tailor/{job_intelligence_id}", response_model=TailoringReport)
-async def get_resume_tailoring(
-    job_intelligence_id: UUID,
-    regenerate: bool = False,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    if await get_job_intelligence(db, current_user.id, job_intelligence_id) is None:
-        raise HTTPException(status_code=404, detail="Job not found.")
-
-    result = await db.execute(
-        select(Resume).where(Resume.user_id == current_user.id).order_by(Resume.created_at.desc()).limit(1)
-    )
-    resume = result.scalar_one_or_none()
-    if resume is None:
-        raise HTTPException(status_code=400, detail="No uploaded resume found — upload a resume first.")
-
-    if not regenerate:
-        cached = await get_cached_tailoring_report(db, current_user.id, resume.id, job_intelligence_id)
-        if cached is not None:
-            return cached
-
-    user_id, resume_id = current_user.id, resume.id
-
-    async def work(job_db: AsyncSession):
-        try:
-            return await generate_tailoring_report(job_db, user_id, resume_id, job_intelligence_id)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-    return await run_in_background(
-        user_id, "resume_tailoring", work, inputs=(resume_id, job_intelligence_id),
-    )
 
 @router.get("/evolution", response_model=EvolutionReport)
 async def get_resume_evolution(

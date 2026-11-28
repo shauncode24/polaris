@@ -8,7 +8,6 @@ to fall back on when rewriting isn't possible.
 Only current, visible evidence is used. Nothing the job asks for is listed
 unless the user has evidence of it.
 """
-import re
 from datetime import date
 from typing import get_args
 
@@ -17,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.facts import Education, Experience, Project, Resume, User
 from app.models.github_analysis import GithubProjectAnalysis
-from app.models.structure import Skill
+from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 from app.schemas.resume.tailored import (
     EducationEntry,
     ExperienceEntry,
@@ -39,12 +38,11 @@ from app.services.evidence.confidence import (
 )
 from app.services.evidence.matching import known_canonicals, mentions_any, skill_aliases
 from app.services.evidence.review import dedupe_visible
-from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.resume.claim_risk import apply_claim_risk_penalty, claim_risk_by_project_id
 from app.services.resume.dates import is_ongoing
 from app.services.resume.skill_names import same_name
-from app.services.resume.tailoring_ranking import TYPE_WEIGHTS, rank_items_for_jd
+from app.services.resume.sources import cited_rows, description_lines, stated_name
 
 MAX_EXPERIENCES = 4
 MAX_PROJECTS = 4
@@ -57,8 +55,27 @@ MAX_TECHNOLOGIES = 8
 MAX_SKILLS = 18
 MAX_SOURCES_PER_SKILL = 5
 
-_BULLET_MARK = re.compile(r"^\s*(?:[-*•·‣▪]|\d+[.)])\s+")
 _REQUIREMENT_ORDER = {"required": 0, "implicit": 1, "nice_to_have": 2}
+# How much a matched skill counts, by how the job asks for it.
+TYPE_WEIGHTS = {"required": 1.0, "implicit": 0.7, "nice_to_have": 0.3}
+
+
+def rank_items_for_jd(
+    items: list[dict],  # [{"id", "type", "label", "canonical_stack": [...]}]
+    canonical_skills: dict[str, str],  # canonical -> "required"|"implicit"|"nice_to_have"
+) -> list[dict]:
+    """Experiences and projects, those showing most of what the job asks for
+    first.
+    """
+    ranked = []
+    for item in items:
+        matched = [s for s in item.get("canonical_stack", []) if s in canonical_skills]
+        score = sum(TYPE_WEIGHTS.get(canonical_skills[s], 0.3) for s in matched)
+        ranked.append({
+            "id": item["id"], "type": item["type"], "label": item["label"],
+            "relevance_score": round(score, 2), "matched_skills": sorted(set(matched)),
+        })
+    return sorted(ranked, key=lambda r: r["relevance_score"], reverse=True)
 
 
 def _newest_first(db_rows: list) -> list:
@@ -94,11 +111,6 @@ def _lines(
         ResumeLine(original=text, sources=[SourceRef(kind=kind, id=row_id, bullet=number)])
         for number, text in best
     ]
-
-
-def description_lines(description: str | None) -> list[str]:
-    """A project description holds one bullet per line."""
-    return [_BULLET_MARK.sub("", line) for line in (description or "").splitlines()]
 
 
 def _technologies(
@@ -201,6 +213,7 @@ async def select_for_job(db: AsyncSession, user_id, job_intelligence_id) -> Sele
         others.sort(key=lambda r: not (projects_by_id[r["id"]].description or "").strip())  # described first
         chosen += others[:MIN_PROJECTS - len(chosen)]
     chosen_projects = [projects_by_id[r["id"]] for r in chosen]
+    chosen_ids = {*chosen_roles, *(r["id"] for r in chosen)}
 
     aliases = await skill_aliases(db, set(wanted))
 
@@ -238,10 +251,7 @@ async def select_for_job(db: AsyncSession, user_id, job_intelligence_id) -> Sele
         experience=[experience_entry(e) for e in chosen_experiences],
         projects=[project_entry(p) for p in chosen_projects],
         education=[education_entry(e) for e in education if e.institution.strip()],
-        skills=await _skills(
-            db, user_id, evidence, wanted, _job_wordings(job),
-            [*chosen_experiences, *chosen_projects], stack_of, canonical_of,
-        ),
+        skills=await _skills(db, user_id, evidence, wanted, _job_wordings(job), chosen_ids, repo_of),
     )
     selected = chosen_roles | {r["id"] for r in chosen}
     return Selection(
@@ -266,11 +276,12 @@ def _skill_name(name: str, job_wordings: list[str]) -> str:
     return next((wording for wording in job_wordings if same_name(wording, name)), name)
 
 
-async def _skills(
-    db, user_id, evidence, wanted, job_wordings, chosen_rows, stack_of, canonical_of,
-) -> list[SkillEntry]:
+async def _skills(db, user_id, evidence, wanted, job_wordings, chosen_ids, repo_of) -> list[SkillEntry]:
     """The skills to list: what the job asks for first, then the best
     evidenced. LeetCode practice alone lists a skill only if the job asks.
+
+    Each is named as a source it cites names it, and cites only sources that
+    do. A skill the record no longer names anywhere is left off.
     """
     # Only evidence that can be pointed at (older data may hold other kinds).
     usable = {
@@ -288,6 +299,11 @@ async def _skills(
     if not listed:
         return []
     confidence = await get_reconciled_skill_confidences(db, user_id)
+    aliases = await skill_aliases(db, set(listed))
+    rows = await cited_rows(db, user_id, [
+        SourceRef(kind=row.source_type, id=row.source_id)
+        for found in listed.values() for row in found if row.source_type != "leetcode_tag"
+    ])
 
     def order(canonical: str):
         return (
@@ -296,27 +312,38 @@ async def _skills(
             canonical,
         )
 
-    chosen = sorted(listed, key=order)[:MAX_SKILLS]
-
-    # Named as the user writes it where possible, in the job's spelling of that name.
-    written: dict[str, str] = {}
-    for row in chosen_rows:
-        for name in stack_of(row):
-            if name in canonical_of:
-                written.setdefault(canonical_of[name], name.strip())
-    stored = dict((await db.execute(
-        select(Skill.canonical_name, Skill.name).where(Skill.canonical_name.in_(chosen))
-    )).all())
-
-    entries = []
-    for canonical in chosen:
-        sources: dict[tuple, SourceRef] = {}
+    def statements(canonical: str) -> list[tuple[int, str, SourceRef]]:
+        """(preference, name, source) for each source that names the skill:
+        first a list on an item that is on the resume, then any list, then a
+        sentence, then LeetCode practice.
+        """
+        found: dict[tuple, tuple[int, str, SourceRef]] = {}
         for row in listed[canonical]:  # strongest first
-            row_id = None if row.source_type == "leetcode_tag" else row.source_id
-            sources.setdefault((row.source_type, row_id), SourceRef(kind=row.source_type, id=row_id))
-        name = written.get(canonical) or stored.get(canonical) or canonical.replace("_", " ")
+            kind = row.source_type
+            if kind == "leetcode_tag":  # practice has no wording of its own
+                found.setdefault((kind, None), (3, canonical.replace("_", " ").title(), SourceRef(kind=kind)))
+                continue
+            cited = rows.get((kind, row.source_id))
+            if cited is None:
+                continue
+            repo = repo_of(cited) if kind == "project" else None
+            stated = stated_name(kind, cited, aliases[canonical], repo)
+            if stated is None:
+                continue
+            name, in_list = stated
+            preference = (0 if str(row.source_id) in chosen_ids else 1) if in_list else 2
+            found.setdefault((kind, row.source_id), (preference, name, SourceRef(kind=kind, id=row.source_id)))
+        return sorted(found.values(), key=lambda item: item[0])  # stable: strongest first within each
+
+    entries: list[SkillEntry] = []
+    for canonical in sorted(listed, key=order):
+        said = statements(canonical)
+        if not said:
+            continue
         entries.append(SkillEntry(
-            name=_skill_name(name, job_wordings.get(canonical, [])),
-            canonical=canonical, sources=list(sources.values())[:MAX_SOURCES_PER_SKILL],
+            name=_skill_name(said[0][1], job_wordings.get(canonical, [])), canonical=canonical,
+            sources=[source for _preference, _name, source in said[:MAX_SOURCES_PER_SKILL]],
         ))
+        if len(entries) == MAX_SKILLS:
+            break
     return entries

@@ -1,8 +1,7 @@
 """A flat view of what a job requires, derived from a JobIntelligenceProfile.
 
-Consumers that only need skill lists (tailoring, resume analysis, skill
-frequency) use this instead of reaching into the profile's enriched
-structures.
+Consumers that only need skill lists (resume analysis, skill frequency) use
+this instead of reaching into the profile's enriched structures.
 """
 from app.schemas.job_intelligence.job_intelligence import JobIntelligenceProfile
 

@@ -34,7 +34,6 @@ from app.models.inference import (  # noqa: E402
     InterviewResponse,
     ProjectClaimAuditReview,
     ProjectInterviewQuestionsReview,
-    ResumeTailoringReview,
 )
 from app.models.job_intelligence import GapAnalysisResultRow, JobIntelligenceProfileRow  # noqa: E402
 from app.services.background import jobs as background_jobs  # noqa: E402
@@ -117,10 +116,6 @@ async def _seed() -> dict:
             ProjectInterviewQuestionsReview(
                 user_id=alice.id, project_id=project.id,
                 report_json={"project_name": "Alice Project", "questions": []},
-            ),
-            ResumeTailoringReview(
-                user_id=alice.id, resume_id=resume.id, job_intelligence_id=job.id,
-                report_json={"role": "Backend Engineer", "llm": {}},
             ),
         ])
         await db.commit()

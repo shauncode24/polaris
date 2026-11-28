@@ -31,7 +31,7 @@ function JobLibrary({ items, loading, busy, onOpen, onSetPrimary, onDelete, onCo
 
   function confirmDelete(job) {
     const message =
-      `Delete "${jobName(job)}"? Its match results and tailoring advice are removed. ` +
+      `Delete "${jobName(job)}"? Its match results and tailored resumes are removed. ` +
       'Goals that targeted it are kept, without the link.'
     if (window.confirm(message)) onDelete(job.id)
   }

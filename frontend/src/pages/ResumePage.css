@@ -286,3 +286,18 @@
   color: var(--text-soft);
   padding: 4px 2px 2px;
 }
+
+.resume-tailor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.resume-tailor h2 { font-size: 15px; }
+.resume-tailor p { font-size: 13px; }

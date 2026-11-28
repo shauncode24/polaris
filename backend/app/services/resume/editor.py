@@ -16,7 +16,8 @@ from app.schemas.resume.tailored_editor import (
 from app.services.evidence.state import evidence_cutoff
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.resume.contact import linkedin_profile_url, phone_number
-from app.services.resume.grounding import cited_rows, ground_line, row_bullets
+from app.services.resume.grounding import ground_line
+from app.services.resume.sources import cited_rows, row_bullets
 from app.services.resume.tailored_score import score_resume
 from app.services.resume.tailored_store import document_of, get_version, list_versions, save_document
 

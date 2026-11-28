@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 36. Unmarked steps (37 to 71, plus 6 and 13) are not started.
+Updated after step 37. Unmarked steps (38 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -15,16 +15,16 @@ Updated after step 36. Unmarked steps (37 to 71, plus 6 and 13) are not started.
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
-| F. Tailored resume | ◐ in progress | 29 to 36 done; 37 not started |
+| F. Tailored resume | ✅ done | 29 to 37 |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**31 of 71 steps done, 1 partial, 2 skipped, 37 not started** (35 of them in Stages F to K).
+**32 of 71 steps done, 1 partial, 2 skipped, 36 not started** (34 of them in Stages G to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 791 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 814 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -128,7 +128,7 @@ This comes before the two large generation features, because they depend on it.
 ✅ 28. Add a per-user daily LLM call budget with a clear error when it's reached.
     - **Status:** Done. Each user gets 100 model calls per UTC day (`LLM_DAILY_CALLS_PER_USER`; 0 removes the limit), counted in the `llm_usage` table where every call is made, so requests, background jobs and identity refreshes all count. Calls the service never answered are given back. At the limit, new AI work is refused with a message saying so; saved results, page loads and the GitHub and LeetCode syncs still work. **Known limit:** work that starts with calls left but runs out partway fails with the same message in most features; a skill gap, career plan or resume review may instead finish with its non-AI fallback, marked as such. The limit counts calls, not tokens. Verified by tests; not tried in a browser.
 
-## Stage F: Pillar 3, tailored resume (about 2–2.5 weeks) — ◐ in progress
+## Stage F: Pillar 3, tailored resume (about 2–2.5 weeks) — ✅ done (not yet tried with a real profile)
 
 New tables: `TailoredResume` (user, JD, version, structured JSON, status, created_at), with `evidence_refs` on each line.
 
@@ -148,8 +148,9 @@ New tables: `TailoredResume` (user, JD, version, structured JSON, status, create
     - **Status:** Done. The Tailored Resume page compares the resume with the latest uploaded one: how many of the job's required and implied skills each names (and which were gained or lost), the engine's ATS score with its six parts, and the warnings on the tailored one. `services/resume/tailored_score.py` renders the document as plain text and runs the existing ATS and keyword checks on both. No model calls, nothing saved; the score changes as suggestions are accepted or lines edited. Verified by tests, a frontend build and a headless-browser run on made-up data. **Limits:** keywords match only in the job's wording ("Postgres" doesn't count for "PostgreSQL"); the ATS rules are the engine's heuristics, not a real screening system. **Fixed afterwards:** a listed skill now takes the job's spelling when both are the same name (the list from step 32, now `services/resume/skill_names.py`; a different term is never swapped in; project technologies keep the user's spelling, and saved versions change only when generated again). Phone number and LinkedIn link can be edited under the name; they are checked, saved to the account (migration `e1b6c3d8f5a2`) and used for later versions. The ATS phone rule now finds numbers it missed, such as `+91 98765 43210` and `+44 20 7946 0958`, and needs at least 9 digits, so scores of uploaded resumes can change too. **For step 36:** the tailored side is scored from plain text, not from the exported file; check that text extracted from the export scores the same.
 ✅ 36. Export: DOCX through `python-docx`, PDF through ReportLab, both in an ATS-safe single-column layout built from the same structured resume. Bundle a font file so accented names and symbols display correctly. Store a version per JD. Prove the PDF export inside the Docker image now, not at deployment.
     - **Status:** Done. The Tailored Resume page downloads the open version as PDF or Word (`GET /tailored-resumes/{job}/versions/{n}/export`). Both, and the score, are built from the same text blocks (`services/resume/render.py`), so they hold the same words in the same order; text read back from either file scores the same as the editor shows. Only approved wording is exported, and the page says when suggestions are still waiting or cited items have been removed or hidden. The PDF embeds DejaVu Sans (`app/assets/fonts`, with its licence). Versions per job were already stored (step 29); files are made on request and not kept. A `.dockerignore` was added. Verified by tests, a headless-browser run, the export tests and a sample PDF inside the backend image with networking off, and a LibreOffice rendering of the Word file; **not opened in Microsoft Word**, and the frontend image was not rebuilt. **Limits:** the PDF refuses, with a message, characters the font lacks (Chinese, Devanagari and other scripts, emoji) and right-to-left text, while the Word file takes them; A4 only; editing a version after downloading it changes what that version downloads, so what was sent isn't kept.
-37. Retire the advisory tailoring report: fold its ranking into the generator and remove the old endpoint and `ResumeTailoring` component.
-    - **Gate:** zero unflagged unsupported claims across 10 profile and JD test pairs (an automated test diffs facts against sources), and the output still works with the LLM stubbed to fail.
+✅ 37. Retire the advisory tailoring report: fold its ranking into the generator and remove the old endpoint and `ResumeTailoring` component.
+    - **Status:** Done. The endpoint `/resume/tailor/{job}`, its report, prompt, schemas and the `ResumeTailoring` panel are removed, the ranking now lives in `services/resume/selection.py`, and the Resume page links to the Tailored Resume page. Migration `f2c7d4e9a1b3` drops the cache table `resume_tailoring_reviews` (the downgrade restores it empty).
+    - **Gate:** zero unflagged unsupported claims across 10 profile and JD test pairs (an automated test diffs facts against sources), and the output still works with the LLM stubbed to fail. ✅ `tests/api/test_resume_gate.py`: ten made-up profile and job pairs, a stand-in model that tries nine ways of overstating, and a separate checker that compares every fact on each resume and in each download with the database; all ten also pass with the model unreachable or answering nonsense. **The first run failed on four profiles:** skills were listed under names from the table shared by all users, so a resume could show another person's spelling, or keep a skill since removed from an item. Fixed: a skill is now named as a source it cites names it, and is left off when the record no longer says it. Switching off the rewrite check also makes the gate fail. **What it doesn't show:** the pairs are made up, no real model was used, and the word-for-word rule it checks can't judge punctuation.
 
 ## Stage G: Pillar 4, interview kit and practice (about 1.5–2 weeks)
 

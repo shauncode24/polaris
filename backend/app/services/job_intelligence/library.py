@@ -7,7 +7,6 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.goals import Goal
-from app.models.inference import ResumeTailoringReview
 from app.models.job_intelligence import (
     CompanyIntelligenceProfileRow,
     GapAnalysisResultRow,
@@ -76,7 +75,7 @@ async def delete_job(db: AsyncSession, user_id, job_id: UUID) -> bool:
         update(Goal).where(Goal.user_id == user_id, Goal.job_intelligence_id == job_id)
         .values(job_intelligence_id=None)
     )
-    for model in (ResumeTailoringReview, TailoredResume, GapAnalysisResultRow):
+    for model in (TailoredResume, GapAnalysisResultRow):
         await db.execute(delete(model).where(model.user_id == user_id, model.job_intelligence_id == job_id))
     await db.delete(row)
     await db.flush()

@@ -271,7 +271,6 @@ def worker(seeded):
     ("POST", "/resume/review", None),
     ("POST", "/resume/analyze?job_intelligence_id={job}", None),
     ("GET", "/resume/coherence?regenerate=true", None),
-    ("GET", "/resume/tailor/{job}?regenerate=true", None),
     ("POST", "/github/review", None),
     ("POST", "/sync/leetcode/review", None),
     ("POST", "/linkedin/ingest", {"raw_text": "Engineer at Acme"}),

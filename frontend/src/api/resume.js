@@ -67,12 +67,6 @@ export function getResumeCoherence(token, targetRole = null, regenerate = false)
   return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
 }
 
-export function getResumeTailoring(token, jobIntelligenceId, regenerate = false) {
-  const url = new URL(`${API_BASE_URL}/resume/tailor/${jobIntelligenceId}`)
-  if (regenerate) url.searchParams.append('regenerate', 'true')
-  return apiFetch(url.toString(), { headers: authHeaders(token) }).then(handle)
-}
-
 export function getResumeEvolution(token) {
   return fetch(`${API_BASE_URL}/resume/evolution`, {
     headers: authHeaders(token),

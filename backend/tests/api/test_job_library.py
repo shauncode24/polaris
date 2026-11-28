@@ -13,12 +13,13 @@ from sqlalchemy import select
 
 from app.models.facts import Project, Resume, User
 from app.models.goals import Goal
-from app.models.inference import ResumeTailoringReview, SkillEvidence
+from app.models.inference import SkillEvidence
 from app.models.job_intelligence import (
     CompanyIntelligenceProfileRow,
     GapAnalysisResultRow,
     JobIntelligenceProfileRow,
 )
+from app.models.tailored_resume import TailoredResume
 from app.schemas.interview.interview_response import GroundingReport
 from app.services.career_planner.context_builder import build_career_plan_context
 from app.services.evidence.state import touch_evidence
@@ -184,7 +185,7 @@ def stored_for(user, job_id):
         return {
             "job": await count(JobIntelligenceProfileRow, JobIntelligenceProfileRow.id == target),
             "gap": await count(GapAnalysisResultRow, GapAnalysisResultRow.job_intelligence_id == target),
-            "tailoring": await count(ResumeTailoringReview, ResumeTailoringReview.job_intelligence_id == target),
+            "resume": await count(TailoredResume, TailoredResume.job_intelligence_id == target),
             "companies": await count(CompanyIntelligenceProfileRow),
         }
     return run(go)
@@ -197,19 +198,19 @@ def test_deleting_a_job_removes_its_results_and_keeps_the_goal(client, seeded):
     for job_id in (doomed, kept):
         assert client.get(f"/jobs/by-intelligence/{job_id}", headers=auth(user.id)).status_code == 200
 
-    async def add_tailoring(db):
-        db.add(ResumeTailoringReview(user_id=user.id, resume_id=user.resume_id,
-                                     job_intelligence_id=uuid.UUID(doomed), report_json={}))
+    async def add_resume(db):
+        db.add(TailoredResume(user_id=user.id, job_intelligence_id=uuid.UUID(doomed), version=1,
+                              content_json={}, created_at=datetime.now(timezone.utc)))
         await db.commit()
-    run(add_tailoring)
+    run(add_resume)
     goal_id = add_goal(user, "Get the backend job", doomed)
     make_primary(client, user, doomed)
 
     response = client.delete(f"/job-intelligence/{doomed}", headers=auth(user.id))
 
     assert response.status_code == 200, response.text[:300]
-    assert stored_for(user, doomed) == {"job": 0, "gap": 0, "tailoring": 0, "companies": 1}
-    assert stored_for(user, kept) == {"job": 1, "gap": 1, "tailoring": 0, "companies": 1}
+    assert stored_for(user, doomed) == {"job": 0, "gap": 0, "resume": 0, "companies": 1}
+    assert stored_for(user, kept) == {"job": 1, "gap": 1, "resume": 0, "companies": 1}
     assert [j["id"] for j in listing(client, user)] == [kept]
     assert primaries(client, user) == []
 

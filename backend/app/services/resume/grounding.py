@@ -19,15 +19,11 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.facts import Certificate, Education, Experience, Project
-from app.models.github_analysis import GithubProjectAnalysis
-from app.models.linkedin import LinkedInProfile
 from app.schemas.resume.tailored import ResumeLine, SourceRef, TailoredResumeDocument
-from app.services.resume.selection import description_lines
 from app.services.resume.skill_names import NAME_OF
+from app.services.resume.sources import cited_rows, row_bullets
 
 _NUMBER_WORDS = {
     word: str(number) for number, word in enumerate(
@@ -128,37 +124,6 @@ def ground_line(line: ResumeLine) -> None:
         line.rewrite, line.decision, line.flags = None, "pending", []
     else:
         line.flags = check.flags
-
-
-# kind of source -> its table, and the row's bullets as the resume numbers them
-_SOURCES = {
-    "experience": (Experience, lambda row: row.bullets or []),
-    "project": (Project, lambda row: description_lines(row.description)),
-    "education": (Education, lambda row: row.details or []),
-    "certificate": (Certificate, lambda row: []),
-    "github_repo": (GithubProjectAnalysis, lambda row: []),
-    "linkedin_profile": (LinkedInProfile, lambda row: []),
-}
-
-
-def row_bullets(kind: str, row) -> list[str]:
-    return _SOURCES[kind][1](row)
-
-
-async def cited_rows(db: AsyncSession, user_id, refs: list[SourceRef]) -> dict[tuple, object]:
-    """(kind, row id) -> the row, for each cited item that is the user's and not
-    hidden. LeetCode practice has no rows.
-    """
-    rows = {}
-    for kind, (table, _bullets) in _SOURCES.items():
-        ids = {ref.id for ref in refs if ref.kind == kind}
-        if not ids:
-            continue
-        query = select(table).where(table.user_id == user_id, table.id.in_(ids))
-        if hasattr(table, "is_hidden"):
-            query = query.where(table.is_hidden.is_(False))
-        rows.update({(kind, row.id): row for row in (await db.execute(query)).scalars()})
-    return rows
 
 
 async def unsupported_sources(db: AsyncSession, user_id, document: TailoredResumeDocument) -> list[str]:

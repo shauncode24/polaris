@@ -67,9 +67,7 @@ async def get_cached_coherence_report(
 async def build_bullets_with_strength(
     db: AsyncSession, user_id, resume_id, skill_confidence: dict[str, float]
 ) -> list[dict]:
-    """Shared by coherence and tailoring — the single real bullet list
-    with strength scores and resolved canonical stacks, built once so
-    both features describe the same bullets the same way.
+    """The bullet list with strength scores and resolved canonical stacks.
     """
     exp_result = await db.execute(
         select(Experience).where(Experience.user_id == user_id, Experience.resume_id == resume_id)

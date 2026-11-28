@@ -39,7 +39,6 @@ CASES = [
     Case("GET", "/projects/{project_id}/interview-questions", owner_status=200),
     Case("POST", "/projects/{project_id}/link", json={"repo_name": "x"}),
     Case("POST", "/projects/{project_id}/unlink"),
-    Case("GET", "/resume/tailor/{job_id}", owner_status=200),
     Case("GET", "/tailored-resumes/{job_id}", owner_status=200),
     Case("GET", "/tailored-resumes/{job_id}?version=1"),
     Case("POST", "/tailored-resumes/{job_id}"),

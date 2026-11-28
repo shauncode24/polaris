@@ -19,7 +19,7 @@ claim_risk_details.
 
 Deterministic only — no LLM call. Reuses the existing claim-risk penalty
 table from resume/claim_risk.py so this can never disagree with how
-Projects/Resume Tailoring already discount claim risk elsewhere in the
+project ranking and the tailored resume discount claim risk elsewhere in the
 codebase.
 """
 from app.services.resume.claim_risk import CLAIM_RISK_MULTIPLIER

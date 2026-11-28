@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.models.facts import Education, Experience, Project, Resume, User, UserSkillOverride
 from app.models.github_analysis import GithubProjectAnalysis
 from app.models.inference import ProjectClaimAuditReview, SkillEvidence
+from app.models.structure import Skill
 from app.services.resume.selection import select_for_job
 from tests.api.test_evidence import run
 from tests.api.test_job_library import add_job
@@ -200,7 +201,7 @@ def test_a_hidden_skill_is_neither_listed_nor_counted(seeded):
 
 def test_only_skills_with_evidence_are_listed_in_the_jobs_order_of_need(seeded):
     user = new_user()
-    item = project(user, "Tool", ["PostgreSQL", "python"])
+    item = project(user, "Tool", ["PostgreSQL", "python", "Redis", "Docker"])
     evidence(user, "redis", "project", item, weight=0.9)  # not asked for
     evidence(user, "docker", "project", item)
     evidence(user, "python", "project", item)
@@ -219,6 +220,59 @@ def test_only_skills_with_evidence_are_listed_in_the_jobs_order_of_need(seeded):
     assert by_name["python"].name == "python"  # as the user wrote it
     assert [(r.kind, r.id) for r in by_name["algorithms"].sources] == [("leetcode_tag", None)]
     assert [(r.kind, r.id) for r in by_name["python"].sources] == [("project", item)]
+
+
+def test_a_skill_is_named_as_the_users_own_record_names_it(seeded):
+    user = new_user()
+    item = project(user, "Tool", ["version control"])
+    role = experience(user, "Engineer", [], ["Wrote services in Golang."])
+    evidence(user, "git", "project", item)
+    evidence(user, "go", "experience", role)
+
+    async def rename(db):  # the shared table holds another person's spelling
+        for canonical, name in (("git", "GitKraken Pro"), ("go", "Go Fiber")):
+            skill = await _skill(db, canonical)
+            before.append((skill.id, skill.name))
+            skill.name = name
+        await db.commit()
+
+    async def restore(db):
+        for skill_id, name in before:
+            (await db.get(Skill, skill_id)).name = name
+        await db.commit()
+
+    before: list = []
+    run(rename)
+    try:
+        skills = select_(user, add_job(user, "Engineer", ["git", "go"])).document.skills
+    finally:
+        run(restore)
+
+    # "go" is the job's spelling of the name; the record only says it as "Golang".
+    assert {s.canonical: s.name for s in skills} == {"git": "version control", "go": "Golang"}
+
+
+def test_a_skill_the_record_no_longer_names_is_left_off(seeded):
+    user = new_user()
+    item = project(user, "Tool", ["Python"], "Run the rest of the jobs.")
+    for canonical in ("python", "docker", "rest_api"):  # docker was since removed; "rest" is just a word
+        evidence(user, canonical, "project", item)
+
+    document = select_(user, add_job(user, "Engineer", ["python", "docker", "rest_api"])).document
+
+    assert skill_names(document) == ["python"]
+
+
+def test_a_skill_cites_only_the_sources_that_name_it(seeded):
+    user = new_user()
+    silent = project(user, "Silent", ["Python"])
+    naming = project(user, "Naming", ["Docker"])
+    evidence(user, "docker", "project", silent, weight=0.9)
+    evidence(user, "docker", "project", naming)
+
+    skills = {s.canonical: s for s in select_(user, add_job(user, "Engineer", ["docker"])).document.skills}
+
+    assert [(ref.kind, ref.id) for ref in skills["docker"].sources] == [("project", naming)]
 
 
 def test_a_github_projects_code_counts_and_is_cited(seeded):

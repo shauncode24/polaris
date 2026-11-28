@@ -137,24 +137,6 @@ class ResumeCoherenceReview(Base):
     )
 
 
-class ResumeTailoringReview(Base):
-    __tablename__ = "resume_tailoring_reviews"
-    __table_args__ = (
-        UniqueConstraint("resume_id", "job_intelligence_id", name="uq_tailoring_resume_job"),
-    )
-
-    id: Mapped[uuid.UUID] = uuid_pk()
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
-    resume_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id"), index=True)
-    job_intelligence_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("job_intelligence_profiles.id"), index=True
-    )
-    report_json: Mapped[dict] = mapped_column(JSONB)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-
-
 class ProjectClaimAuditReview(Base):
     __tablename__ = "project_claim_audit_reviews"
     __table_args__ = (UniqueConstraint("project_id", name="uq_claim_audit_project"),)

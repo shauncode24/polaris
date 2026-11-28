@@ -1,6 +1,6 @@
 """Shared text sanitizer for any AI-generated prose that might echo back
 an internal bullet_id (e.g. exp_<uuid>_0) into user-facing text. Used by
-resume review, narrative coherence, and tailoring — one implementation
+resume review and narrative coherence — one implementation
 so every surface strips these the same way instead of each re-inventing
 its own regex.
 """

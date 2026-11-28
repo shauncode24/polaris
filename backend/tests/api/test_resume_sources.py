@@ -33,7 +33,7 @@ def record():
                    source="github", github_repo_name="Tool")
     analysis = repo(user, "Tool", ["Terraform"])
     school = add(Education(user_id=user.id, institution="State University", details=["GPA 8.4"], created_at=NOW))
-    profile = add(LinkedInProfile(user_id=user.id, raw_text="r", parsed_json={}, created_at=NOW))
+    profile = add(LinkedInProfile(user_id=user.id, raw_text="r", parsed_json={"skills": ["Docker"]}, created_at=NOW))
     evidence(user, "python", "experience", role)
     evidence(user, "terraform", "github_repo", analysis)
     evidence(user, "docker", "linkedin_profile", profile)
