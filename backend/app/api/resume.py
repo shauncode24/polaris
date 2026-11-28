@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.llm import LLMBudgetError
+from app.core.llm import LLMNotAllowedError
 from app.core.rate_limit import TooMuchWork, require_ai_slot
 from app.core.settings import settings
 from app.models.facts import (
@@ -361,7 +361,7 @@ async def get_resume_workspace(
         try:
             require_ai_slot(uid)
             role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
-        except LLMBudgetError as e:  # the page still loads, saying why
+        except LLMNotAllowedError as e:  # the page still loads, saying why
             role_fit_results = fallback_role_fit(str(e))
         except TooMuchWork as e:
             role_fit_results = fallback_role_fit(e.detail)

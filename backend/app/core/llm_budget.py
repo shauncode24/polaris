@@ -1,4 +1,7 @@
-"""How many model calls each user may make in a day.
+"""Who may call the model, and how many times a day.
+
+Only users who have confirmed their email address may (unless
+REQUIRE_CONFIRMED_EMAIL is false), so throwaway sign-ups can't spend the quota.
 
 The model account's quota is shared by everyone, so each user gets a daily
 number of calls. Days are UTC days. A call is counted before it is sent, and
@@ -16,6 +19,8 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from app.core.database import AsyncSessionLocal
+from app.core.settings import settings
+from app.models.facts import User
 from app.models.usage import LlmUsage
 
 current_user: ContextVar = ContextVar("llm_budget_user", default=None)
@@ -29,6 +34,14 @@ session_factory = AsyncSessionLocal
 
 def _today() -> date:
     return datetime.now(timezone.utc).date()
+
+
+async def may_use_ai(user_id) -> bool:
+    if not settings.require_confirmed_email:
+        return True
+    async with session_factory() as db:
+        confirmed = await db.scalar(select(User.email_verified_at).where(User.id == user_id))
+    return confirmed is not None
 
 
 async def reserve(user_id) -> date | None:

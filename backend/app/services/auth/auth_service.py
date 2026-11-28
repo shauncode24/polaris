@@ -1,11 +1,14 @@
+from datetime import datetime, timezone
+
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password, verify_password
 from app.core.settings import settings
 from app.models.facts import User
+from app.services.auth.sessions import end_all_sessions
 
 
 class AuthError(Exception):
@@ -39,6 +42,12 @@ async def register_user(
     return user
 
 
+async def users_with_email(db: AsyncSession, email: str) -> list[User]:
+    """Every account for an address, however its capitals were typed."""
+    result = await db.execute(select(User).where(func.lower(User.email) == email.lower()))
+    return list(result.scalars())
+
+
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -68,16 +77,26 @@ async def authenticate_with_google(db: AsyncSession, credential: str) -> User:
     first_name = idinfo.get("given_name", "") or "Polaris User"
     last_name = idinfo.get("family_name")
     avatar_url = idinfo.get("picture")
+    # Whether Google vouches that the address is this person's.
+    proven = bool(email) and str(idinfo.get("email_verified")).lower() == "true"
 
     result = await db.execute(select(User).where(User.google_id == google_id))
     user = result.scalar_one_or_none()
 
     if user is None and email:
+        if not proven:
+            raise AuthError("Google hasn't verified this email address.")
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if user is not None:
             # Existing local account with a matching email — link Google
             # to it rather than creating a duplicate user.
+            if user.email_verified_at is None:
+                # Whoever set its password never showed that the address was
+                # theirs, and must not keep a way into what is now this
+                # person's account.
+                user.password_hash = None
+                await end_all_sessions(db, user.id)
             user.google_id = google_id
             user.avatar_url = user.avatar_url or avatar_url
 
@@ -95,6 +114,9 @@ async def authenticate_with_google(db: AsyncSession, credential: str) -> User:
         )
         db.add(user)
 
+    if proven and user.email == email and user.email_verified_at is None:
+        user.email_verified_at = datetime.now(timezone.utc)
+
     await db.commit()
     await db.refresh(user)
     return user
@@ -111,6 +133,7 @@ def user_details(user: User) -> dict:
         "auth_provider": user.auth_provider,
         "github_username": user.github_username,
         "leetcode_username": user.leetcode_username,
+        "needs_email_confirmation": settings.require_confirmed_email and user.email_verified_at is None,
     }
 
 

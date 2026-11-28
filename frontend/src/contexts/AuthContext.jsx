@@ -6,6 +6,12 @@ const AuthContext = createContext(null)
 // Where week-long tokens used to be kept.
 const OLD_TOKEN_KEY = 'polaris-token'
 
+// While it is the same user, pages keep the token they were given.
+function keepToken(previous, next) {
+  if (!previous || !next || previous.user.id !== next.user.id) return next
+  return { ...next, access_token: previous.access_token }
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -26,7 +32,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     localStorage.removeItem(OLD_TOKEN_KEY)
-    const stopListening = onSessionChange(setSession)
+    const stopListening = onSessionChange((next) => setSession((previous) => keepToken(previous, next)))
     restore()
     return stopListening
   }, [restore])
@@ -39,6 +45,8 @@ export function AuthProvider({ children }) {
     loading,
     unreachable,
     retry: restore,
+    // Asks the server again what it knows about the user.
+    refreshUser: renewSession,
     register: authApi.register,
     login: authApi.login,
     loginWithGoogle: authApi.googleAuth,

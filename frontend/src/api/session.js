@@ -12,8 +12,8 @@ let current = null // { access_token, user } while signed in
 let renewal = null
 const listeners = new Set()
 
-// Calls `listener` with the session now, and whenever someone signs in or out.
-// Renewing the token of the same user isn't announced: pages would reload.
+// Calls `listener` with the session now, and whenever someone signs in or out or
+// what is known about them changes. A new token alone isn't announced.
 export function onSessionChange(listener) {
   listeners.add(listener)
   listener(current)
@@ -21,7 +21,7 @@ export function onSessionChange(listener) {
 }
 
 function adopt(session) {
-  const changed = current?.user.id !== session?.user.id
+  const changed = JSON.stringify(current?.user) !== JSON.stringify(session?.user)
   current = session
   if (changed) listeners.forEach((listener) => listener(session))
 }
@@ -100,6 +100,14 @@ export function renewSession() {
     renewal = null
   })
   return renewal
+}
+
+// For after the server may have ended this browser's session, as a password reset
+// does: if it has, every tab is signed out now, not when its token runs out.
+export async function signOutIfEnded() {
+  const session = await renewSession()
+  // `current` remains when the page is reloading as another user.
+  if (!session && !current) await endSession()
 }
 
 // Signing out in one tab signs the others out too.

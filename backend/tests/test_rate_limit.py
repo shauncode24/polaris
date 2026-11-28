@@ -276,6 +276,8 @@ def test_preflight_requests_are_not_counted(limits):
 def test_when_the_sign_in_cookie_is_https_only(monkeypatch, origin, samesite, secure):
     monkeypatch.setenv("FRONTEND_ORIGIN", origin)
     monkeypatch.setenv("COOKIE_SAMESITE", samesite)
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")  # required with https
+    monkeypatch.setenv("MAIL_FROM", "polaris@example.com")
     assert Settings().cookie_secure is secure
     assert Settings().cookie_samesite == samesite.lower()
 

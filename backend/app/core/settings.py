@@ -46,8 +46,17 @@ def _networks(name: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
     return networks
 
 
+def _flag(name: str, default: bool) -> bool:
+    value = os.environ.get(name, "").strip().lower()
+    if not value:
+        return default
+    if value not in ("true", "false"):
+        raise ConfigurationError(f"{name} must be true or false.")
+    return value == "true"
+
+
 def _positive(name: str, default: int) -> int:
-    value = int(os.environ.get(name, str(default)))
+    value = int(os.environ.get(name) or default)
     if value < 1:
         raise ConfigurationError(f"{name} must be 1 or more, not {value}.")
     return value
@@ -96,6 +105,29 @@ class Settings:
         self.jwt_algorithm = "HS256"
         self.google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
         self.frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+
+        # --- Email (see core/mail.py) ---
+        self.smtp_host = os.environ.get("SMTP_HOST", "").strip()
+        self.smtp_security = (os.environ.get("SMTP_SECURITY") or "starttls").strip().lower()
+        if self.smtp_security not in ("starttls", "ssl", "none"):
+            raise ConfigurationError("SMTP_SECURITY must be starttls, ssl or none.")
+        self.smtp_port = _positive("SMTP_PORT", 465 if self.smtp_security == "ssl" else 587)
+        self.smtp_username = os.environ.get("SMTP_USERNAME", "").strip()
+        self.smtp_password = os.environ.get("SMTP_PASSWORD", "")
+        self.mail_from = os.environ.get("MAIL_FROM", "").strip() or (
+            self.smtp_username if "@" in self.smtp_username else ""
+        )
+        if self.smtp_host and not self.mail_from:
+            raise ConfigurationError("MAIL_FROM is required: the address emails are sent from.")
+        if self.smtp_security == "none" and self.smtp_username:
+            raise ConfigurationError("SMTP_SECURITY=none would send the SMTP password unencrypted.")
+        if not self.smtp_host and self.frontend_origin.startswith("https://"):
+            raise ConfigurationError(
+                "SMTP_HOST is required once the app is served over HTTPS: without it nobody can "
+                "confirm an address or reset a password."
+            )
+        # AI features wait until the user has confirmed their email address.
+        self.require_confirmed_email = _flag("REQUIRE_CONFIRMED_EMAIL", True)
 
         # --- Sessions (see services/auth/sessions.py) ---
         # An access token can't be withdrawn, so it is short-lived. The browser

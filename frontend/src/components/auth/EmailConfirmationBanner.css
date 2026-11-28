@@ -1,0 +1,34 @@
+.email-banner {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  width: min(420px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  text-align: left;
+}
+.email-banner__text { overflow-wrap: anywhere; }
+.email-banner__message { font-size: 13px; color: var(--text); }
+.email-banner__message:empty { display: none; }
+.email-banner__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.email-banner__actions button {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.email-banner__actions button:hover { border-color: var(--accent); }
+.email-banner__actions button:disabled { opacity: 0.6; cursor: default; }

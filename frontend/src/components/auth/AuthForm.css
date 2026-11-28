@@ -3,6 +3,7 @@
 
 .auth-form__subtitle { font-size: 14px; color: var(--text); margin-top: -8px; }
 .auth-form__subtitle a { color: var(--accent); font-weight: 600; }
+.auth-form__link { font-size: 13px; color: var(--accent); font-weight: 600; align-self: flex-end; margin-top: -8px; }
 
 .auth-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .auth-form__submit { width: 100%; justify-content: center; margin-top: 4px; }

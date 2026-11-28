@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import llm_budget
 from app.core.database import AsyncSessionLocal
-from app.core.llm import LLMError, require_budget
+from app.core.llm import LLMError, require_ai_access
 from app.core.rate_limit import require_ai_slot
 from app.models.background import JOB_FAILED, JOB_RUNNING, JOB_SUCCEEDED, BackgroundJob
 
@@ -88,8 +88,8 @@ async def start(
     the same `inputs` is already running for this user, returns that job
     instead, so a double click or a reloaded page doesn't pay for it twice.
 
-    Work that `needs_model` isn't started for a user with no model calls left
-    today: `LLMBudgetError` is raised. Work the user asked for counts against
+    Work that `needs_model` isn't started for a user who couldn't call it:
+    `LLMNotAllowedError` is raised. Work the user asked for counts against
     how much they may start in a short time: past that, `TooMuchWork` is raised.
     Joining a running job is neither refused nor counted.
     """
@@ -114,7 +114,7 @@ async def start(
                 await db.commit()
                 return running
             if needs_model:
-                await require_budget(user_id)
+                await require_ai_access(user_id)
             if user_asked and not counted:
                 require_ai_slot(user_id)
                 counted = True

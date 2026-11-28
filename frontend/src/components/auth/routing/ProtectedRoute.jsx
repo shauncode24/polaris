@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
 import Button from '../../common/Button'
+import EmailConfirmationBanner from '../EmailConfirmationBanner'
 
 function ProtectedRoute({ children }) {
   const { token, loading, unreachable, retry } = useAuth()
@@ -17,7 +18,12 @@ function ProtectedRoute({ children }) {
   }
   if (!token) return <Navigate to="/login" replace />
 
-  return children
+  return (
+    <>
+      {children}
+      <EmailConfirmationBanner />
+    </>
+  )
 }
 
 export default ProtectedRoute

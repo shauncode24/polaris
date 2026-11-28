@@ -115,6 +115,11 @@ async def renew_session(db: AsyncSession, token: str) -> tuple[User, str] | None
     return user, next_token
 
 
+async def end_all_sessions(db: AsyncSession, user_id) -> None:
+    """Signs the user out of every browser. The caller commits."""
+    await db.execute(delete(AuthSession).where(AuthSession.user_id == user_id))
+
+
 async def end_session(db: AsyncSession, token: str) -> None:
     """Signs out the session a token belongs to, however old the token."""
     named = _read(token)

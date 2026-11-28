@@ -51,6 +51,11 @@ os.environ["FRONTEND_ORIGIN"] = "http://localhost:5173"
 os.environ["COOKIE_SAMESITE"] = "lax"
 os.environ["ACCESS_TOKEN_MINUTES"] = "15"
 os.environ["REFRESH_TOKEN_DAYS"] = "14"
+# No test sends real email, whatever .env holds. Test users haven't confirmed an
+# address; the rule that they must has its own tests.
+for name in ("SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USERNAME", "SMTP_PASSWORD", "MAIL_FROM"):
+    os.environ[name] = ""
+os.environ["REQUIRE_CONFIRMED_EMAIL"] = "false"
 
 # Database-backed tests live under tests/api and need a real Postgres.
 collect_ignore = [] if TEST_DATABASE_URL else ["api"]

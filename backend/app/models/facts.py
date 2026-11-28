@@ -20,6 +20,8 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    # When the address was shown to be the user's: by an emailed link or Google.
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     auth_provider: Mapped[str] = mapped_column(String(20), default="local")
     target_roles: Mapped[list[str] | None] = mapped_column(ARRAY(String))

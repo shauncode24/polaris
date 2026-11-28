@@ -74,18 +74,33 @@ class LLMReplyError(LLMError):
     """The service answered, but not with something usable."""
 
 
-class LLMBudgetError(LLMUnavailableError):
-    """The user has used today's calls. Raised even where there is a fallback,
-    which would look like an answer and might be saved as one.
+class LLMNotAllowedError(LLMUnavailableError):
+    """This user may not call the model now. Raised even where there is a
+    fallback, which would look like an answer and might be saved as one.
     """
+
+
+class LLMUnconfirmedError(LLMNotAllowedError):
+    status_code = 403
+
+    def __init__(self):
+        super().__init__(
+            "Confirm your email address to use AI features. We can send you the link again."
+        )
+
+
+class LLMBudgetError(LLMNotAllowedError):
+    """The user has used today's calls."""
     status_code = 429
 
     def __init__(self, limit: int):
         super().__init__(f"You've reached today's limit of {limit} AI requests. It resets at midnight UTC.")
 
 
-async def require_budget(user_id) -> None:
-    """Refuses, before any work starts, a user with no calls left today."""
+async def require_ai_access(user_id) -> None:
+    """Refuses, before any work starts, a user who couldn't call the model."""
+    if not await llm_budget.may_use_ai(user_id):
+        raise LLMUnconfirmedError()
     if not await llm_budget.has_calls_left(user_id):
         raise LLMBudgetError(llm_budget.DAILY_CALLS)
 
@@ -230,8 +245,9 @@ async def llm_json(
     (a pydantic model, or `dict` for the object as it is).
 
     With a `fallback`, a failed call returns `fallback()` marked degraded.
-    Without one it raises an `LLMError`. A user out of calls for the day gets
-    `LLMBudgetError` either way.
+    Without one it raises an `LLMError`. A user who may not call the model (an
+    unconfirmed address, no calls left today) gets `LLMNotAllowedError` either
+    way.
 
     label       names the call in the logs
     expect      keys a finished reply always has
@@ -254,6 +270,9 @@ async def llm_json(
         logger.error("llm label=%s not sent: GROQ_API_KEY is not set", label)
 
     user_id = llm_budget.current_user.get()
+    if failure is None and user_id is not None and not await llm_budget.may_use_ai(user_id):
+        failure = LLMUnconfirmedError()
+        logger.info("llm label=%s not sent: user %s has not confirmed their email", label, user_id)
     attempt = 0
     while failure is None:
         counted_on = None
@@ -312,7 +331,7 @@ async def llm_json(
             ]
             temperature = 0
 
-    if fallback is not None and not isinstance(failure, LLMBudgetError):
+    if fallback is not None and not isinstance(failure, LLMNotAllowedError):
         logger.warning("llm label=%s using the fallback: %s", label, failure)
         return LLMReply(fallback(), degraded=True)
     raise failure from cause

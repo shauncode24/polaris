@@ -1,4 +1,4 @@
-"""Sign-up, sign-in, and keeping a browser signed in.
+"""Sign-up, sign-in, keeping a browser signed in, and the emailed links.
 
 Each sign-in answers with a short-lived access token, which the page sends as a
 header, and sets the refresh token as a cookie. /auth/refresh trades that cookie
@@ -6,14 +6,25 @@ for a new pair; /auth/logout ends it.
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.settings import settings
 from app.models.facts import User
-from app.schemas.auth import AuthResponse, GoogleAuthRequest, LoginRequest, RegisterRequest, UserResponse
+from app.schemas.auth import (
+    AuthResponse,
+    EmailTokenRequest,
+    ForgotPasswordRequest,
+    GoogleAuthRequest,
+    LoginRequest,
+    Message,
+    RegisterRequest,
+    ResetPasswordRequest,
+    UserResponse,
+)
+from app.services.auth import email_links
 from app.services.auth.auth_service import (
     AuthError,
     authenticate_user,
@@ -21,6 +32,7 @@ from app.services.auth.auth_service import (
     build_token_response,
     register_user,
     user_details,
+    users_with_email,
 )
 from app.services.auth.sessions import end_session, renew_session, start_session
 
@@ -29,6 +41,13 @@ logger = logging.getLogger(__name__)
 
 REFRESH_COOKIE = "polaris_refresh"
 SESSION_ENDED = "Your session has ended. Sign in again."
+# The same whether or not there is such an account, so this can't be used to find out.
+RESET_REQUESTED = "If there's an account for that address, we've sent it a link to set a new password."
+BAD_LINK = "This link has expired or has already been used. Ask for a new one."
+CONFIRMATION_SENT = "We've sent you a link. Check your inbox, and your spam folder."
+ALREADY_CONFIRMED = "Your email address is already confirmed."
+TOO_MANY_EMAILS = "We've sent several of these already. Check your spam folder, or try again in an hour."
+EMAIL_FAILED = "The email couldn't be sent. Try again later."
 
 
 def _cookie_options() -> dict:
@@ -64,7 +83,10 @@ async def _signed_in(user: User, request: Request, response: Response, db) -> di
 
 
 @router.post("/register", response_model=AuthResponse)
-async def register(payload: RegisterRequest, request: Request, response: Response, db=Depends(get_db)):
+async def register(
+    payload: RegisterRequest, request: Request, response: Response, background: BackgroundTasks,
+    db=Depends(get_db),
+):
     try:
         user = await register_user(
             db, payload.first_name, payload.last_name, payload.email, payload.password
@@ -72,6 +94,8 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     except AuthError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     logger.info("Registered new user (id=%s)", user.id)
+    # After the reply: signing up doesn't wait for the mail service.
+    background.add_task(email_links.send_confirmation, user.email, email_links.confirmation_token(user))
     return await _signed_in(user, request, response, db)
 
 
@@ -114,6 +138,41 @@ async def logout(request: Request, response: Response, db=Depends(get_db)):
     if token:
         await end_session(db, token)
     response.delete_cookie(REFRESH_COOKIE, **_cookie_options())
+
+
+@router.post("/password/forgot", response_model=Message)
+async def forgot_password(payload: ForgotPasswordRequest, background: BackgroundTasks, db=Depends(get_db)):
+    for user in await users_with_email(db, payload.email):
+        # Sent after the reply, which so takes no longer when there is an account.
+        background.add_task(email_links.send_password_reset, user.email, email_links.reset_token(user))
+    return Message(detail=RESET_REQUESTED)
+
+
+@router.post("/password/reset", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_password(payload: ResetPasswordRequest, db=Depends(get_db)):
+    if not await email_links.reset_password(db, payload.token, payload.password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=BAD_LINK)
+
+
+@router.post("/email/confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def confirm_email(payload: EmailTokenRequest, db=Depends(get_db)):
+    if not await email_links.confirm_email(db, payload.token):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=BAD_LINK)
+
+
+@router.post("/email/resend", response_model=Message)
+async def resend_confirmation(current_user: User = Depends(get_current_user)):
+    if current_user.email_verified_at is not None or not current_user.email:
+        return Message(detail=ALREADY_CONFIRMED)
+    # Waited for, so that the user hears if it couldn't be sent.
+    sent = await email_links.send_confirmation(
+        current_user.email, email_links.confirmation_token(current_user),
+    )
+    if sent == "limited":
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=TOO_MANY_EMAILS)
+    if sent == "failed":
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=EMAIL_FAILED)
+    return Message(detail=CONFIRMATION_SENT)
 
 
 @router.get("/me", response_model=UserResponse)

@@ -49,6 +49,7 @@ function LoginForm() {
         autoComplete="email"
       />
       <PasswordField value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+      <Link to="/forgot-password" className="auth-form__link">Forgot your password?</Link>
 
       <Button type="submit" variant="primary" size="md" className="auth-form__submit" disabled={submitting}>
         {submitting ? 'Logging in…' : 'Log in'}

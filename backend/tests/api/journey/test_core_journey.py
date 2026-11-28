@@ -2,15 +2,19 @@
 resume and an interview kit, through the real routes on the real database. Only
 the model, GitHub and LeetCode are stood in for.
 
-    connect sources -> review the profile -> add a job -> see fit and gaps
+    sign up and confirm the address
+    -> connect sources -> review the profile -> add a job -> see fit and gaps
     -> tailored resume (review, export) and interview kit (practise, progress)
 """
 import io
+import re
 import uuid
 
 import pytest
 from docx import Document
 
+from app.core import mail
+from app.core.settings import settings
 from app.services.leetcode import leetcode_sync
 from app.services.resume.docx_parser import extract_text_from_docx
 from app.services.resume.pdf_parser import extract_text_from_pdf
@@ -33,6 +37,13 @@ def world(monkeypatch):
     monkeypatch.setattr(llm, "API_KEY", "test-key")
     monkeypatch.setattr(llm, "chat_completion", model)
     stand_in_github(monkeypatch.setattr)
+    monkeypatch.setattr(settings, "require_confirmed_email", True)
+    model.emails = []
+
+    async def send(to, subject, body):
+        model.emails.append(body)
+        return True
+    monkeypatch.setattr(mail, "send", send)
 
     async def profile(username, *args, **kwargs):
         return leetcode_profile()
@@ -77,6 +88,9 @@ def test_from_a_new_account_to_a_tailored_resume_and_an_interview_kit(client, wo
         "password": "a long enough password",
     })
     me.headers = {"Authorization": f"Bearer {account['access_token']}"}
+    link = re.search(r"confirm-email#token=(\S+)", world.emails[0])
+    confirmed = client.post("/auth/email/confirm", json={"token": link.group(1)})
+    assert confirmed.status_code == 204, confirmed.text
 
     # --- connect sources ------------------------------------------------------
     me.post("/resume/upload", files={"file": (
