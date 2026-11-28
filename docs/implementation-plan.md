@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 37. Unmarked steps (38 to 71, plus 6 and 13) are not started.
+Updated after step 38. Unmarked steps (39 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -16,15 +16,15 @@ Updated after step 37. Unmarked steps (38 to 71, plus 6 and 13) are not started.
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
 | F. Tailored resume | ✅ done | 29 to 37 |
-| G. Interview kit and practice | not started | 38 to 43 |
+| G. Interview kit and practice | ◐ in progress | 38 done; 39 to 43 not started |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**32 of 71 steps done, 1 partial, 2 skipped, 36 not started** (34 of them in Stages G to K).
+**33 of 71 steps done, 1 partial, 2 skipped, 35 not started** (33 of them in Stages G to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 814 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 865 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -152,11 +152,12 @@ New tables: `TailoredResume` (user, JD, version, structured JSON, status, create
     - **Status:** Done. The endpoint `/resume/tailor/{job}`, its report, prompt, schemas and the `ResumeTailoring` panel are removed, the ranking now lives in `services/resume/selection.py`, and the Resume page links to the Tailored Resume page. Migration `f2c7d4e9a1b3` drops the cache table `resume_tailoring_reviews` (the downgrade restores it empty).
     - **Gate:** zero unflagged unsupported claims across 10 profile and JD test pairs (an automated test diffs facts against sources), and the output still works with the LLM stubbed to fail. ✅ `tests/api/test_resume_gate.py`: ten made-up profile and job pairs, a stand-in model that tries nine ways of overstating, and a separate checker that compares every fact on each resume and in each download with the database; all ten also pass with the model unreachable or answering nonsense. **The first run failed on four profiles:** skills were listed under names from the table shared by all users, so a resume could show another person's spelling, or keep a skill since removed from an item. Fixed: a skill is now named as a source it cites names it, and is left off when the record no longer says it. Switching off the rewrite check also makes the gate fail. **What it doesn't show:** the pairs are made up, no real model was used, and the word-for-word rule it checks can't judge punctuation.
 
-## Stage G: Pillar 4, interview kit and practice (about 1.5–2 weeks)
+## Stage G: Pillar 4, interview kit and practice (about 1.5–2 weeks) — ◐ in progress
 
 New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evidence refs, gap flag), `PracticeAttempt` (answer, feedback, score).
 
-38. Question generation from the JD's requirements, `interview_focus_areas` and seniority: technical depth, system design, behavioral, role-specific. Validate against a schema. A deterministic topic skeleton is the fallback.
+✅ 38. Question generation from the JD's requirements, `interview_focus_areas` and seniority: technical depth, system design, behavioral, role-specific. Validate against a schema. A deterministic topic skeleton is the fallback.
+    - **Status:** Done. `build_outline` in `services/interview/kit_outline.py` decides from the job alone what is asked: each question's category, topic, job skills and competencies, with a standard wording. The seniority sets how many: 15 (intern) to 21 (staff), fewer when the job gives less to ask about. `generate_interview_kit` (`kit_generation.py`) makes one model call to word them, sending only the job, never anything about the candidate. The model can't add, drop or retag a question; a wording that is missing, too short or long, repeated, or (for technical depth) doesn't name its skill leaves the standard one, and the kit's `notice` says so. A missing key, an outage, unreadable replies or a used-up daily limit give the whole kit in standard wording. Tables `interview_kits` and `interview_questions` (migration `a3d8e5f0b2c4`) store numbered versions per job, so a new kit keeps earlier questions; deleting a job deletes them (`kit_store.py`). Nothing calls it yet. Verified by tests with a stand-in model, and by wording kits for 5 saved real postings with the real model: every call was accepted first time and 4 kits had every question worded; the intern one kept 2 of 15 standard because the model reworded the skill's name. Those trial jobs were rebuilt from saved extraction replies, without skill normalization. **Limits:** standard wording reads stiffly with some topics; wording quality is not checked (one reply had a garbled word); a technical question is rejected if it shortens the skill's name; questions don't use company notes. `PracticeAttempt` is left to step 41. **For step 39:** fill `evidence_refs` and `thin_evidence` (empty until then), using each question's `skills` and `competencies`, and compare the kit's date with `evidence_cutoff` (step 20).
 39. Evidence mapping: for each question, choose the best project, experience or LeetCode topic using the existing interview context-builder ranking. Mark "thin evidence" when none qualifies.
 40. Answer outline built only from mapped facts, passed through the existing grounding gate.
 41. Practice mode: the user answers a question and the existing `/interview/ask` pipeline gives feedback linked to the question ID. Track coverage per category.
