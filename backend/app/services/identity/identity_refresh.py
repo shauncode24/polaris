@@ -49,6 +49,8 @@ async def trigger_identity_refresh(user_id, source_event: str) -> None:
 
     try:
         # Every change gets its own job: joining a running one would miss it.
-        await jobs.start(user_id, "identity_auto_refresh", work, inputs=(uuid.uuid4(),))
+        await jobs.start(
+            user_id, "identity_auto_refresh", work, inputs=(uuid.uuid4(),), user_asked=False,
+        )
     except Exception as e:
         logger.warning("Could not start an identity refresh after '%s': %s", source_event, e)

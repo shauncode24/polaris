@@ -29,7 +29,8 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 40.** Done.
 - [x] **Commit step 41.** Done.
 - [x] **Commit step 42.** Done.
-- [ ] **Commit step 43.**
+- [x] **Commit step 43.** Done.
+- [ ] **Commit step 44.**
 - [ ] **Try the Interview Kit page** (after migrating): generate a kit for a real job, check the evidence on a few questions, practise two or three and open the study plan. Tell me which matches are wrong, how often "Thin evidence" is unfair, and whether the scores and feedback are useful.
 - [ ] **Open a LeetCode topic link** such as https://leetcode.com/tag/dynamic-programming/ and tell me if it doesn't reach the topic's problems (the site refuses automated checks).
 - [ ] **Open a downloaded resume in Microsoft Word and a PDF reader** and tell me what should look different. It is A4; say if you need US Letter. Run `uv sync` from `backend/` on any other machine first (ReportLab is new).
@@ -51,6 +52,7 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 
 - [ ] **Daily AI limit per user.** Set to 100 calls. On Groq's free tier that is too generous to protect anyone: one person using all of it could spend the whole app's 200,000 daily tokens. Roughly 30 would stop one user taking everything but still allows only about a handful of active users a day. Change it with `LLM_DAILY_CALLS_PER_USER` in `.env`; decide it together with the provider below.
 - [ ] **How much evidence should count?** A skill needs a score of 60% to be met and 30% to count partly. One source rarely gets there: a skill used in one job (25%) or seen in one ordinary GitHub repo (18% to 39%) is usually shown as a gap, and one project that describes it (35%) only counts partly. LeetCode is more generous by design: 100 problems across 5 topics meets "algorithms" by itself. Tell me if either should change; the numbers are in `services/evidence/scoring.py`.
+- [ ] **Sign-in attempts per address.** Set to 10 a minute (`AUTH_RATE_LIMIT_REQUESTS`). Everyone behind one shared address, such as a campus network, shares them, so raise it if a group will sign up together. The other limits are 120 requests a minute per address and 20 pieces of AI work a minute per user.
 - [ ] **Hosting** (Render or Fly.io with managed Postgres, or one VPS). Needed for step 13 (staging) and Stage J.
 - [ ] **Password reset and email verification.** The app has email/password sign-in and no reset flow, so a forgotten password locks the user out. Choose: build it (needs a transactional email provider such as Resend or Postmark), or drop email/password and keep Google sign-in only.
 - [ ] **`services/projects/curation.py`.** Only tests use it, the app never calls it. Keep, wire in, or delete?
@@ -63,6 +65,7 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [ ] **Repair CI** (Stage A, step 5, skipped): the workflow still runs on Windows with no Postgres, so the database-backed tests are skipped there. I can do this edit if you tell me to.
 - [ ] **Staging account and secrets** for the hosting choice above: `JWT_SECRET`, `ENCRYPTION_KEY`, `GROQ_API_KEY`, `GOOGLE_CLIENT_ID`. Never paste them into chat.
 - [ ] **Google OAuth console:** add the staging and production origins to the allowed origins.
+- [ ] **When deploying, set `TRUSTED_PROXIES`** to the addresses of the host's proxy or load balancer (it depends on the hosting choice; I'll help find them). Without it every user looks like the same caller and shares one limit, including the 10 sign-in attempts a minute.
 
 ## Later (not yet needed)
 

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.rate_limit import require_ai_slot
 from app.core.security import decrypt_secret, encrypt_secret
 from app.models.facts import User
 from app.schemas.leetcode.leetcode_sync import LeetCodeManualSubmission
@@ -90,6 +91,7 @@ async def trigger_leetcode_sync(
     if not username:
         return JSONResponse(status_code=400, content={"status": "error", "reason": "LeetCode username is required."})
 
+    require_ai_slot(current_user.id)  # topic names not seen before go to the model
     current_user.leetcode_username = username
     await db.commit()
 
@@ -115,6 +117,7 @@ async def submit_leetcode_manual(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    require_ai_slot(current_user.id)  # topic names not seen before go to the model
     result = await sync_leetcode_manual(db, current_user, payload.tag_counts)
     await touch_evidence(db, current_user.id)
     await persist_engineering_snapshot(db, current_user.id, "leetcode manual submission")

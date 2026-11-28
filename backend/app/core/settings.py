@@ -1,3 +1,4 @@
+import ipaddress
 import os
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -25,6 +26,24 @@ def _require_env(name: str) -> str:
             f"missing/insecure default — set it in your .env file or environment."
         )
     return value
+
+
+def _networks(name: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """A comma-separated list of IP addresses and networks, empty if unset."""
+    networks = []
+    for entry in filter(None, (part.strip() for part in os.environ.get(name, "").split(","))):
+        try:
+            network = ipaddress.ip_network(entry)
+        except ValueError as e:
+            raise ConfigurationError(
+                f"{name}: '{entry}' is not an IP address or network such as 10.0.0.0/8 ({e})."
+            ) from e
+        if network.prefixlen == 0:
+            raise ConfigurationError(
+                f"{name}: '{entry}' would trust every caller, letting anyone claim any address."
+            )
+        networks.append(network)
+    return networks
 
 
 class Settings:
@@ -87,9 +106,14 @@ class Settings:
         self.max_paste_text_chars = int(os.environ.get("MAX_PASTE_TEXT_CHARS", "50000"))
         self.max_request_body_bytes = int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(15 * 1024 * 1024)))
 
-        # --- Rate limiting (Phase 1 §1.4) ---
+        # --- Rate limiting (see core/rate_limit.py) ---
+        # Each is a number of requests per window; 0 removes that limit.
         self.rate_limit_requests = int(os.environ.get("RATE_LIMIT_REQUESTS", "120"))
+        self.auth_rate_limit_requests = int(os.environ.get("AUTH_RATE_LIMIT_REQUESTS", "10"))
+        self.ai_rate_limit_requests = int(os.environ.get("AI_RATE_LIMIT_REQUESTS", "20"))
         self.rate_limit_window_seconds = int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60"))
+        # Proxies whose X-Forwarded-For is believed.
+        self.trusted_proxies = _networks("TRUSTED_PROXIES")
 
         # --- Observability (Phase 1 §1.1) ---
         # Controls the root logger level set by app/core/logging_config.py.

@@ -11,6 +11,7 @@ from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.llm import LLMBudgetError
+from app.core.rate_limit import TooMuchWork, require_ai_slot
 from app.core.settings import settings
 from app.models.facts import (
     User, Resume, Experience, Project, Education, Certificate,
@@ -358,9 +359,12 @@ async def get_resume_workspace(
         # FIX (cross-user evidence leak): user_id now required.
         resume_scoped_evidence = await build_scoped_skill_evidence(db, uid, RESUME_SOURCE_TYPES)
         try:
+            require_ai_slot(uid)
             role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
         except LLMBudgetError as e:  # the page still loads, saying why
             role_fit_results = fallback_role_fit(str(e))
+        except TooMuchWork as e:
+            role_fit_results = fallback_role_fit(e.detail)
         role_fit = [r.model_dump() for r in role_fit_results]
 
     coverage_gaps = await analyze_cross_source_coverage(db, uid, latest.id)

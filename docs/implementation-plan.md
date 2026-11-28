@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 43. Unmarked steps (44 to 71, plus 13) are not started.
+Updated after step 44. Unmarked steps (45 to 71, plus 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -17,14 +17,14 @@ Updated after step 43. Unmarked steps (44 to 71, plus 13) are not started.
 | E. LLM foundation | ✅ done | 25 to 28 |
 | F. Tailored resume | ✅ done | 29 to 37 |
 | G. Interview kit and practice | ✅ done | 38 to 43 |
-| H. Hardening and account basics | not started | 44 to 51 |
+| H. Hardening and account basics | ◐ in progress | 44 done; 45 to 51 not started |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**39 of 71 steps done, 1 partial, 2 skipped, 29 not started** (28 of them in Stages H to K).
+**40 of 71 steps done, 1 partial, 2 skipped, 28 not started** (27 of them in Stages H to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 1077 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 1125 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -170,9 +170,10 @@ New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evid
     - **Status:** Done. A new Interview Kit page (`/interview-kit`, in the sidebar; the Skill Gap page's practice link now opens it): generate a kit for a saved job, a tab per category and one for the study plan, evidence chips or "Thin evidence" on each question, the answer outline, practice with feedback and earlier attempts, a progress bar with the weakest area, and "Match again" when the profile has changed. New routes: `GET` and `POST /interview/kits/{job}`, and `POST .../versions/{n}/evidence` (`services/interview/kit_view.py`). The career planner now shows each day's LeetCode links. **Orphaned project components:** all five deleted (their jobs are done by the kit, the project details panel, the project list and the profile page's link confirmation). Verified by tests, a frontend build and a headless-browser run against a throwaway database with a stand-in model (light, dark and a 600px window); **not tried with the real model on this page or with your own profile**. **Limits:** the study plan appears on this page only, not on the planner; a draft answer is lost on leaving the page or changing job or version; at 600px the sidebar still takes about a quarter of the width (step 57); the main script is 647 kB (step 55).
     - **Gate:** the whole journey test passes with a stubbed LLM, from sources to a tailored resume and an interview kit. ✅ `tests/api/journey/test_core_journey.py`: a new account uploads a resume, syncs GitHub and LeetCode, pastes LinkedIn, reviews the profile, adds a job, reads the fit, generates, approves and exports a resume, generates a kit, practises, and gets a study plan and career plan, all through the real routes. The model, GitHub and LeetCode are stand-ins, and it runs locally, not in CI (step 5).
 
-## Stage H: Hardening and account basics (about 1.5 weeks)
+## Stage H: Hardening and account basics (about 1.5 weeks) — ◐ in progress
 
-44. Rate limiting: a strict limit on `/auth/*`; per-user limits on LLM endpoints; trusted-proxy handling for `X-Forwarded-For`; evict idle entries from the in-memory map.
+✅ 44. Rate limiting: a strict limit on `/auth/*`; per-user limits on LLM endpoints; trusted-proxy handling for `X-Forwarded-For`; evict idle entries from the in-memory map.
+    - **Status:** Done, in `core/rate_limit.py`. Per minute: 120 requests per address, as before; 10 sign-in or sign-up attempts per address (everything under `/auth/` except `/auth/me`); and 20 pieces of AI work per user. AI work is counted where it starts, so saved results, page loads, rejoining a running job and automatic identity refreshes don't count; LeetCode syncs do, and the resume page still loads past the limit, saying why role fit is missing. A refusal says how long to wait and sends `Retry-After`. `X-Forwarded-For` is believed only from `TRUSTED_PROXIES` (empty by default), read from the right; IPv6 callers are counted by /64; idle entries are dropped once a window. **Fixed on the way:** the browser couldn't read a refusal (no CORS headers, so it looked like a network failure), preflight requests were counted, and any failed sign-in check on page load, including a refusal, signed the user out. Verified by tests, a frontend build and a sign-in run against a local server; **not tried in a browser or behind a real proxy**. **Limits:** counts are per server process and cleared by a restart (step 58 adds workers, which multiplies each limit); sign-in attempts are limited by address only, so guesses spread over many addresses aren't slowed; uvicorn also believes the header from the same machine (127.0.0.1). **For Stage J:** set `TRUSTED_PROXIES` to the host's proxy, or every user shares one limit.
 45. Token lifetime: short-lived access token plus a refresh token in an httpOnly cookie.
 46. Password reset and email verification through the chosen email provider, or a documented decision to restrict sign-in to Google. Without this, a forgotten password locks the user out.
 47. Account deletion: `DELETE /account` removes all of a user's data (including stored files and encrypted tokens). Add data export if time allows.

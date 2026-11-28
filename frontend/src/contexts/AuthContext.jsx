@@ -18,9 +18,13 @@ export function AuthProvider({ children }) {
     try {
       const me = await authApi.fetchMe(activeToken)
       setUser(me)
-    } catch {
-      localStorage.removeItem(TOKEN_KEY)
-      setToken(null)
+    } catch (error) {
+      // Only a refused token signs the user out. After anything else (too many
+      // requests, the server being down) a reload picks the session up again.
+      if (error.status === 401) {
+        localStorage.removeItem(TOKEN_KEY)
+        setToken(null)
+      }
       setUser(null)
     } finally {
       setLoading(false)

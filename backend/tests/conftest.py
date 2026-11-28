@@ -41,8 +41,11 @@ os.environ["LLM_DAILY_CALLS_PER_USER"] = "100000"
 
 os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
 os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
-# Every test request comes from one client, far faster than any real user.
-os.environ.setdefault("RATE_LIMIT_REQUESTS", "100000")
+# Every test request comes from one client, far faster than any real user. The
+# limits have their own tests.
+for name in ("RATE_LIMIT_REQUESTS", "AUTH_RATE_LIMIT_REQUESTS", "AI_RATE_LIMIT_REQUESTS"):
+    os.environ[name] = "100000"
+os.environ["TRUSTED_PROXIES"] = ""
 
 # Database-backed tests live under tests/api and need a real Postgres.
 collect_ignore = [] if TEST_DATABASE_URL else ["api"]
