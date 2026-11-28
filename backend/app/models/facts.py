@@ -44,6 +44,9 @@ class Experience(Base):
     company: Mapped[str] = mapped_column(String(255))
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
+    # As written ("2023", "Present"); see services/resume/dates.py.
+    start_date_text: Mapped[str | None] = mapped_column(String(50))
+    end_date_text: Mapped[str | None] = mapped_column(String(50))
     stack: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     bullets: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     competency_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
@@ -122,6 +125,9 @@ class Education(Base):
     field_of_study: Mapped[str | None] = mapped_column(String(255))
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
+    # As written ("2023", "Present"); see services/resume/dates.py.
+    start_date_text: Mapped[str | None] = mapped_column(String(50))
+    end_date_text: Mapped[str | None] = mapped_column(String(50))
     is_current: Mapped[bool] = mapped_column(Boolean, default=False)
     details: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     # Phase 4 (provenance) — same rule as Experience.source above.

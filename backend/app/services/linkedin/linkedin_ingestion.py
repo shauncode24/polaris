@@ -10,6 +10,7 @@ from app.models.inference import SkillEvidence
 from app.models.linkedin import LinkedInProfile
 from app.prompts.linkedin.extraction import LINKEDIN_EXTRACTION_SYSTEM_PROMPT
 from app.schemas.linkedin.linkedin import ExtractedLinkedInProfile, LinkedInIngestResult
+from app.services.resume.dates import date_columns, is_ongoing
 from app.services.projects.linking import normalize_name
 from app.services.evidence.scoring import WEIGHTS
 from app.services.resume.skill_classifier import resolve_skills
@@ -46,6 +47,20 @@ async def _existing_experience_keys(db: AsyncSession, user_id) -> set[str]:
     return {f"{normalize_name(r)}@{normalize_name(c)}" for r, c in result.all()}
 
 
+async def _undated_linkedin_rows(db: AsyncSession, user_id, model, key_of) -> dict:
+    """Rows an earlier LinkedIn import saved without dates, by their key."""
+    result = await db.execute(select(model).where(
+        model.user_id == user_id, model.source == "linkedin",
+        model.start_date_text.is_(None), model.end_date_text.is_(None),
+    ))
+    return {key_of(row): row for row in result.scalars().all()}
+
+
+def _fill(row, dates: dict) -> None:
+    for column, value in dates.items():
+        setattr(row, column, value)
+
+
 async def _existing_education_keys(db: AsyncSession, user_id) -> set[str]:
     result = await db.execute(select(Education.institution, Education.degree).where(Education.user_id == user_id))
     return {f"{normalize_name(i)}@{normalize_name(d or '')}" for i, d in result.all()}
@@ -74,35 +89,48 @@ async def ingest_linkedin_profile(db: AsyncSession, user, raw_text: str) -> Link
     await db.flush()
 
     existing_exp_keys = await _existing_experience_keys(db, user.id)
+    undated_roles = await _undated_linkedin_rows(
+        db, user.id, Experience, lambda r: f"{normalize_name(r.role)}@{normalize_name(r.company)}",
+    )
     experiences_created = experiences_deduped = 0
     for exp in extraction.experience:
         if not exp.role or not exp.company:
             continue
         key = f"{normalize_name(exp.role)}@{normalize_name(exp.company)}"
+        dates = date_columns(exp.date_range)
         if key in existing_exp_keys:
             experiences_deduped += 1
+            if key in undated_roles:
+                _fill(undated_roles[key], dates)
             continue
         existing_exp_keys.add(key)
         db.add(Experience(
             user_id=user.id, resume_id=None, role=exp.role, company=exp.company,
-            start_date=None, end_date=None, stack=[], bullets=exp.bullets,
+            **dates, stack=[], bullets=exp.bullets,
             source="linkedin", created_at=datetime.now(timezone.utc),
         ))
         experiences_created += 1
 
     existing_edu_keys = await _existing_education_keys(db, user.id)
+    undated_education = await _undated_linkedin_rows(
+        db, user.id, Education, lambda r: f"{normalize_name(r.institution)}@{normalize_name(r.degree or '')}",
+    )
     education_created = education_deduped = 0
     for edu in extraction.education:
         if not edu.institution:
             continue
         key = f"{normalize_name(edu.institution)}@{normalize_name(edu.degree or '')}"
+        dates = date_columns(edu.date_range, lone_date_is_end=True)
         if key in existing_edu_keys:
             education_deduped += 1
+            if key in undated_education:
+                _fill(undated_education[key], dates)
             continue
         existing_edu_keys.add(key)
         db.add(Education(
             user_id=user.id, resume_id=None, institution=edu.institution, degree=edu.degree,
-            field_of_study=edu.field_of_study, start_date=None, end_date=None, is_current=False,
+            field_of_study=edu.field_of_study, **dates,
+            is_current=is_ongoing(dates["end_date_text"]),
             details=[], source="linkedin", created_at=datetime.now(timezone.utc),
         ))
         education_created += 1

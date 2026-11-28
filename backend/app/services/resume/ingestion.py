@@ -10,6 +10,7 @@ from app.models.facts import User, Experience, Project, Education, Resume
 from app.models.structure import Skill, ProjectSkill
 from app.models.inference import SkillEvidence, ProfileSnapshot
 
+from app.services.resume.dates import date_columns
 from app.services.resume.extraction import extract_resume_data
 from app.services.resume.skill_classifier import resolve_skills
 from app.services.evidence.matching import mentions_skill
@@ -116,7 +117,7 @@ async def ingest_resume(
     for exp in extraction.experiences:
         row = Experience(
             user_id=user.id, resume_id=resume_row.id, role=exp.role, company=exp.company,
-            start_date=None, end_date=None, stack=exp.stack, bullets=exp.bullets,
+            **date_columns(exp.start_date, exp.end_date), stack=exp.stack, bullets=exp.bullets,
             source="resume",
             created_at=datetime.now(timezone.utc),
         )
@@ -139,7 +140,8 @@ async def ingest_resume(
         row = Education(
             user_id=user.id, resume_id=resume_row.id,
             institution=edu.institution, degree=edu.degree, field_of_study=edu.field_of_study,
-            start_date=None, end_date=None, is_current=edu.is_current, details=edu.details,
+            **date_columns(edu.start_date, edu.end_date, lone_date_is_end=True),
+            is_current=edu.is_current, details=edu.details,
             source="resume",
             created_at=datetime.now(timezone.utc),
         )

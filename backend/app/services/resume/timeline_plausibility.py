@@ -15,6 +15,8 @@ from datetime import date, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.resume.dates import last_day
+
 # If GitHub-evidenced work on a skill starts more than this many days
 # AFTER a resume-claimed experience using that skill ENDED, it's worth a
 # plain, non-judgmental note — not flagged as contradictory, just as
@@ -112,7 +114,8 @@ async def build_timeline_plausibility_notes(db: AsyncSession, user_id, resume_id
     resolved = await resolve_skills(all_raw, db, skip_if_unavailable=True) if all_raw else {}
 
     for exp in experiences:
-        window = (_to_date(exp.start_date), _to_date(exp.end_date))
+        # A role that ended in "2023" may have run to the end of that year.
+        window = (_to_date(exp.start_date), last_day(exp.end_date_text) or _to_date(exp.end_date))
         for raw in (exp.stack or []):
             canonical = resolved.get(raw)
             if canonical is None:

@@ -93,6 +93,8 @@ class ExperienceEntry(BaseModel):
     company: str = Field(min_length=1)
     start_date: date | None = None
     end_date: date | None = None
+    start_date_text: str | None = None  # as written; this is what is shown
+    end_date_text: str | None = None
     bullets: list[ResumeLine] = []
     sources: Sources = Field(min_length=1)
 
@@ -111,6 +113,8 @@ class EducationEntry(BaseModel):
     field_of_study: str | None = None
     start_date: date | None = None
     end_date: date | None = None
+    start_date_text: str | None = None
+    end_date_text: str | None = None
     is_current: bool = False
     bullets: list[ResumeLine] = []
     sources: Sources = Field(min_length=1)

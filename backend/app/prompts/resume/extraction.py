@@ -13,10 +13,12 @@ following bullet/sentence for that project — so no detail from the source text
 For each project and each experience, the "stack" array MUST include every technology, language,
 framework, tool, or platform mentioned anywhere in that project's or experience's own text
 (description or bullets) — not just the headline technologies.
+Copy every "start_date" and "end_date" exactly as the resume writes it (e.g. "Jun 2025", "2023",
+"Present", "Expected 2027"). Never add a month or day that isn't written; use null only when no date
+is written. A single date on an education entry is its "end_date".
 For "education": include every degree/program listed (undergraduate, graduate, bootcamps, relevant
-diplomas). "end_date" should be null and "is_current" should be true if the resume indicates the
-program is ongoing/expected (e.g. "Expected 2027", "Present", no end date given for the most recent
-entry). "details" should capture any GPA, honors, relevant coursework, or minor mentioned for that
+diplomas). "is_current" should be true if the resume indicates the program is ongoing or expected
+(e.g. "Expected 2027", "Present", no end date given for the most recent entry). "details" should capture any GPA, honors, relevant coursework, or minor mentioned for that
 entry, each as a separate string — do not fabricate a GPA or honor that isn't stated.
 The top-level "skills" list and every "stack" array must contain ONLY concrete technologies,
 languages, frameworks, libraries, tools, or platforms.

@@ -41,6 +41,7 @@ from app.services.evidence.matching import known_canonicals, mentions_any, skill
 from app.services.evidence.review import dedupe_visible
 from app.services.job_intelligence.builder import get_job_intelligence
 from app.services.resume.claim_risk import apply_claim_risk_penalty, claim_risk_by_project_id
+from app.services.resume.dates import is_ongoing
 from app.services.resume.tailoring_ranking import TYPE_WEIGHTS, rank_items_for_jd
 
 MAX_EXPERIENCES = 4
@@ -73,7 +74,7 @@ def _resume_order(rows: list, uploaded_at: dict) -> list:
     def ended(row) -> date:
         if row.end_date:
             return row.end_date
-        return date.max if row.start_date else date.min
+        return date.max if row.start_date or is_ongoing(row.end_date_text) else date.min
 
     return sorted(sorted(rows, key=listed), key=ended, reverse=True)  # both sorts are stable
 
@@ -202,6 +203,7 @@ async def select_for_job(db: AsyncSession, user_id, job_intelligence_id) -> Sele
     def experience_entry(e: Experience) -> ExperienceEntry:
         return ExperienceEntry(
             role=e.role.strip(), company=e.company.strip(), start_date=e.start_date, end_date=e.end_date,
+            start_date_text=e.start_date_text, end_date_text=e.end_date_text,
             bullets=_lines(e.bullets or [], "experience", e.id, MAX_EXPERIENCE_BULLETS, wanted, aliases),
             sources=[SourceRef(kind="experience", id=e.id)],
         )
@@ -222,6 +224,7 @@ async def select_for_job(db: AsyncSession, user_id, job_intelligence_id) -> Sele
         return EducationEntry(
             institution=e.institution.strip(), degree=e.degree, field_of_study=e.field_of_study,
             start_date=e.start_date, end_date=e.end_date, is_current=bool(e.is_current),
+            start_date_text=e.start_date_text, end_date_text=e.end_date_text,
             bullets=_lines(e.details or [], "education", e.id, MAX_EDUCATION_LINES, wanted, aliases),
             sources=[SourceRef(kind="education", id=e.id)],
         )
