@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 31. Unmarked steps (32 to 71, plus 6 and 13) are not started.
+Updated after step 32. Unmarked steps (33 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -15,16 +15,16 @@ Updated after step 31. Unmarked steps (32 to 71, plus 6 and 13) are not started.
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
 | E. LLM foundation | ✅ done | 25 to 28 |
-| F. Tailored resume | ◐ in progress | 29 to 31 done; 32 to 37 not started |
+| F. Tailored resume | ◐ in progress | 29 to 32 done; 33 to 37 not started |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**26 of 71 steps done, 1 partial, 2 skipped, 42 not started** (40 of them in Stages F to K).
+**27 of 71 steps done, 1 partial, 2 skipped, 41 not started** (39 of them in Stages F to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 574 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 634 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -138,7 +138,8 @@ New tables: `TailoredResume` (user, JD, version, structured JSON, status, create
     - **Status:** Done. `select_for_job` in `services/resume/selection.py` builds a `TailoredResumeDocument` in the evidence's own wording, with a ranking that says why each item was chosen. No model calls; nothing calls it yet. Up to 4 roles (most relevant, in resume order) and 4 projects (relevant ones, topped up to 2), bullets that show the job's skills first, and up to 18 skills the user has evidence for, required ones first. Hidden items and skills are left out; LeetCode practice alone lists a skill only when the job asks for it. **Limits:** a project description is one bullet per line, so a paragraph stays one bullet; a claim-audit penalty is lost after a resume re-upload until the project is audited again. **Gap found and fixed afterwards:** resume and LinkedIn imports discarded start and end dates. They are now saved with the wording as written (`services/resume/dates.py`), which is what a resume shows, so a stated year never becomes a month. This also switches on two checks that had no dates to work with: the note (and lower skill score) when GitHub evidence starts long after a role ended, and the resume analysis's role order and overlap points. Rows imported earlier have no dates until imported again.
 ✅ 31. Bullet rewriting: the LLM rewrites each selected bullet toward the JD's language, given only that bullet's source facts, through `llm_json`.
     - **Status:** Done. `rewrite_bullets` in `services/resume/rewriting.py` makes one call per experience or project bullet. A call holds the bullet's own wording and the job's names for the skills that bullet already mentions: no role, company, other bullet or other requirement. Rewrites are stored as pending suggestions, so the resume keeps the original wording until the user accepts one. A bullet that mentions none of the job's skills is not sent, since there is no job wording to move it toward; education lines are not rewritten and no summary is written. An unusable reply skips that bullet, an unavailable model stops the run, both are reported in `problem` (for step 33's notice), and the daily limit raises as elsewhere. Nothing calls it yet. Verified by tests and by rewriting 13 made-up bullets with the real model. **For step 32:** after the prompt was tightened, the model still named something the bullet didn't in 3 of the 13 ("version control" became "Git", "containerised" became "Dockerized", "data warehouse" became "Redshift"; the last two pairings were made up for the test). The gate must compare against the bullet's literal wording: matching by skill name would pass "Git", because "version control" counts as Git. It also saw one rewrite read worse than its original.
-32. Grounding gate: every number, technology and claim in a rewritten bullet must exist in its source facts. Violations are dropped or flagged "needs your confirmation". Reuse the approach in `services/interview/grounding.py`.
+✅ 32. Grounding gate: every number, technology and claim in a rewritten bullet must exist in its source facts. Violations are dropped or flagged "needs your confirmation". Reuse the approach in `services/interview/grounding.py`.
+    - **Status:** Done. `services/resume/grounding.py`, deterministic, applied to every rewrite as it is made. It compares the rewrite with the bullet's literal words, not with skill names. A figure the bullet doesn't state removes the rewrite. Any other word added or left out, a changed symbol (`~`, `+`, `$`), or the same words in a new order, is kept and flagged in the line's `flags`, in words for the user. Only listed spellings of one name pass ("Postgres" and "PostgreSQL", "AWS" and "Amazon Web Services"). `unsupported_sources` checks that everything a document cites exists, is the user's and is not hidden, and that each line's original is the cited bullet. Of the 10 changed rewrites saved from step 31's real-model runs, 3 passed and 7 were flagged, including every unsupported one; at least one flagged rewrite was a fair paraphrase. **Limits:** fair paraphrases and reorderings are flagged too, so most real rewording will ask for confirmation; ordinary punctuation, hyphens, slashes and capital letters are not compared; entry headings, technologies and skill names are not compared with their sources. **For step 34:** run `ground_line` on every line and `unsupported_sources` on any document the browser sends (nothing calls the latter yet), and make accepting a flagged rewrite an explicit confirmation.
 33. Deterministic fallback: if the LLM fails, return the original bullets ordered by relevance with a notice.
 34. Editor UI: original against rewritten, per-bullet accept, reject or edit, section reordering, evidence shown for each line.
 35. Scoring: before and after keyword coverage and ATS checks, using the `analysis` engine on the generated resume.

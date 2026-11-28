@@ -94,7 +94,7 @@ def _lines(
     ]
 
 
-def _description_lines(description: str | None) -> list[str]:
+def description_lines(description: str | None) -> list[str]:
     """A project description holds one bullet per line."""
     return [_BULLET_MARK.sub("", line) for line in (description or "").splitlines()]
 
@@ -216,7 +216,7 @@ async def select_for_job(db: AsyncSession, user_id, job_intelligence_id) -> Sele
         return ProjectEntry(
             name=p.name.strip(), url=p.repo_url or (repo.html_url if repo else None),
             technologies=_technologies(stack_of(p), canonical_of, wanted, hidden),
-            bullets=_lines(_description_lines(p.description), "project", p.id, MAX_PROJECT_BULLETS, wanted, aliases),
+            bullets=_lines(description_lines(p.description), "project", p.id, MAX_PROJECT_BULLETS, wanted, aliases),
             sources=sources,
         )
 

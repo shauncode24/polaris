@@ -6,8 +6,9 @@ so it has nothing to borrow a claim from. A bullet that mentions none of the
 job's skills has no job language to move toward and is not sent.
 
 A rewrite is only stored beside the original, as a pending suggestion: the
-resume keeps the original wording until the user accepts it. Nothing here yet
-checks a rewrite against the facts.
+resume keeps the original wording until the user accepts it. Each one is
+checked against that wording (grounding.py), which removes it or flags what
+the user has to confirm.
 """
 import re
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from app.schemas.resume.tailored import ResumeLine, TailoredResumeDocument
 from app.services.evidence.confidence import get_hidden_skill_names
 from app.services.evidence.matching import find_skill, skill_aliases
 from app.services.job_intelligence.builder import get_job_intelligence
+from app.services.resume.grounding import ground_line
 
 # A reply longer than this is not a reworded bullet.
 _MAX_GROWTH = 1.5
@@ -132,6 +134,6 @@ async def rewrite_bullets(
             problem = str(e)
             break
         if not _same_wording(rewrite, original):
-            # A new suggestion: nothing the user decided or was warned of before applies to it.
-            line.rewrite, line.decision, line.flags = rewrite, "pending", []
+            line.rewrite, line.decision = rewrite, "pending"  # a new suggestion, not yet decided on
+            ground_line(line)
     return RewriteResult(result, problem)

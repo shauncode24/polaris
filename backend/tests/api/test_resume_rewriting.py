@@ -234,6 +234,24 @@ def test_running_out_of_calls_is_not_hidden(seeded, model, monkeypatch):
         llm_budget.current_user.reset(token)
 
 
+def test_every_rewrite_is_checked_against_its_bullet(seeded, model):
+    user, job, document = resume(["Tuned Postgres queries.", "Backed up Postgres.", "Upgraded Postgres."])
+    model.will(
+        {"rewrite": "Tuned PostgreSQL queries."},
+        {"rewrite": "Backed up PostgreSQL and Redis."},
+        {"rewrite": "Upgraded 12 PostgreSQL servers."},
+    )
+
+    result = rewrite(user, job, document)
+
+    clean, doubtful, invented = result.document.experience[0].bullets
+    assert (clean.rewrite, clean.flags) == ("Tuned PostgreSQL queries.", [])
+    assert doubtful.rewrite == "Backed up PostgreSQL and Redis."
+    assert any('"Redis"' in flag for flag in doubtful.flags)
+    assert (invented.rewrite, invented.flags, invented.text) == (None, [], "Upgraded Postgres.")
+    assert result.problem is None
+
+
 def test_another_users_job_gives_nothing(seeded, model):
     _user, job, document = resume(["Tuned Postgres queries."])
 
