@@ -29,8 +29,10 @@ TOO_MANY_REQUESTS = "Too many requests."
 TOO_MANY_SIGN_INS = "Too many sign-in attempts."
 TOO_MUCH_WORK = "You've started a lot of AI work in a short time."
 
-# Under /auth/, but it only reads the signed-in user, on every page load.
-_NOT_A_SIGN_IN = {"/auth/me"}
+# Under /auth/, but nothing there to guess, and used far more often than a
+# sign-in: reading the signed-in user, renewing a session (every page load) and
+# ending one.
+_NOT_A_SIGN_IN = {"/auth/me", "/auth/refresh", "/auth/logout"}
 
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network

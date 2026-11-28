@@ -1,75 +1,51 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import * as authApi from '../api/auth'
+import { endSession, onSessionChange, renewSession } from '../api/session'
 
 const AuthContext = createContext(null)
-const TOKEN_KEY = 'polaris-token'
+// Where week-long tokens used to be kept.
+const OLD_TOKEN_KEY = 'polaris-token'
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY))
-  const [user, setUser] = useState(null)
+  const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  // True when the server couldn't say whether this browser is signed in.
+  const [unreachable, setUnreachable] = useState(false)
 
-  const loadUser = useCallback(async (activeToken) => {
-    if (!activeToken) {
-      setUser(null)
-      setLoading(false)
-      return
-    }
+  const restore = useCallback(async () => {
+    setLoading(true)
+    setUnreachable(false)
     try {
-      const me = await authApi.fetchMe(activeToken)
-      setUser(me)
-    } catch (error) {
-      // Only a refused token signs the user out. After anything else (too many
-      // requests, the server being down) a reload picks the session up again.
-      if (error.status === 401) {
-        localStorage.removeItem(TOKEN_KEY)
-        setToken(null)
-      }
-      setUser(null)
+      await renewSession()
+    } catch {
+      setUnreachable(true)
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    loadUser(token)
-  }, [token, loadUser])
+    localStorage.removeItem(OLD_TOKEN_KEY)
+    const stopListening = onSessionChange(setSession)
+    restore()
+    return stopListening
+  }, [restore])
 
-  function applySession(session) {
-    localStorage.setItem(TOKEN_KEY, session.access_token)
-    setToken(session.access_token)
-    setUser(session.user)
+  const value = {
+    // Changes only when someone signs in or out. Requests made with it are sent
+    // with the current access token (see `authFetch`).
+    token: session?.access_token ?? null,
+    user: session?.user ?? null,
+    loading,
+    unreachable,
+    retry: restore,
+    register: authApi.register,
+    login: authApi.login,
+    loginWithGoogle: authApi.googleAuth,
+    logout: endSession,
   }
 
-  async function register(payload) {
-    const session = await authApi.register(payload)
-    applySession(session)
-    return session
-  }
-
-  async function login(payload) {
-    const session = await authApi.login(payload)
-    applySession(session)
-    return session
-  }
-
-  async function loginWithGoogle(credential) {
-    const session = await authApi.googleAuth(credential)
-    applySession(session)
-    return session
-  }
-
-  function logout() {
-    localStorage.removeItem(TOKEN_KEY)
-    setToken(null)
-    setUser(null)
-  }
-
-  return (
-    <AuthContext.Provider value={{ token, user, loading, register, login, loginWithGoogle, logout }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

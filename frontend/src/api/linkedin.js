@@ -1,5 +1,6 @@
 // frontend/src/api/linkedin.js
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -22,7 +23,7 @@ export function ingestLinkedInProfile(token, rawText) {
 }
 
 export function getLinkedInWorkspace(token) {
-  return fetch(`${API_BASE_URL}/linkedin/workspace`, {
+  return authFetch(`${API_BASE_URL}/linkedin/workspace`, {
     headers: authHeaders(token),
   }).then(handle)
 }

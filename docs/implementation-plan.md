@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 44. Unmarked steps (45 to 71, plus 13) are not started.
+Updated after step 45. Unmarked steps (46 to 71, plus 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -17,14 +17,14 @@ Updated after step 44. Unmarked steps (45 to 71, plus 13) are not started.
 | E. LLM foundation | ✅ done | 25 to 28 |
 | F. Tailored resume | ✅ done | 29 to 37 |
 | G. Interview kit and practice | ✅ done | 38 to 43 |
-| H. Hardening and account basics | ◐ in progress | 44 done; 45 to 51 not started |
+| H. Hardening and account basics | ◐ in progress | 44, 45 done; 46 to 51 not started |
 | I. Frontend quality | not started | 52 to 57 |
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**40 of 71 steps done, 1 partial, 2 skipped, 28 not started** (27 of them in Stages H to K).
+**41 of 71 steps done, 1 partial, 2 skipped, 27 not started** (26 of them in Stages H to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 1125 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 1172 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -173,8 +173,9 @@ New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evid
 ## Stage H: Hardening and account basics (about 1.5 weeks) — ◐ in progress
 
 ✅ 44. Rate limiting: a strict limit on `/auth/*`; per-user limits on LLM endpoints; trusted-proxy handling for `X-Forwarded-For`; evict idle entries from the in-memory map.
-    - **Status:** Done, in `core/rate_limit.py`. Per minute: 120 requests per address, as before; 10 sign-in or sign-up attempts per address (everything under `/auth/` except `/auth/me`); and 20 pieces of AI work per user. AI work is counted where it starts, so saved results, page loads, rejoining a running job and automatic identity refreshes don't count; LeetCode syncs do, and the resume page still loads past the limit, saying why role fit is missing. A refusal says how long to wait and sends `Retry-After`. `X-Forwarded-For` is believed only from `TRUSTED_PROXIES` (empty by default), read from the right; IPv6 callers are counted by /64; idle entries are dropped once a window. **Fixed on the way:** the browser couldn't read a refusal (no CORS headers, so it looked like a network failure), preflight requests were counted, and any failed sign-in check on page load, including a refusal, signed the user out. Verified by tests, a frontend build and a sign-in run against a local server; **not tried in a browser or behind a real proxy**. **Limits:** counts are per server process and cleared by a restart (step 58 adds workers, which multiplies each limit); sign-in attempts are limited by address only, so guesses spread over many addresses aren't slowed; uvicorn also believes the header from the same machine (127.0.0.1). **For Stage J:** set `TRUSTED_PROXIES` to the host's proxy, or every user shares one limit.
-45. Token lifetime: short-lived access token plus a refresh token in an httpOnly cookie.
+    - **Status:** Done, in `core/rate_limit.py`. Per minute: 120 requests per address, as before; 10 sign-in or sign-up attempts per address (everything under `/auth/` except `/auth/me`, and since step 45 `/auth/refresh` and `/auth/logout`); and 20 pieces of AI work per user. AI work is counted where it starts, so saved results, page loads, rejoining a running job and automatic identity refreshes don't count; LeetCode syncs do, and the resume page still loads past the limit, saying why role fit is missing. A refusal says how long to wait and sends `Retry-After`. `X-Forwarded-For` is believed only from `TRUSTED_PROXIES` (empty by default), read from the right; IPv6 callers are counted by /64; idle entries are dropped once a window. **Fixed on the way:** the browser couldn't read a refusal (no CORS headers, so it looked like a network failure), preflight requests were counted, and any failed sign-in check on page load, including a refusal, signed the user out. Verified by tests, a frontend build and a sign-in run against a local server; **not tried in a browser or behind a real proxy**. **Limits:** counts are per server process and cleared by a restart (step 58 adds workers, which multiplies each limit); sign-in attempts are limited by address only, so guesses spread over many addresses aren't slowed; uvicorn also believes the header from the same machine (127.0.0.1). **For Stage J:** set `TRUSTED_PROXIES` to the host's proxy, or every user shares one limit.
+✅ 45. Token lifetime: short-lived access token plus a refresh token in an httpOnly cookie.
+    - **Status:** Done. Access tokens last 15 minutes and are kept only in the page's memory. The refresh token is an httpOnly cookie sent only to `/auth`, replaced on every use and lasting 14 days unused (`services/auth/sessions.py`, table `auth_sessions`, migration `d6a1b8c3e5f7`; no token is stored). A replaced token used again ends that session, except the latest one for 30 seconds, so that two tabs or a lost reply don't sign anyone out. New routes `POST /auth/refresh` and `POST /auth/logout`, both refused from other sites and left out of step 44's sign-in limit. The frontend renews the token and repeats the refused request (`api/session.js`), so pages keep their state; signing out signs out the other tabs; a server that can't be reached shows a retry instead of the sign-in page. **Everyone has to sign in once more:** week-long tokens are refused, and `JWT_EXPIRE_MINUTES` is replaced by `ACCESS_TOKEN_MINUTES` so that an old `.env` can't keep them. Verified by tests, a frontend build and a headless-Chrome run against a throwaway database with one-minute tokens; **not tried in Firefox or Safari, over HTTPS, or with Google sign-in**. **Limits:** a copied access token works until it expires, even after signing out; a session in regular use never expires; there is no list of signed-in devices or "sign out everywhere"; expired sessions are removed only when that user signs in again; a reply lost for more than 30 seconds signs that browser out. **For step 46:** a password reset must delete the user's sessions. **For Stage J:** the app and API need one site (or `COOKIE_SAMESITE=none`), and the cookie's `/auth` path must change if the API is served under a prefix.
 46. Password reset and email verification through the chosen email provider, or a documented decision to restrict sign-in to Google. Without this, a forgotten password locks the user out.
 47. Account deletion: `DELETE /account` removes all of a user's data (including stored files and encrypted tokens). Add data export if time allows.
 48. Collapse the remaining parallel implementations, one at a time, each with tests first: one role-fit module, one resume-analysis entry point (decide whether `/resume/review` and `/resume/analyze` are separate features), one bullet-analysis path. Migrate the remaining `chat_completion` call sites to `llm_json`.

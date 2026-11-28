@@ -192,8 +192,10 @@ def test_the_sign_in_limit_leaves_other_requests_alone(limits):
     caller = client()
     sign_in(caller)
     assert sign_in(caller).status_code == 429
-    # Reading who is signed in happens on every page load.
+    # Reading who is signed in and renewing the session happen on every page load.
     assert [caller.get("/auth/me").status_code for _ in range(5)] == [401] * 5
+    assert [caller.post("/auth/refresh").status_code for _ in range(5)] == [401] * 5
+    assert [caller.post("/auth/logout").status_code for _ in range(5)] == [204] * 5
     assert caller.get("/projects").status_code == 401
 
 
@@ -261,3 +263,32 @@ def test_preflight_requests_are_not_counted(limits):
     preflight = {"Origin": ORIGIN, "Access-Control-Request-Method": "POST"}
     assert [caller.options("/auth/login", headers=preflight).status_code for _ in range(5)] == [200] * 5
     assert sign_in(caller).status_code == 422
+
+
+# --- session settings --------------------------------------------------------
+
+@pytest.mark.parametrize("origin, samesite, secure", [
+    ("http://localhost:5173", "lax", False),
+    ("https://polaris.example", "lax", True),
+    ("https://polaris.example", "Strict", True),
+    ("http://localhost:5173", "none", True),  # browsers require it
+])
+def test_when_the_sign_in_cookie_is_https_only(monkeypatch, origin, samesite, secure):
+    monkeypatch.setenv("FRONTEND_ORIGIN", origin)
+    monkeypatch.setenv("COOKIE_SAMESITE", samesite)
+    assert Settings().cookie_secure is secure
+    assert Settings().cookie_samesite == samesite.lower()
+
+
+@pytest.mark.parametrize("name, value", [
+    ("COOKIE_SAMESITE", "sometimes"), ("ACCESS_TOKEN_MINUTES", "0"), ("REFRESH_TOKEN_DAYS", "-1"),
+])
+def test_a_session_setting_that_would_break_sign_in_stops_the_server(monkeypatch, name, value):
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ConfigurationError, match=name):
+        Settings()
+
+
+def test_the_old_week_long_setting_is_ignored(monkeypatch):
+    monkeypatch.setenv("JWT_EXPIRE_MINUTES", "10080")
+    assert Settings().access_token_minutes == 15

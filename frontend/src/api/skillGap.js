@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -19,7 +20,7 @@ function authHeaders(token) {
 // Job selection reads from the Job Intelligence module directly — Skill
 // Gap never re-parses a JD, it only ever picks from what's already there.
 export function listParsedJobs(token) {
-  return fetch(`${API_BASE_URL}/job-intelligence`, {
+  return authFetch(`${API_BASE_URL}/job-intelligence`, {
     headers: { ...authHeaders(token) },
   }).then(handle)
 }

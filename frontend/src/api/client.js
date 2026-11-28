@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+import { API_BASE_URL } from './config'
+import { authFetch } from './session'
 
 // Slow requests (mostly AI work) are answered with 202 and a job id; the job is
 // then checked until it has finished.
@@ -18,7 +19,7 @@ async function waitForJob(jobId, headers) {
 
     let response
     try {
-      response = await fetch(`${API_BASE_URL}/background-jobs/${jobId}`, { headers })
+      response = await authFetch(`${API_BASE_URL}/background-jobs/${jobId}`, { headers })
     } catch (error) {
       failedChecks += 1
       if (failedChecks >= MAX_FAILED_CHECKS) throw error
@@ -35,10 +36,10 @@ async function waitForJob(jobId, headers) {
   }
 }
 
-// `fetch` for requests that may run as a background job. The promise resolves
+// `authFetch` for requests that may run as a background job. The promise resolves
 // when the work is done, with the response the request would have given.
 export async function apiFetch(url, options = {}) {
-  const response = await fetch(url, options)
+  const response = await authFetch(url, options)
   if (response.status !== 202) return response
   const { job_id: jobId } = await response.json()
   const authorization = options.headers?.Authorization

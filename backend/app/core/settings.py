@@ -46,6 +46,13 @@ def _networks(name: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
     return networks
 
 
+def _positive(name: str, default: int) -> int:
+    value = int(os.environ.get(name, str(default)))
+    if value < 1:
+        raise ConfigurationError(f"{name} must be 1 or more, not {value}.")
+    return value
+
+
 class Settings:
     def __init__(self) -> None:
         raw_url = _require_env("DATABASE_URL")
@@ -87,9 +94,21 @@ class Settings:
         # with a well-known, publicly-visible secret.
         self.jwt_secret = _require_env("JWT_SECRET")
         self.jwt_algorithm = "HS256"
-        self.jwt_expire_minutes = int(os.environ.get("JWT_EXPIRE_MINUTES", "10080"))  # 7 days
         self.google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
         self.frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+
+        # --- Sessions (see services/auth/sessions.py) ---
+        # An access token can't be withdrawn, so it is short-lived. The browser
+        # gets new ones with its refresh token, which lasts this long unused.
+        self.access_token_minutes = _positive("ACCESS_TOKEN_MINUTES", 15)
+        self.refresh_token_days = _positive("REFRESH_TOKEN_DAYS", 14)
+        # "lax" works when the app and the API share a site (localhost, or
+        # subdomains of one domain). "none" is for two unrelated domains.
+        self.cookie_samesite = os.environ.get("COOKIE_SAMESITE", "lax").strip().lower()
+        if self.cookie_samesite not in ("lax", "strict", "none"):
+            raise ConfigurationError("COOKIE_SAMESITE must be lax, strict or none.")
+        # Browsers accept "none" only on a cookie sent over HTTPS.
+        self.cookie_secure = self.frontend_origin.startswith("https://") or self.cookie_samesite == "none"
 
         # --- Encryption at rest (Phase 1 §1.4) ---
         # Used to encrypt sensitive third-party credentials stored on the

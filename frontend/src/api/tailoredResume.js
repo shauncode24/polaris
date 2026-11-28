@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -15,7 +16,7 @@ function authHeaders(token) {
 // The newest version unless `version` is given.
 export function getTailoredResume(token, jobId, version = null) {
   const query = version ? `?version=${version}` : ''
-  return fetch(`${API_BASE_URL}/tailored-resumes/${jobId}${query}`, {
+  return authFetch(`${API_BASE_URL}/tailored-resumes/${jobId}${query}`, {
     headers: authHeaders(token),
   }).then(handle)
 }
@@ -30,7 +31,7 @@ export function generateTailoredResume(token, jobId) {
 
 // `changes` is { lines: [{ line_id, decision, edited, confirm_flags }], section_order }.
 export function changeTailoredResume(token, jobId, version, changes) {
-  return fetch(`${API_BASE_URL}/tailored-resumes/${jobId}/versions/${version}`, {
+  return authFetch(`${API_BASE_URL}/tailored-resumes/${jobId}/versions/${version}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify(changes),
@@ -40,7 +41,7 @@ export function changeTailoredResume(token, jobId, version, changes) {
 // Saves the version as a file ('pdf' or 'docx') through the browser's download.
 // Fetched with the header, so the token is never placed in a URL.
 export async function downloadTailoredResume(token, jobId, version, format) {
-  const response = await fetch(
+  const response = await authFetch(
     `${API_BASE_URL}/tailored-resumes/${jobId}/versions/${version}/export?format=${format}`,
     { headers: authHeaders(token) },
   )

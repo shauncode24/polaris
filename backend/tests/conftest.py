@@ -46,6 +46,11 @@ os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 for name in ("RATE_LIMIT_REQUESTS", "AUTH_RATE_LIMIT_REQUESTS", "AI_RATE_LIMIT_REQUESTS"):
     os.environ[name] = "100000"
 os.environ["TRUSTED_PROXIES"] = ""
+# Sessions behave the same whatever .env holds.
+os.environ["FRONTEND_ORIGIN"] = "http://localhost:5173"
+os.environ["COOKIE_SAMESITE"] = "lax"
+os.environ["ACCESS_TOKEN_MINUTES"] = "15"
+os.environ["REFRESH_TOKEN_DAYS"] = "14"
 
 # Database-backed tests live under tests/api and need a real Postgres.
 collect_ignore = [] if TEST_DATABASE_URL else ["api"]

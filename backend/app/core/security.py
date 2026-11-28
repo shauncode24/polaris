@@ -32,18 +32,24 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+# Marks a token as an access token. Tokens issued without it were valid for a
+# week and are no longer accepted.
+_ACCESS = "access"
+
+
 def create_access_token(user_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
-    payload = {"sub": user_id, "exp": expire}
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
+    payload = {"sub": user_id, "exp": expire, "use": _ACCESS}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
 def decode_access_token(token: str) -> str | None:
+    """The user id in a valid, unexpired access token, or None."""
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-        return payload.get("sub")
     except JWTError:
         return None
+    return payload.get("sub") if payload.get("use") == _ACCESS else None
 
 
 # --- Encryption at rest for sensitive third-party credentials ---------

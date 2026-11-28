@@ -1,5 +1,6 @@
 // frontend/src/api/career.js
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -14,7 +15,7 @@ function authHeaders(token) {
 }
 
 export function createGoal(token, { title, deadline, priority, jobIntelligenceId }) {
-  return fetch(`${API_BASE_URL}/goals`, {
+  return authFetch(`${API_BASE_URL}/goals`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({
@@ -27,11 +28,11 @@ export function createGoal(token, { title, deadline, priority, jobIntelligenceId
 }
 
 export function listGoals(token) {
-  return fetch(`${API_BASE_URL}/goals`, { headers: authHeaders(token) }).then(handle)
+  return authFetch(`${API_BASE_URL}/goals`, { headers: authHeaders(token) }).then(handle)
 }
 
 export function updateGoal(token, goalId, { title, deadline, priority } = {}) {
-  return fetch(`${API_BASE_URL}/goals/${goalId}`, {
+  return authFetch(`${API_BASE_URL}/goals/${goalId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({ title, deadline: deadline || null, priority: priority || null }),
@@ -39,7 +40,7 @@ export function updateGoal(token, goalId, { title, deadline, priority } = {}) {
 }
 
 export function deleteGoal(token, goalId) {
-  return fetch(`${API_BASE_URL}/goals/${goalId}`, {
+  return authFetch(`${API_BASE_URL}/goals/${goalId}`, {
     method: 'DELETE',
     headers: authHeaders(token),
   }).then(handle)

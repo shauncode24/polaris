@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -19,7 +20,7 @@ function authHeaders(token) {
 // The newest version unless `version` is given.
 export function getInterviewKit(token, jobId, version = null) {
   const query = version ? `?version=${version}` : ''
-  return fetch(`${API_BASE_URL}/interview/kits/${jobId}${query}`, {
+  return authFetch(`${API_BASE_URL}/interview/kits/${jobId}${query}`, {
     headers: authHeaders(token),
   }).then(handle)
 }
@@ -41,7 +42,7 @@ export function matchKitEvidence(token, jobId, version) {
 
 // Newest first.
 export function getPracticeAttempts(token, questionId) {
-  return fetch(`${API_BASE_URL}/interview/questions/${questionId}/attempts`, {
+  return authFetch(`${API_BASE_URL}/interview/questions/${questionId}/attempts`, {
     headers: authHeaders(token),
   }).then(handle)
 }
@@ -55,7 +56,7 @@ export function submitPracticeAnswer(token, questionId, answer) {
 }
 
 export function getStudyPlan(token, jobId) {
-  return fetch(`${API_BASE_URL}/interview/study-plan/${jobId}`, {
+  return authFetch(`${API_BASE_URL}/interview/study-plan/${jobId}`, {
     headers: authHeaders(token),
   }).then(handle)
 }

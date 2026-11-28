@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -13,19 +14,19 @@ function authHeaders(token) {
 }
 
 export function listProjects(token) {
-  return fetch(`${API_BASE_URL}/projects`, {
+  return authFetch(`${API_BASE_URL}/projects`, {
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function getProjectsInsights(token) {
-  return fetch(`${API_BASE_URL}/projects/insights`, {
+  return authFetch(`${API_BASE_URL}/projects/insights`, {
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function getGoalAwareRanking(token) {
-  return fetch(`${API_BASE_URL}/projects/ranking`, {
+  return authFetch(`${API_BASE_URL}/projects/ranking`, {
     headers: authHeaders(token),
   }).then(handle)
 }
@@ -57,7 +58,7 @@ export function getProjectInterviewQuestions(token, projectId, regenerate = fals
 }
 
 export function confirmProjectLink(token, projectId, repoName) {
-  return fetch(`${API_BASE_URL}/projects/${projectId}/link`, {
+  return authFetch(`${API_BASE_URL}/projects/${projectId}/link`, {
     method: 'POST',
     headers: {
       ...authHeaders(token),
@@ -68,14 +69,14 @@ export function confirmProjectLink(token, projectId, repoName) {
 }
 
 export function unlinkProject(token, projectId) {
-  return fetch(`${API_BASE_URL}/projects/${projectId}/unlink`, {
+  return authFetch(`${API_BASE_URL}/projects/${projectId}/unlink`, {
     method: 'POST',
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function getLinkOptions(token) {
-  return fetch(`${API_BASE_URL}/projects/link-options`, {
+  return authFetch(`${API_BASE_URL}/projects/link-options`, {
     headers: authHeaders(token),
   }).then(handle)
 }

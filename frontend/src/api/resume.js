@@ -1,5 +1,6 @@
 // frontend/src/api/resume.js
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -14,7 +15,7 @@ async function handle(response) {
 }
 
 export function getResumeWorkspace(token) {
-  return fetch(`${API_BASE_URL}/resume/workspace`, {
+  return authFetch(`${API_BASE_URL}/resume/workspace`, {
     headers: authHeaders(token),
   }).then(handle)
 }
@@ -22,7 +23,7 @@ export function getResumeWorkspace(token) {
 // Fetches the stored PDF with the auth header and returns it as a Blob, so
 // the token is never placed in a URL.
 export async function fetchResumePdf(token) {
-  const response = await fetch(`${API_BASE_URL}/resume/download`, {
+  const response = await authFetch(`${API_BASE_URL}/resume/download`, {
     headers: authHeaders(token),
   })
   if (!response.ok) {
@@ -68,7 +69,7 @@ export function getResumeCoherence(token, targetRole = null, regenerate = false)
 }
 
 export function getResumeEvolution(token) {
-  return fetch(`${API_BASE_URL}/resume/evolution`, {
+  return authFetch(`${API_BASE_URL}/resume/evolution`, {
     headers: authHeaders(token),
   }).then(handle)
 }

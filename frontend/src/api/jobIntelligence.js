@@ -1,5 +1,6 @@
 // frontend/src/api/jobIntelligence.js
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -43,20 +44,20 @@ export function analyzeJobIntelligencePdf(token, file, { company, role } = {}) {
 }
 
 export function listJobIntelligenceProfiles(token) {
-  return fetch(`${API_BASE_URL}/job-intelligence`, {
+  return authFetch(`${API_BASE_URL}/job-intelligence`, {
     headers: { ...authHeaders(token) },
   }).then(handle)
 }
 
 export function setPrimaryJob(token, jobIntelligenceId, primary) {
-  return fetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}/primary`, {
+  return authFetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}/primary`, {
     method: primary ? 'PUT' : 'DELETE',
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function deleteJob(token, jobIntelligenceId) {
-  return fetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}`, {
+  return authFetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}`, {
     method: 'DELETE',
     headers: authHeaders(token),
   }).then(handle)
@@ -64,13 +65,13 @@ export function deleteJob(token, jobIntelligenceId) {
 
 export function compareJobs(token, jobIntelligenceIds) {
   const query = new URLSearchParams(jobIntelligenceIds.map((id) => ['ids', id]))
-  return fetch(`${API_BASE_URL}/job-intelligence/compare?${query}`, {
+  return authFetch(`${API_BASE_URL}/job-intelligence/compare?${query}`, {
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function getJobIntelligenceProfile(token, jobIntelligenceId) {
-  return fetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}`, {
+  return authFetch(`${API_BASE_URL}/job-intelligence/${jobIntelligenceId}`, {
     headers: { ...authHeaders(token) },
   }).then(handle)
 }

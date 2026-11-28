@@ -1,5 +1,6 @@
 // frontend/src/api/identity.js
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -14,7 +15,7 @@ function authHeaders(token) {
 }
 
 export async function getEngineeringIdentity(token) {
-  const response = await fetch(`${API_BASE_URL}/identity`, {
+  const response = await authFetch(`${API_BASE_URL}/identity`, {
     headers: authHeaders(token),
   })
   if (response.status === 404) return null
@@ -30,13 +31,13 @@ export function refreshEngineeringIdentity(token) {
 }
 
 export function getIdentityHistory(token, limit = 10) {
-  return fetch(`${API_BASE_URL}/identity/history?limit=${limit}`, {
+  return authFetch(`${API_BASE_URL}/identity/history?limit=${limit}`, {
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function getWeeklyBrief(token) {
-  return fetch(`${API_BASE_URL}/identity/weekly-brief`, { headers: authHeaders(token) }).then(handle)
+  return authFetch(`${API_BASE_URL}/identity/weekly-brief`, { headers: authHeaders(token) }).then(handle)
 }
 
 export function refreshWeeklyBrief(token) {

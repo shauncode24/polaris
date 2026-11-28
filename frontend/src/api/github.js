@@ -1,5 +1,6 @@
 // frontend/src/api/github.js
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 export { syncGithub } from './profile'
 
@@ -16,7 +17,7 @@ async function handle(response) {
 }
 
 export function getGithubWorkspace(token) {
-  return fetch(`${API_BASE_URL}/github/workspace`, {
+  return authFetch(`${API_BASE_URL}/github/workspace`, {
     headers: authHeaders(token),
   }).then(handle)
 }

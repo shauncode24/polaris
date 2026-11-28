@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
@@ -31,7 +32,7 @@ export function syncGithub(token, { username, githubToken } = {}) {
 }
 
 export function syncLeetcode(token, { username } = {}) {
-  return fetch(`${API_BASE_URL}/sync/leetcode`, {
+  return authFetch(`${API_BASE_URL}/sync/leetcode`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({ username: username || null }),
@@ -39,7 +40,7 @@ export function syncLeetcode(token, { username } = {}) {
 }
 
 export function submitLeetcodeManual(token, tagCounts) {
-  return fetch(`${API_BASE_URL}/sync/leetcode/manual`, {
+  return authFetch(`${API_BASE_URL}/sync/leetcode/manual`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({ tag_counts: tagCounts }),
@@ -47,13 +48,13 @@ export function submitLeetcodeManual(token, tagCounts) {
 }
 
 export function getProfileData(token) {
-  return fetch(`${API_BASE_URL}/profile/data`, {
+  return authFetch(`${API_BASE_URL}/profile/data`, {
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function getLeetcodeWorkspace(token) {
-  return fetch(`${API_BASE_URL}/sync/leetcode/workspace`, {
+  return authFetch(`${API_BASE_URL}/sync/leetcode/workspace`, {
     headers: authHeaders(token),
   }).then(handle)
 }
@@ -68,7 +69,7 @@ export function runLeetcodePortfolioReview(token) {
 // Confirm, edit, hide or restore one project / experience / education entry.
 // kind: 'projects' | 'experiences' | 'education'; action: 'confirm' | 'edit' | 'hide' | 'unhide'.
 export function reviewEvidenceItem(token, kind, itemId, action, fields = null) {
-  return fetch(`${API_BASE_URL}/profile/${kind}/${itemId}`, {
+  return authFetch(`${API_BASE_URL}/profile/${kind}/${itemId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({ action, fields }),
@@ -76,7 +77,7 @@ export function reviewEvidenceItem(token, kind, itemId, action, fields = null) {
 }
 
 export function setSkillVisibility(token, skill, hidden) {
-  return fetch(`${API_BASE_URL}/profile/skills/${encodeURIComponent(skill)}/visibility`, {
+  return authFetch(`${API_BASE_URL}/profile/skills/${encodeURIComponent(skill)}/visibility`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     body: JSON.stringify({ hidden }),

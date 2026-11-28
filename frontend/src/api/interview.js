@@ -1,5 +1,6 @@
 // frontend/src/api/interview.js
 import { API_BASE_URL, apiFetch } from './client'
+import { authFetch } from './session'
 
 /**
  * Parses backend responses, handling both:
@@ -68,13 +69,13 @@ export function correctInterviewResponse(token, { parentResponseId, correction }
 }
 
 export function listInterviewSessions(token) {
-  return fetch(`${API_BASE_URL}/interview/sessions`, {
+  return authFetch(`${API_BASE_URL}/interview/sessions`, {
     headers: authHeaders(token),
   }).then(handle)
 }
 
 export function getInterviewSessionThread(token, sessionId) {
-  return fetch(`${API_BASE_URL}/interview/sessions/${sessionId}`, {
+  return authFetch(`${API_BASE_URL}/interview/sessions/${sessionId}`, {
     headers: authHeaders(token),
   }).then(handle)
 }

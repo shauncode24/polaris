@@ -100,16 +100,23 @@ async def authenticate_with_google(db: AsyncSession, credential: str) -> User:
     return user
 
 
+def user_details(user: User) -> dict:
+    """What the app is told about the signed-in user."""
+    return {
+        "id": str(user.id),
+        "first_name": user.first_name or user.name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "avatar_url": user.avatar_url,
+        "auth_provider": user.auth_provider,
+        "github_username": user.github_username,
+        "leetcode_username": user.leetcode_username,
+    }
+
+
 def build_token_response(user: User) -> dict:
     return {
         "access_token": create_access_token(str(user.id)),
         "token_type": "bearer",
-        "user": {
-            "id": str(user.id),
-            "first_name": user.first_name or user.name,
-            "last_name": user.last_name,
-            "email": user.email,
-            "avatar_url": user.avatar_url,
-            "auth_provider": user.auth_provider,
-        },
+        "user": user_details(user),
     }
