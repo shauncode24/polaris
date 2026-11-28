@@ -20,6 +20,7 @@ from app.api.projects import router as projects_router
 from app.api.github import router as github_router
 from app.api.identity import router as identity_router
 from app.api.linkedin import router as linkedin_router
+from app.api.tailored_resumes import router as tailored_resumes_router
 from app.core.llm import LLMError
 from app.core.logging_config import configure_logging
 from app.core.settings import settings
@@ -119,6 +120,7 @@ app.include_router(github_router)
 app.include_router(identity_router)
 app.include_router(linkedin_router)
 app.include_router(background_jobs_router)
+app.include_router(tailored_resumes_router)
 
 
 @app.exception_handler(LLMError)

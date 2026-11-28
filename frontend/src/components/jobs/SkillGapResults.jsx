@@ -270,6 +270,9 @@ function NextSteps({ job }) {
         <Link to={`/career-planner?jobId=${job.id}`} className="sg-next__link sg-next__link--primary">
           Plan how to close the gaps →
         </Link>
+        <Link to={`/tailored-resume?jobId=${job.id}`} className="sg-next__link">
+          Tailor your resume →
+        </Link>
         <Link to={`/interview?jobId=${job.id}`} className="sg-next__link">
           Practise interview questions →
         </Link>

@@ -1,5 +1,6 @@
-"""Saving and loading tailored resumes. Each save of a new resume for a job is
-a new version; every lookup is limited to the user's own.
+"""Saving and loading tailored resumes. Each newly generated resume for a job is
+a new version, which the user's choices then change in place; every lookup is
+limited to the user's own.
 """
 import uuid
 from datetime import datetime, timezone
@@ -49,14 +50,33 @@ async def save_new_version(
 
 
 async def get_version(
-    db: AsyncSession, user_id, job_intelligence_id, version: int | None = None,
+    db: AsyncSession, user_id, job_intelligence_id, version: int | None = None, *, for_update: bool = False,
 ) -> TailoredResume | None:
     """One version of the user's resume for a job; the newest when `version`
-    is not given.
+    is not given. With `for_update` it is locked until the next commit.
     """
     query = select(TailoredResume).where(
         TailoredResume.user_id == user_id, TailoredResume.job_intelligence_id == job_intelligence_id,
     )
     if version is not None:
         query = query.where(TailoredResume.version == version)
-    return await db.scalar(query.order_by(TailoredResume.version.desc()).limit(1))
+    query = query.order_by(TailoredResume.version.desc()).limit(1)
+    return await db.scalar(query.with_for_update() if for_update else query)
+
+
+async def list_versions(db: AsyncSession, user_id, job_intelligence_id) -> list[int]:
+    """The version numbers of the user's resume for a job, newest first."""
+    result = await db.scalars(
+        select(TailoredResume.version)
+        .where(TailoredResume.user_id == user_id, TailoredResume.job_intelligence_id == job_intelligence_id)
+        .order_by(TailoredResume.version.desc())
+    )
+    return list(result)
+
+
+async def save_document(db: AsyncSession, row: TailoredResume, document: TailoredResumeDocument) -> None:
+    """Replaces the content of a version the caller has loaded as the user's."""
+    # Validated again: it may have been changed field by field since it was read.
+    checked = TailoredResumeDocument.model_validate(document.model_dump())
+    row.content_json = checked.model_dump(mode="json")
+    await db.commit()

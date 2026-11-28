@@ -19,7 +19,9 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit the resume date fix.** Done.
 - [x] **Commit step 31.** Done.
 - [x] **Commit step 32.** Done.
-- [ ] **Commit step 33.**
+- [x] **Commit step 33.** Done.
+- [ ] **Commit step 34.**
+- [ ] **Try the Tailored Resume page** (after migrating): pick one of your jobs, generate, and accept, reject and edit a few lines. Tell me whether the confirmation warnings are too frequent with real suggestions, and what you miss being able to change (contact details, skills and removing a bullet aren't editable yet).
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
 - [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now ten new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, the background jobs table, the daily usage table, the tailored resumes table and the date wording columns (most AI features fail without the last two). Expect the 2 legacy goals to lose their job link if their job can't be matched.

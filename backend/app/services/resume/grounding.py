@@ -175,6 +175,26 @@ _SOURCES = {
 }
 
 
+def row_bullets(kind: str, row) -> list[str]:
+    return _SOURCES[kind][1](row)
+
+
+async def cited_rows(db: AsyncSession, user_id, refs: list[SourceRef]) -> dict[tuple, object]:
+    """(kind, row id) -> the row, for each cited item that is the user's and not
+    hidden. LeetCode practice has no rows.
+    """
+    rows = {}
+    for kind, (table, _bullets) in _SOURCES.items():
+        ids = {ref.id for ref in refs if ref.kind == kind}
+        if not ids:
+            continue
+        query = select(table).where(table.user_id == user_id, table.id.in_(ids))
+        if hasattr(table, "is_hidden"):
+            query = query.where(table.is_hidden.is_(False))
+        rows.update({(kind, row.id): row for row in (await db.execute(query)).scalars()})
+    return rows
+
+
 async def unsupported_sources(db: AsyncSession, user_id, document: TailoredResumeDocument) -> list[str]:
     """What `document` cites that the user's record doesn't have: an item that
     is missing, hidden or someone else's, or a line whose original wording is
@@ -187,21 +207,13 @@ async def unsupported_sources(db: AsyncSession, user_id, document: TailoredResum
     lines = document.lines()
     refs: list[SourceRef] = [ref for item in [*entries, *lines] for ref in item.sources]
 
-    rows = {}
-    for kind, (table, _bullets) in _SOURCES.items():
-        ids = {ref.id for ref in refs if ref.kind == kind}
-        if not ids:
-            continue
-        query = select(table).where(table.user_id == user_id, table.id.in_(ids))
-        if hasattr(table, "is_hidden"):
-            query = query.where(table.is_hidden.is_(False))
-        rows.update({(kind, row.id): row for row in (await db.execute(query)).scalars()})
+    rows = await cited_rows(db, user_id, refs)
 
     def cited_bullet(ref: SourceRef) -> str | None:
         row = rows.get((ref.kind, ref.id))
         if row is None or ref.bullet is None:
             return None
-        bullets = _SOURCES[ref.kind][1](row)
+        bullets = row_bullets(ref.kind, row)
         return (bullets[ref.bullet] or "").strip() if ref.bullet < len(bullets) else None
 
     # LeetCode practice has no row of its own, so a source naming one is wrong.
