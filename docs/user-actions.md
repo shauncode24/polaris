@@ -15,8 +15,9 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 27.** Done.
 - [x] **Commit step 28.** Done.
 - [x] **Commit step 29.** Done.
-- [ ] **Commit step 30.**
-- [ ] **Commit the resume date fix.**
+- [x] **Commit step 30.** Done.
+- [x] **Commit the resume date fix.** Done.
+- [ ] **Commit step 31.**
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
 - [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now ten new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, the background jobs table, the daily usage table, the tailored resumes table and the date wording columns (most AI features fail without the last two). Expect the 2 legacy goals to lose their job link if their job can't be matched.
@@ -37,7 +38,7 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [ ] **Hosting** (Render or Fly.io with managed Postgres, or one VPS). Needed for step 13 (staging) and Stage J.
 - [ ] **Password reset and email verification.** The app has email/password sign-in and no reset flow, so a forgotten password locks the user out. Choose: build it (needs a transactional email provider such as Resend or Postmark), or drop email/password and keep Google sign-in only.
 - [ ] **`services/projects/curation.py`.** Only tests use it, the app never calls it. Keep, wire in, or delete?
-- [ ] **LLM provider and monthly budget.** Currently Groq (`openai/gpt-oss-120b`). The tailored-resume and interview-kit stages will make many more LLM calls per user. The free tier is too small to launch on: 200,000 tokens a day and 8,000 a minute for the whole app, where analysing one job takes about 6,000 to 7,000. That is roughly 30 jobs a day for all users together, and a very long posting may not fit in the per-minute limit at all. One interview answer takes three calls, roughly 6,000 tokens, so about one a minute and 30 a day.
+- [ ] **LLM provider and monthly budget.** Currently Groq (`openai/gpt-oss-120b`). The tailored-resume and interview-kit stages will make many more LLM calls per user: rewording one resume takes a call of about 750 tokens for each bullet that mentions a job skill, at most 32 calls (about 24,000 tokens). The free tier is too small to launch on: 200,000 tokens a day and 8,000 a minute for the whole app, where analysing one job takes about 6,000 to 7,000. That is roughly 30 jobs a day for all users together, and a very long posting may not fit in the per-minute limit at all. One interview answer takes three calls, roughly 6,000 tokens, so about one a minute and 30 a day.
 
 ## Things only you can do
 

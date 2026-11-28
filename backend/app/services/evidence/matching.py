@@ -13,10 +13,16 @@ from app.models.structure import SkillAlias
 from app.services.resume.skill_classifier import CANONICAL_SKILLS
 
 
+def find_skill(text: str, raw_name: str) -> str | None:
+    """`raw_name` as `text` writes it, where it appears as its own word."""
+    pattern = r"(?<![a-zA-Z0-9])" + re.escape(raw_name) + r"(?![a-zA-Z0-9])"
+    match = re.search(pattern, text, re.IGNORECASE)
+    return match.group(0) if match else None
+
+
 def mentions_skill(text: str, raw_name: str) -> bool:
     """True when `raw_name` appears in `text` as its own word."""
-    pattern = r"(?<![a-zA-Z0-9])" + re.escape(raw_name.lower()) + r"(?![a-zA-Z0-9])"
-    return re.search(pattern, text.lower()) is not None
+    return find_skill(text, raw_name) is not None
 
 
 def mentions_any(text: str, names: set[str]) -> bool:
