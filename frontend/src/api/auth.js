@@ -1,9 +1,15 @@
 import { API_BASE_URL } from './client'
 
+// A refused field arrives as a list of problems; other errors as plain text.
+function errorMessage(detail) {
+  if (Array.isArray(detail)) return detail[0]?.msg?.replace(/^Value error, /, '')
+  return typeof detail === 'string' ? detail : undefined
+}
+
 async function handle(response) {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(data.detail || 'Something went wrong. Please try again.')
+    throw new Error(errorMessage(data.detail) || 'Something went wrong. Please try again.')
   }
   return data
 }
