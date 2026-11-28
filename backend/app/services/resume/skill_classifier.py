@@ -1,8 +1,10 @@
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.llm import Prompt, llm_json
+from app.core.llm import LLMError, Prompt, llm_json
 from app.models.structure import SkillAlias
 from app.schemas.shared.skill_classification import SkillClassificationBatch
 
@@ -159,6 +161,8 @@ CANONICAL_SKILLS: dict[str, str] = {
 
 from app.prompts.shared.classification import CLASSIFICATION_SYSTEM_PROMPT
 
+logger = logging.getLogger(__name__)
+
 
 async def _classify_via_llm(raw_strings: list[str]) -> dict[str, tuple[str | None, bool]]:
     """One batched LLM call for every raw string not already known, rather
@@ -179,7 +183,9 @@ async def _classify_via_llm(raw_strings: list[str]) -> dict[str, tuple[str | Non
     return output
 
 
-async def resolve_skills(raw_strings: set[str], db: AsyncSession) -> dict[str, str | None]:
+async def resolve_skills(
+    raw_strings: set[str], db: AsyncSession, *, skip_if_unavailable: bool = False,
+) -> dict[str, str | None]:
     """Resolve every raw skill string to its canonical name, or None if it's
     not a real skill at all. Three tiers, cheapest first:
 
@@ -189,6 +195,10 @@ async def resolve_skills(raw_strings: set[str], db: AsyncSession) -> dict[str, s
     3. Batched LLM classification -> only for genuinely unseen strings,
        one call per ingestion run (not per skill), and every result is
        written back into the cache so it's never re-classified again.
+
+    If that call fails it raises an `LLMError`. With `skip_if_unavailable` the
+    new strings resolve to None instead and are not cached, so a later run asks
+    about them again.
     """
     results: dict[str, str | None] = {}
     unresolved: set[str] = set()
@@ -219,7 +229,13 @@ async def resolve_skills(raw_strings: set[str], db: AsyncSession) -> dict[str, s
 
     if unresolved:
         # Sorted so the same set of strings always produces the same request.
-        classified = await _classify_via_llm(sorted(unresolved))
+        try:
+            classified = await _classify_via_llm(sorted(unresolved))
+        except LLMError as e:
+            if not skip_if_unavailable:
+                raise
+            logger.warning("Left %d new skill names unclassified for now: %s", len(unresolved), e)
+            classified = {}
 
         # Not a skill for now if the model skipped it; asked again next time.
         results.update({raw: None for raw in unresolved if raw not in classified})

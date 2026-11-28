@@ -182,7 +182,9 @@ async def _persist_leetcode_data(
         if topic is not None:
             tag_weighted_score[tag] = weighted_totals_by_topic.get(topic, 0.0)
 
-    resolved = await resolve_skills(set(tag_counts.keys()), db)
+    # The counts are worth saving whether or not the model can be reached; topic
+    # names it couldn't classify are picked up by a later sync.
+    resolved = await resolve_skills(set(tag_counts.keys()), db, skip_if_unavailable=True)
 
     tags_report: list[dict] = []
     reinforced_skills: list[str] = []

@@ -97,7 +97,7 @@ async def _build_gap_result(
     await db.commit()
     await db.refresh(gap_result_row)
 
-    await trigger_identity_refresh(db, user_id, "job description analysis")
+    await trigger_identity_refresh(user_id, "job description analysis")
 
     return gap_result_row
 

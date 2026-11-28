@@ -130,7 +130,7 @@ async def upload_resume(
 
         # Freshness fix: keep Engineering Identity current the instant new
         # resume data lands, instead of only on a manual POST /identity/refresh.
-        await trigger_identity_refresh(job_db, user_id, "resume upload")
+        await trigger_identity_refresh(user_id, "resume upload")
         return result
 
     return await run_in_background(
@@ -176,7 +176,7 @@ async def analyze_resume(
         # This is the endpoint that actually produces resume_score/grade —
         # the field IdentityFacts reads — so it gets its own refresh trigger
         # distinct from the raw upload above.
-        await trigger_identity_refresh(job_db, user_id, "resume analysis")
+        await trigger_identity_refresh(user_id, "resume analysis")
         return report
 
     return await run_in_background(user_id, "resume_analysis", work, inputs=(job_intelligence_id,))

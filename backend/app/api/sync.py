@@ -73,7 +73,7 @@ async def trigger_github_sync(
         await persist_engineering_snapshot(job_db, user_id, "github sync")
         # Freshness fix — same trigger point as the proven
         # LeetcodeEngineeringSnapshot pattern above.
-        await trigger_identity_refresh(job_db, user_id, "github sync")
+        await trigger_identity_refresh(user_id, "github sync")
         return result
 
     return await run_in_background(user_id, "github_sync", work, inputs=(username,))
@@ -103,7 +103,7 @@ async def trigger_leetcode_sync(
 
     await touch_evidence(db, current_user.id)
     await persist_engineering_snapshot(db, current_user.id, "leetcode sync")
-    await trigger_identity_refresh(db, current_user.id, "leetcode sync")
+    await trigger_identity_refresh(current_user.id, "leetcode sync")
 
     return result
 
@@ -117,7 +117,7 @@ async def submit_leetcode_manual(
     result = await sync_leetcode_manual(db, current_user, payload.tag_counts)
     await touch_evidence(db, current_user.id)
     await persist_engineering_snapshot(db, current_user.id, "leetcode manual submission")
-    await trigger_identity_refresh(db, current_user.id, "leetcode manual submission")
+    await trigger_identity_refresh(current_user.id, "leetcode manual submission")
     return result
 
 

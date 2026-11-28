@@ -11,7 +11,8 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 24.** Done.
 - [x] **Commit step 25.** Done.
 - [x] **Commit step 26.** Done.
-- [ ] **Commit the password fix**, then run `uv sync` from `backend/` on any other machine that runs the app.
+- [x] **Commit the password fix.** Done. Run `uv sync` from `backend/` on any other machine that runs the app.
+- [ ] **Commit step 27.**
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
 - [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now seven new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, and the background jobs table (most AI features fail without it). Expect the 2 legacy goals to lose their job link if their job can't be matched.

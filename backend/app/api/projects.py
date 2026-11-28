@@ -170,7 +170,7 @@ async def get_project_claim_audit(
         # confidence is now reconciled against — this was previously the
         # one signal in IdentityFacts most related to the confidence/
         # contradiction problem that never triggered a refresh at all.
-        await trigger_identity_refresh(job_db, user_id, "claim audit")
+        await trigger_identity_refresh(user_id, "claim audit")
         return report
 
     return await run_in_background(user_id, "claim_audit", work, inputs=(project_id,))
@@ -269,7 +269,7 @@ async def confirm_project_link(
     # Freshness fix — confirming a repo link can newly enable (or change
     # the target of) a Claim Audit finding for this project, which
     # claim_risk_details/top_skills reconciliation depends on.
-    await trigger_identity_refresh(db, current_user.id, "project link confirmed")
+    await trigger_identity_refresh(current_user.id, "project link confirmed")
 
     return {"status": "success", "github_repo_name": project.github_repo_name}
 
@@ -288,6 +288,6 @@ async def remove_project_link(
 
     # Freshness fix — removing a repo link can retire a previously-real
     # claim-risk finding for this project.
-    await trigger_identity_refresh(db, current_user.id, "project link removed")
+    await trigger_identity_refresh(current_user.id, "project link removed")
 
     return {"status": "success"}

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.core.llm import LLMError, LLMReplyError
 from app.models.facts import GithubSnapshot
 from app.models.inference import ProfileSnapshot
 from app.models.github_analysis import GithubProjectAnalysis, PortfolioAnalysis
@@ -130,6 +131,9 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
 
     total_stars = total_forks = total_commits = new_count = archived_count = 0
     cache_hits = cache_misses = 0
+    # Set once the model can't be reached: asking again for every repository
+    # would only make the sync slow.
+    model_unavailable = False
 
     async with httpx.AsyncClient(timeout=20.0) as client:
         repos = await fetch_repos(client, username, token)
@@ -258,6 +262,7 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 topics=topics,
             )
 
+            assessment_skipped = False
             if cache_is_fresh(cache_row, current_sha):
                 architecture_result = cached_architecture_result
             elif is_eligible_for_architecture_pass(
@@ -266,13 +271,24 @@ async def sync_github(db: AsyncSession, user, username: str, token: str) -> dict
                 is_fork=is_fork,
                 contributed_as_fork=score["is_meaningful_fork_contribution"],
             ):
-                architecture_result = await assess_architecture_depth(
-                    repo_name, analysis["technologies"], tree_paths
-                )
+                architecture_result = None
+                assessment_skipped = model_unavailable
+                if not model_unavailable:
+                    try:
+                        architecture_result = await assess_architecture_depth(
+                            repo_name, analysis["technologies"], tree_paths
+                        )
+                    except LLMError as e:
+                        logger.warning("Architecture assessment of %s left for a later sync: %s", repo_name, e)
+                        assessment_skipped = True
+                        model_unavailable = not isinstance(e, LLMReplyError)
+                if assessment_skipped and cache_row is not None:
+                    architecture_result = cache_row.architecture_assessment  # from an earlier commit
             else:
                 architecture_result = None
 
-            if not cache_is_fresh(cache_row, current_sha) and current_sha is not None:
+            # Not cached while an assessment is owed, so the next sync makes it.
+            if not cache_is_fresh(cache_row, current_sha) and current_sha is not None and not assessment_skipped:
                 await upsert_repo_cache(
                     db, user_id=user.id, repo_name=repo_name, last_commit_sha=current_sha,
                     commit_hygiene=hygiene_result, pr_stats=pr_stats,

@@ -40,7 +40,7 @@ async def ingest_linkedin(
             raise HTTPException(status_code=502, detail=str(e))
 
         await touch_evidence(job_db, user_id)
-        await trigger_identity_refresh(job_db, user_id, "linkedin ingestion")
+        await trigger_identity_refresh(user_id, "linkedin ingestion")
         return result
 
     text_hash = hashlib.sha256(payload.raw_text.encode()).hexdigest()

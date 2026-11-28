@@ -63,7 +63,9 @@ async def sync_github_skill_evidence(
         await db.flush()
         return {"skills_evidenced": 0, "repos_considered": len(eligible)}
 
-    resolved = await resolve_skills(raw_tech_strings, db)
+    # A technology name the model can't classify right now is picked up by a
+    # later sync; it can't have had evidence before, so none is lost.
+    resolved = await resolve_skills(raw_tech_strings, db, skip_if_unavailable=True)
 
     evidenced_skills: set[str] = set()
     for a in eligible:

@@ -277,6 +277,9 @@ async def generate_engineering_identity(
     identity_refresh.py) pass the real event name; an explicit
     POST /identity/refresh keeps the "manual_refresh" default.
     """
+    # The snapshot is dated by when its facts were read: a change made after
+    # this isn't in it.
+    read_at = datetime.now(timezone.utc)
     facts = await build_identity_facts(db, user_id)
 
     llm_payload = _build_synthesis_payload(facts)
@@ -298,7 +301,7 @@ async def generate_engineering_identity(
     report = EngineeringIdentityReport(
         facts=facts,
         narrative=narrative,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=read_at,
         analysis_degraded=degraded,
         source_event=source_event,
     )

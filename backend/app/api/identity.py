@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,8 +15,8 @@ from app.schemas.identity.engineering_identity import (
 )
 from app.schemas.identity.weekly_brief import WeeklyBriefReport
 from app.services.identity.identity_builder import build_profile_facts
+from app.services.identity.identity_refresh import refresh_identity
 from app.services.identity.identity_synthesizer import (
-    generate_engineering_identity,
     get_engineering_identity_history,
     get_latest_engineering_identity,
     invalidate_engineering_identity,
@@ -44,10 +45,12 @@ async def get_engineering_identity(
 
 @router.post("/refresh", response_model=EngineeringIdentityReport)
 async def refresh_engineering_identity(current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
+    user_id, requested_at = current_user.id, datetime.now(timezone.utc)
 
     async def work(job_db: AsyncSession):
-        return await generate_engineering_identity(job_db, user_id)
+        return await refresh_identity(
+            job_db, user_id, source_event="manual_refresh", requested_at=requested_at,
+        )
 
     return await run_in_background(user_id, "identity_refresh", work)
 

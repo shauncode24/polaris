@@ -11,7 +11,7 @@ and keeps the model from inferring quality it can't actually see.
 """
 import logging
 
-from app.core.llm import Prompt, llm_json
+from app.core.llm import LLMError, Prompt, llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,10 @@ def is_eligible_for_architecture_pass(
 
 
 async def assess_architecture_depth(repo_name: str, technologies: list[str], file_paths: list[str]) -> dict | None:
+    """None means there is nothing to assess, or the answer made no sense.
+    Raises `LLMError` when the model gave no answer, so that the caller can ask
+    again later instead of remembering the failure.
+    """
     if not file_paths:
         return None
 
@@ -75,6 +79,8 @@ async def assess_architecture_depth(repo_name: str, technologies: list[str], fil
             "observations": parsed.get("observations", [])[:4],
             "confidence": parsed.get("confidence", "low"),
         }
+    except LLMError:
+        raise
     except Exception as e:
         logger.warning("Architecture assessment failed for %s, skipping: %s", repo_name, e)
         return None
