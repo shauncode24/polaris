@@ -71,7 +71,8 @@ class EvidenceMapping:
 
 
 @dataclass
-class _Item:
+class Item:
+    """A project or role, with what is needed to tell what it shows."""
     kind: str  # "project" | "experience"
     row: object
     repo: GithubProjectAnalysis | None
@@ -83,8 +84,16 @@ class _Item:
     def lines(self) -> list[str]:
         return [line or "" for line in row_bullets(self.kind, self.row)]
 
+    @property
+    def technologies(self) -> list[str]:
+        found = [*(self.row.stack or []), *((self.repo.technologies or []) if self.repo else [])]
+        return [name for name in found if name and name.strip()]
 
-def _basis(question) -> str:
+
+def basis_of(question) -> str:
+    """What work must show to answer the question: "skills", "competencies" or
+    "topic".
+    """
     if question.skills:
         return "skills"
     if question.category == "behavioral" or question.topic in GENERIC_TOPICS:
@@ -92,11 +101,14 @@ def _basis(question) -> str:
     return "topic"
 
 
-def _first_line(lines: list[str], shows) -> int | None:
-    return next((number for number, line in enumerate(lines) if line.strip() and shows(line)), None)
+def _lines_where(lines: list[str], shows) -> list[int]:
+    return [number for number, line in enumerate(lines) if line.strip() and shows(line)]
 
 
-def _shows_skills(item: _Item, skills: list[str], names: dict[str, set[str]]) -> QuestionEvidence | None:
+def skill_lines(item: Item, skills: list[str], names: dict[str, set[str]]) -> tuple[list[str], list[int]]:
+    """The skills the item shows, and the numbers of its lines that mention
+    one. A skill can be shown by the item's technologies alone, with no line.
+    """
     matched, usable = [], set()
     for skill in skills:
         # A name that is also an ordinary word ("go") proves nothing in a
@@ -106,31 +118,45 @@ def _shows_skills(item: _Item, skills: list[str], names: dict[str, set[str]]) ->
         if named or any(mentions_any(line, in_prose) for line in item.lines):
             matched.append(skill)
             usable |= in_prose
-    if not matched:
-        return None
-    return QuestionEvidence(
-        kind=item.kind, id=item.row.id, skills=matched,
-        bullet=_first_line(item.lines, lambda line: mentions_any(line, usable)),
-    )
+    return matched, _lines_where(item.lines, lambda line: mentions_any(line, usable))
 
 
-def _shows_competencies(item: _Item, competencies: list[str]) -> QuestionEvidence | None:
+def competency_lines(item: Item, competencies: list[str]) -> list[int]:
+    """The lines whose wording shows one of the competencies, by the keywords.
+    Work the model tagged may have none.
+    """
     wanted = set(competencies)
-    matched = sorted(wanted & set(item.row.competency_tags or []))
+    return _lines_where(item.lines, lambda line: wanted & set(tag_text_deterministic(line)))
+
+
+def topic_lines(item: Item, topic: str) -> list[int]:
+    return _lines_where(item.lines, lambda line: names_topic(line, {topic}))
+
+
+def lists_topic(item: Item, topic: str) -> bool:
+    return any(names_topic(name, {topic}) for name in item.technologies)
+
+
+def _shows_skills(item: Item, skills: list[str], names: dict[str, set[str]]) -> QuestionEvidence | None:
+    matched, lines = skill_lines(item, skills, names)
     if not matched:
         return None
-    return QuestionEvidence(
-        kind=item.kind, id=item.row.id, competencies=matched,
-        bullet=_first_line(item.lines, lambda line: wanted & set(tag_text_deterministic(line))),
-    )
+    return QuestionEvidence(kind=item.kind, id=item.row.id, skills=matched, bullet=lines[0] if lines else None)
 
 
-def _shows_topic(item: _Item, topic: str) -> QuestionEvidence | None:
-    bullet = _first_line(item.lines, lambda line: names_topic(line, {topic}))
-    technologies = [*(item.row.stack or []), *((item.repo.technologies or []) if item.repo else [])]
-    if bullet is None and not any(names_topic(name or "", {topic}) for name in technologies):
+def _shows_competencies(item: Item, competencies: list[str]) -> QuestionEvidence | None:
+    matched = sorted(set(competencies) & set(item.row.competency_tags or []))
+    if not matched:
         return None
-    return QuestionEvidence(kind=item.kind, id=item.row.id, bullet=bullet)
+    lines = competency_lines(item, competencies)
+    return QuestionEvidence(kind=item.kind, id=item.row.id, competencies=matched, bullet=lines[0] if lines else None)
+
+
+def _shows_topic(item: Item, topic: str) -> QuestionEvidence | None:
+    lines = topic_lines(item, topic)
+    if not lines and not lists_topic(item, topic):
+        return None
+    return QuestionEvidence(kind=item.kind, id=item.row.id, bullet=lines[0] if lines else None)
 
 
 def _practice(question, skills: list[str], names: dict[str, set[str]], counts: dict[str, int]):
@@ -146,7 +172,7 @@ def _practice(question, skills: list[str], names: dict[str, set[str]], counts: d
             if counts.get(tag, 0) >= MIN_SOLVED_PER_TOPIC:
                 found.append((counts[tag], tag, for_skills))
 
-    if _basis(question) == "topic":
+    if basis_of(question) == "topic":
         tagged({question.topic}, [])
     for skill in skills:
         if skill in PRACTICE_TAGS:  # data structures and algorithms: judged on all their topics
@@ -162,10 +188,8 @@ def _practice(question, skills: list[str], names: dict[str, set[str]], counts: d
     return QuestionEvidence(kind="leetcode_topic", topic=tag, skills=shown)
 
 
-async def _items(db: AsyncSession, user_id) -> tuple[list[_Item], list[_Item]]:
-    """The user's projects and roles, each most recent first."""
-    projects = await load_projects_with_tags(db, user_id)
-    experiences = await load_experiences_with_tags(db, user_id)
+async def build_items(db: AsyncSession, user_id, projects: list, experiences: list) -> tuple[list[Item], list[Item]]:
+    """The user's current projects and roles, in the order given."""
     repos = {a.repo_name: a for a in (await db.scalars(
         select(GithubProjectAnalysis).where(GithubProjectAnalysis.user_id == user_id)
     ))}
@@ -174,22 +198,36 @@ async def _items(db: AsyncSession, user_id) -> tuple[list[_Item], list[_Item]]:
         for row in rows:
             skills_of.setdefault((row.source_type, row.source_id), set()).add(canonical)
 
-    def technologies(row, repo) -> list[str]:
-        return [name for name in [*(row.stack or []), *((repo.technologies or []) if repo else [])] if name]
-
-    paired = [("project", p, repos.get(p.github_repo_name)) for p in projects]
-    paired += [("experience", e, None) for e in experiences]
-    canonical_of = await known_canonicals(db, {name for _kind, row, repo in paired for name in technologies(row, repo)})
+    items = [Item("project", p, repos.get(p.github_repo_name), set(), set()) for p in projects]
+    items += [Item("experience", e, None, set(), set()) for e in experiences]
+    canonical_of = await known_canonicals(db, {name for item in items for name in item.technologies})
     risks = await claim_risk_by_project_id(db, [p.id for p in projects])
 
-    items = []
-    for kind, row, repo in paired:
-        recorded = set(skills_of.get((kind, row.id), ()))
-        if repo is not None:
-            recorded |= skills_of.get(("github_repo", repo.id), set())
-        listed = {canonical_of[name] for name in technologies(row, repo) if name in canonical_of}
-        items.append(_Item(kind, row, repo, recorded, recorded | listed, risks.get(row.id)))
+    for item in items:
+        item.recorded = set(skills_of.get((item.kind, item.row.id), ()))
+        if item.repo is not None:
+            item.recorded |= skills_of.get(("github_repo", item.repo.id), set())
+        listed = {canonical_of[name] for name in item.technologies if name in canonical_of}
+        item.skills, item.risk = item.recorded | listed, risks.get(item.row.id)
     return items[:len(projects)], items[len(projects):]
+
+
+async def skill_names(db: AsyncSession, job: JobIntelligenceProfile, canonicals: set[str]) -> dict[str, set[str]]:
+    """canonical skill -> every lower-case name for it, the job's own included."""
+    aliases = await skill_aliases(db, canonicals)
+    names = {canonical: set(aliases[canonical]) for canonical in canonicals}
+    for skill in [*job.enriched_required_skills, *job.enriched_implicit_skills, *job.enriched_nice_to_have]:
+        if skill.canonical in names:
+            names[skill.canonical] |= {name.lower() for name in spellings(skill, aliases)}
+    return names
+
+
+async def practice_counts(db: AsyncSession, user_id) -> dict[str, int]:
+    """LeetCode tag -> problems solved, as of the latest sync."""
+    counts: dict[str, int] = {}
+    for name, count in (await latest_leetcode_counts(db, user_id)).items():
+        counts[tag_slug(name)] = max(count, counts.get(tag_slug(name), 0))
+    return counts
 
 
 async def map_evidence(db: AsyncSession, user_id, job: JobIntelligenceProfile, questions: list) -> EvidenceMapping:
@@ -198,26 +236,19 @@ async def map_evidence(db: AsyncSession, user_id, job: JobIntelligenceProfile, q
     way; the matching itself is not saved.
     """
     mapped_at = datetime.now(timezone.utc)  # before reading: a later change makes this out of date
-    projects, experiences = await _items(db, user_id)
+    projects, experiences = await build_items(
+        db, user_id, await load_projects_with_tags(db, user_id), await load_experiences_with_tags(db, user_id),
+    )
     hidden = await get_hidden_skill_names(db, user_id)
     confidence = {
         canonical: entry["confidence"]
         for canonical, entry in (await get_reconciled_skill_confidences(db, user_id)).items()
     }
-    counts: dict[str, int] = {}
-    for name, count in (await latest_leetcode_counts(db, user_id)).items():
-        counts[tag_slug(name)] = max(count, counts.get(tag_slug(name), 0))
-
-    asked = {skill for q in questions for skill in q.skills} - hidden
-    aliases = await skill_aliases(db, asked)
-    job_skills = [*job.enriched_required_skills, *job.enriched_implicit_skills, *job.enriched_nice_to_have]
-    names: dict[str, set[str]] = {canonical: set(aliases[canonical]) for canonical in asked}
-    for skill in job_skills:
-        if skill.canonical in names:
-            names[skill.canonical] |= {name.lower() for name in spellings(skill, aliases)}
+    counts = await practice_counts(db, user_id)
+    names = await skill_names(db, job, {skill for q in questions for skill in q.skills} - hidden)
 
     def best(question) -> QuestionEvidence | None:
-        basis = _basis(question)
+        basis = basis_of(question)
         skills = [s for s in question.skills if s not in hidden]
         found: dict = {}  # row id -> why it qualifies
         for item in [*projects, *experiences]:
@@ -250,7 +281,7 @@ async def map_evidence(db: AsyncSession, user_id, job: JobIntelligenceProfile, q
 
     refs = [[ref] if (ref := best(question)) else [] for question in questions]
     untagged = any(item.row.competency_tags is None for item in [*projects, *experiences])
-    missed = any(not ref and _basis(q) == "competencies" for q, ref in zip(questions, refs))
+    missed = any(not ref and basis_of(q) == "competencies" for q, ref in zip(questions, refs))
     await db.commit()
     return EvidenceMapping(refs, mapped_at, _UNTAGGED if untagged and missed else None)
 

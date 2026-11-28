@@ -40,7 +40,8 @@ def _date_text(written: str | None, day: date | None) -> str:
     return written or (day.strftime("%b %Y") if day else "")
 
 
-def _dates(entry, ongoing: bool = False) -> str:
+def date_range(entry, ongoing: bool = False) -> str:
+    """An entry's dates as the resume writes them, such as "Jun 2023 - Present"."""
     start = _date_text(entry.start_date_text, entry.start_date)
     end = _date_text(entry.end_date_text, entry.end_date) or ("Present" if ongoing else "")
     return " - ".join(filter(None, [start, end]))
@@ -57,7 +58,7 @@ def _sections(document: TailoredResumeDocument) -> dict[str, list[tuple[str, str
         "experience": [
             piece
             for e in document.experience
-            for piece in [("title", f"{e.role}, {e.company}"), ("detail", _dates(e)), *_bullets(e.bullets)]
+            for piece in [("title", f"{e.role}, {e.company}"), ("detail", date_range(e)), *_bullets(e.bullets)]
         ],
         "projects": [
             piece
@@ -72,7 +73,7 @@ def _sections(document: TailoredResumeDocument) -> dict[str, list[tuple[str, str
             for piece in [
                 ("title", e.institution),
                 ("detail", ", ".join(filter(None, [e.degree, e.field_of_study]))),
-                ("detail", _dates(e, e.is_current)),
+                ("detail", date_range(e, e.is_current)),
                 *_bullets(e.bullets),
             ]
         ],

@@ -68,6 +68,43 @@ class InterviewKitDraft(BaseModel):
     evidence_notice: str | None = None  # what the matching couldn't check; safe to show
 
 
+class OutlineStory(BaseModel):
+    """The work an answer is built on."""
+    kind: Literal["project", "experience", "leetcode"]
+    id: uuid.UUID | None = None  # the project or role
+    title: str
+    period: str | None = None  # as the record words it
+    technologies: list[str] = []
+    url: str | None = None
+
+
+class OutlineFact(BaseModel):
+    """Something the record says, in its own words."""
+    text: str
+    bullet: int | None = None  # which of the story's lines it is, if one
+
+
+class OutlineSection(BaseModel):
+    heading: str
+    prompt: str  # what to cover here; says nothing about the user
+    facts: list[OutlineFact] = []  # empty when the record says nothing for it
+
+
+class AnswerOutline(BaseModel):
+    """How to answer one question from the user's own record."""
+    question_id: uuid.UUID
+    story: OutlineStory | None = None  # none when there is no evidence
+    sections: list[OutlineSection]
+    other_facts: list[OutlineFact] = []  # the rest of the story, placed under no heading
+    warnings: list[str] = []
+
+
+class KitOutlines(BaseModel):
+    version: int
+    stale: bool  # the evidence has changed since it was matched
+    outlines: list[AnswerOutline]  # in the kit's order
+
+
 class WordedQuestion(BaseModel):
     id: str
     question: str

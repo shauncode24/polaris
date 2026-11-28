@@ -34,6 +34,7 @@ coverage_gaps, evidence_coverage) is sourced from the single shared
 identity_context adapter — see identity_context.py for the interview-
 specific slimming applied there (dedup, dropped unused fields).
 """
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import select
@@ -94,11 +95,14 @@ async def load_projects_with_tags(db: AsyncSession, user_id) -> list[Project]:
 async def load_experiences_with_tags(db: AsyncSession, user_id) -> list[Experience]:
     """The user's current, visible roles, most recent first."""
     result = await db.execute(
-        select(Experience)
-        .where(Experience.user_id == user_id)
-        .order_by(Experience.start_date.desc().nullsfirst(), Experience.created_at.desc())
+        select(Experience).where(Experience.user_id == user_id).order_by(Experience.created_at.desc())
     )
-    experiences = dedupe_visible("experiences", list(result.scalars().all()))
+    # The newest copy of each role is the current one, whatever dates it has; only
+    # then are they put in the order of the roles' own dates, undated first.
+    experiences = sorted(
+        dedupe_visible("experiences", list(result.scalars().all())),
+        key=lambda e: e.start_date or date.max, reverse=True,
+    )
 
     items = [
         {"key": str(e.id), "text": _experience_text(e), "existing_tags": e.competency_tags}
