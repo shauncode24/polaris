@@ -36,6 +36,8 @@ os.environ["GROQ_API_KEY"] = "test-key-never-sent"
 os.environ["GROQ_BASE_URL"] = "http://llm.invalid/v1"
 os.environ["GROQ_MODEL"] = "openai/gpt-oss-120b"
 os.environ["LLM_MAX_RETRIES"] = "0"
+# Tests reuse a few users far beyond a real day's use; the limit has its own tests.
+os.environ["LLM_DAILY_CALLS_PER_USER"] = "100000"
 
 os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
 os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())

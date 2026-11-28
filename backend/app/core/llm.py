@@ -9,6 +9,7 @@ Features call `llm_json`. It owns everything that is the same for every call:
     or cut off before the end
   * one log line per attempt with the tokens spent and the time taken
   * errors whose message can be shown to a user, including a missing API key
+  * each user's daily number of calls (see llm_budget.py)
   * the caller's fallback, when it has one
 
 The model can run out of room and still send valid JSON with the end missing.
@@ -33,6 +34,7 @@ from openai import (
     RateLimitError,
 )
 
+from app.core import llm_budget
 from app.core import settings as _settings  # noqa: F401  (loads .env before it is read below)
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,22 @@ class LLMUnavailableError(LLMError):
 
 class LLMReplyError(LLMError):
     """The service answered, but not with something usable."""
+
+
+class LLMBudgetError(LLMUnavailableError):
+    """The user has used today's calls. Raised even where there is a fallback,
+    which would look like an answer and might be saved as one.
+    """
+    status_code = 429
+
+    def __init__(self, limit: int):
+        super().__init__(f"You've reached today's limit of {limit} AI requests. It resets at midnight UTC.")
+
+
+async def require_budget(user_id) -> None:
+    """Refuses, before any work starts, a user with no calls left today."""
+    if not await llm_budget.has_calls_left(user_id):
+        raise LLMBudgetError(llm_budget.DAILY_CALLS)
 
 
 class Prompt(NamedTuple):
@@ -212,7 +230,8 @@ async def llm_json(
     (a pydantic model, or `dict` for the object as it is).
 
     With a `fallback`, a failed call returns `fallback()` marked degraded.
-    Without one it raises an `LLMError`.
+    Without one it raises an `LLMError`. A user out of calls for the day gets
+    `LLMBudgetError` either way.
 
     label       names the call in the logs
     expect      keys a finished reply always has
@@ -234,8 +253,16 @@ async def llm_json(
         )
         logger.error("llm label=%s not sent: GROQ_API_KEY is not set", label)
 
+    user_id = llm_budget.current_user.get()
     attempt = 0
     while failure is None:
+        counted_on = None
+        if user_id is not None and llm_budget.DAILY_CALLS > 0:
+            counted_on = await llm_budget.reserve(user_id)
+            if counted_on is None:
+                failure = LLMBudgetError(llm_budget.DAILY_CALLS)
+                logger.warning("llm label=%s not sent: user %s has no calls left today", label, user_id)
+                break
         attempt += 1
         request = {
             "model": model,
@@ -256,6 +283,8 @@ async def llm_json(
                 label, model, attempt, (time.monotonic() - started) * 1000, type(e).__name__, e,
             )
             if not _is_rejected_json(e):
+                if counted_on is not None:  # never answered, so not counted
+                    await llm_budget.refund(user_id, counted_on)
                 failure, cause = _unavailable(e), e
                 break
             problem = e
@@ -283,7 +312,7 @@ async def llm_json(
             ]
             temperature = 0
 
-    if fallback is not None:
+    if fallback is not None and not isinstance(failure, LLMBudgetError):
         logger.warning("llm label=%s using the fallback: %s", label, failure)
         return LLMReply(fallback(), degraded=True)
     raise failure from cause

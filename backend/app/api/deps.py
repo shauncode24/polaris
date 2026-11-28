@@ -5,6 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import llm_budget
 from app.core.database import get_db
 from app.core.security import decode_access_token
 from app.models.facts import User
@@ -37,4 +38,5 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    llm_budget.current_user.set(user.id)  # model calls made for this request are theirs
     return user

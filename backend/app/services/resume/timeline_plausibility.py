@@ -108,7 +108,8 @@ async def build_timeline_plausibility_notes(db: AsyncSession, user_id, resume_id
     all_raw: set[str] = set()
     for exp in experiences:
         all_raw.update(exp.stack or [])
-    resolved = await resolve_skills(all_raw, db) if all_raw else {}
+    # Advisory, and part of reading skill scores: never worth failing the page.
+    resolved = await resolve_skills(all_raw, db, skip_if_unavailable=True) if all_raw else {}
 
     for exp in experiences:
         window = (_to_date(exp.start_date), _to_date(exp.end_date))

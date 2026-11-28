@@ -6,7 +6,7 @@ Estimates assume one developer working part-time and are rough. Total: about **1
 
 ## Progress
 
-Updated after step 27. Unmarked steps (28 to 71, plus 6 and 13) are not started.
+Updated after step 28. Unmarked steps (29 to 71, plus 6 and 13) are not started.
 
 | Stage | Status | Steps |
 |---|---|---|
@@ -14,7 +14,7 @@ Updated after step 27. Unmarked steps (28 to 71, plus 6 and 13) are not started.
 | B. Consolidate and make the data trustworthy | ✅ done except step 13 | 7 to 12 done (committed in `82bac8a`); 13 not started |
 | C. Unified evidence record | ✅ done | 14 to 20 done (committed) |
 | D. JD fit tied to evidence | ✅ done | 21 to 24 |
-| E. LLM foundation | ◐ in progress | 25 to 27 done; 28 not started |
+| E. LLM foundation | ✅ done | 25 to 28 |
 | F. Tailored resume | not started | 29 to 37 |
 | G. Interview kit and practice | not started | 38 to 43 |
 | H. Hardening and account basics | not started | 44 to 51 |
@@ -22,9 +22,9 @@ Updated after step 27. Unmarked steps (28 to 71, plus 6 and 13) are not started.
 | J. Deployment | not started | 58 to 67 |
 | K. Beta and launch | not started | 68 to 71 |
 
-**22 of 71 steps done, 1 partial, 2 skipped, 46 not started** (44 of them in Stages E to K).
+**23 of 71 steps done, 1 partial, 2 skipped, 45 not started** (43 of them in Stages F to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 437 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 463 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -41,7 +41,7 @@ Recommended choice in bold.
 | Decision | Options | Affects | Status |
 |---|---|---|---|
 | Hosting | **Render or Fly.io with managed Postgres**, or one VPS with Compose | Steps 13 and 58 to 67 | open |
-| LLM provider | **Keep Groq, behind a provider setting**, or switch | Steps 25 and 31 | Groq kept (step 25); budget still open |
+| LLM provider | **Keep Groq, behind a provider setting**, or switch | Steps 25 and 31 | Groq kept (step 25); budget and daily limit still open |
 | Resume export | **One structured resume JSON rendered to DOCX (`python-docx`) and PDF (WeasyPrint on an HTML template)** | Steps 29 to 36 | open |
 | Background work | **FastAPI tasks plus a `jobs` table**; Celery/RQ only if needed | Steps 26 and 27 | open |
 | Legacy `JobDescription` rows | **Migrate any worth keeping, then drop the table** | Step 7 | ✅ done |
@@ -115,7 +115,7 @@ Recommended choice in bold.
     - **Gate:** a real JD gives a match view where every "met" requirement links to evidence. ✅ Checked on 9 saved real postings against a sample record: all 19 met requirements carried their projects, experience, repos or LeetCode topics. Not checked in a browser; only GitHub items are clickable.
     - **Status:** Done. The skill-gap models live in one module with a shared base for the three kinds of match (stored comparisons are rebuilt once), and the unused response model is gone. The five components and the two only they used are deleted; the Skill Gap page gained strengths and risks, links to plan and practise for that job, and match scores in the job picker. The job list now shows a score only while it is current. **Added to this step:** LeetCode practice counts toward "data structures" and "algorithms": 100 solved problems across 5 topics meets the requirement, 30 across 3 meets it partly, and less is shown as weak evidence.
 
-## Stage E: LLM foundation (about 3–4 days) — ◐ in progress
+## Stage E: LLM foundation (about 3–4 days) — ✅ done
 
 This comes before the two large generation features, because they depend on it.
 
@@ -125,7 +125,8 @@ This comes before the two large generation features, because they depend on it.
     - **Status:** Done. Table `background_jobs`, status route `GET /background-jobs/{id}`. Job analysis, skill gap, career plan, interview answers and corrections, resume upload, review, analysis, coherence and tailoring, GitHub sync and review, LeetCode review, LinkedIn import, the project reports, identity refresh and weekly brief now answer 202 and finish in the background; stored results and input errors are still answered at once. The frontend waits through one shared helper (`apiFetch`), so the pages did not change. Jobs run inside the server process (no separate worker): a restart fails the running ones, which are then reported as interrupted; an identical request joins the running job; a job is stopped after 15 minutes; finished jobs are cleared after a day. Still answered in the request: the resume page's role-fit call when no analysis is stored, and a LeetCode sync's classification of topic names not seen before. Verified by tests and by running the frontend helper against a local server; **not tried in a browser**.
 ✅ 27. Add an advisory lock so only one identity refresh runs per user at a time. Move `trigger_identity_refresh` onto a background job.
     - **Status:** Done. Every data change (resume upload and analysis, syncs, LinkedIn import, project link and unlink, claim audit, skill gap) now starts the identity refresh as its own background job, so the request no longer waits for it. A Postgres advisory lock allows one refresh per user at a time, across server processes. Changes made during a refresh get exactly one further refresh; a snapshot is now dated by when its data was read so that this can be told. The manual refresh uses the same lock. **Known limits:** pages show the previous identity until the refresh finishes (a new user sees none for those seconds); a running refresh holds two of the server's 15 database connections, so many simultaneous users would need a larger pool (Stage J). Verified by tests; not tried in a browser.
-28. Add a per-user daily LLM call budget with a clear error when it's reached.
+✅ 28. Add a per-user daily LLM call budget with a clear error when it's reached.
+    - **Status:** Done. Each user gets 100 model calls per UTC day (`LLM_DAILY_CALLS_PER_USER`; 0 removes the limit), counted in the `llm_usage` table where every call is made, so requests, background jobs and identity refreshes all count. Calls the service never answered are given back. At the limit, new AI work is refused with a message saying so; saved results, page loads and the GitHub and LeetCode syncs still work. **Known limit:** work that starts with calls left but runs out partway fails with the same message in most features; a skill gap, career plan or resume review may instead finish with its non-AI fallback, marked as such. The limit counts calls, not tokens. Verified by tests; not tried in a browser.
 
 ## Stage F: Pillar 3, tailored resume (about 2–2.5 weeks)
 

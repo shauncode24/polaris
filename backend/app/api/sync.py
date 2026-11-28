@@ -76,7 +76,8 @@ async def trigger_github_sync(
         await trigger_identity_refresh(user_id, "github sync")
         return result
 
-    return await run_in_background(user_id, "github_sync", work, inputs=(username,))
+    # The sync is worth doing without the model: what it can't do now waits.
+    return await run_in_background(user_id, "github_sync", work, inputs=(username,), needs_model=False)
 
 
 @router.post("/leetcode")

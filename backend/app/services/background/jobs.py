@@ -26,8 +26,9 @@ from sqlalchemy import delete, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import llm_budget
 from app.core.database import AsyncSessionLocal
-from app.core.llm import LLMError
+from app.core.llm import LLMError, require_budget
 from app.models.background import JOB_FAILED, JOB_RUNNING, JOB_SUCCEEDED, BackgroundJob
 
 logger = logging.getLogger(__name__)
@@ -78,10 +79,15 @@ async def _fail_if_stale(db: AsyncSession, *conditions) -> None:
     )
 
 
-async def start(user_id, kind: str, work: Work, *, inputs: tuple = ()) -> uuid.UUID:
+async def start(
+    user_id, kind: str, work: Work, *, inputs: tuple = (), needs_model: bool = True,
+) -> uuid.UUID:
     """Starts `work` and returns the job's id. If the same kind of work with
     the same `inputs` is already running for this user, returns that job
     instead, so a double click or a reloaded page doesn't pay for it twice.
+
+    Work that `needs_model` isn't started for a user with no model calls left
+    today: `LLMBudgetError` is raised.
     """
     key = _dedupe_key(kind, inputs)
     mine = (BackgroundJob.user_id == user_id, BackgroundJob.dedupe_key == key)
@@ -96,6 +102,15 @@ async def start(user_id, kind: str, work: Work, *, inputs: tuple = ()) -> uuid.U
 
         # More than one pass only if the other job finishes between the two queries.
         for _ in range(3):
+            running = await db.scalar(
+                select(BackgroundJob.id).where(*mine, BackgroundJob.status == JOB_RUNNING)
+            )
+            if running is not None:
+                await db.commit()
+                return running
+            if needs_model:
+                await require_budget(user_id)
+
             now = _now()
             created = await db.scalar(
                 insert(BackgroundJob)
@@ -110,17 +125,10 @@ async def start(user_id, kind: str, work: Work, *, inputs: tuple = ()) -> uuid.U
             )
             if created is not None:
                 await db.commit()
-                task = asyncio.create_task(_run(created, kind, work))
+                task = asyncio.create_task(_run(created, user_id, kind, work))
                 _tasks.add(task)
                 task.add_done_callback(_tasks.discard)
                 return created
-
-            running = await db.scalar(
-                select(BackgroundJob.id).where(*mine, BackgroundJob.status == JOB_RUNNING)
-            )
-            if running is not None:
-                await db.commit()
-                return running
 
     raise RuntimeError(f"could not start a '{kind}' background job")
 
@@ -159,7 +167,8 @@ async def _record(job_id, outcome: dict) -> None:
         await db.commit()
 
 
-async def _run(job_id, kind: str, work: Work) -> None:
+async def _run(job_id, user_id, kind: str, work: Work) -> None:
+    llm_budget.current_user.set(user_id)  # this task's model calls are theirs
     heartbeat = asyncio.create_task(_keep_alive(job_id))
     started = time.monotonic()
     try:

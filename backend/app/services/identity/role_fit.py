@@ -64,7 +64,7 @@ Use ONLY these five exact role name strings, one entry each: "Backend Engineer",
 "Full Stack Engineer", "AI/ML Engineer", "DevOps / Platform"."""
 
 
-def _fallback_role_fit(reason: str) -> list[RoleFitResult]:
+def fallback_role_fit(reason: str) -> list[RoleFitResult]:
     return [RoleFitResult(role=r, rating=1, rationale=reason) for r in VALID_ROLES]
 
 
@@ -75,7 +75,7 @@ async def get_role_fit(skill_evidence: list[dict], scope: str) -> list[RoleFitRe
     evidence itself — it only reasons over what it's handed.
     """
     if not skill_evidence:
-        return _fallback_role_fit(f"No verified skill evidence available yet for scope '{scope}'.")
+        return fallback_role_fit(f"No verified skill evidence available yet for scope '{scope}'.")
 
     payload = {"scope": scope, "skills": skill_evidence}
 
@@ -84,7 +84,7 @@ async def get_role_fit(skill_evidence: list[dict], scope: str) -> list[RoleFitRe
         label=f"role_fit:{scope}", expect=("role_fit",), temperature=0.3,
     )
     if reply.degraded:
-        return _fallback_role_fit("Role-fit narrative is temporarily unavailable.")
+        return fallback_role_fit("Role-fit narrative is temporarily unavailable.")
     parsed = reply.value
 
     # Never trust the LLM's role names blindly — same defensive pattern

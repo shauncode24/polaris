@@ -29,9 +29,11 @@ class BackgroundJobStatus(BaseModel):
     finished_at: datetime | None = None
 
 
-async def run_in_background(user_id, kind: str, work: jobs.Work, *, inputs: tuple = ()) -> JSONResponse:
+async def run_in_background(
+    user_id, kind: str, work: jobs.Work, *, inputs: tuple = (), needs_model: bool = True,
+) -> JSONResponse:
     """What a route returns for slow work. See `jobs.start`."""
-    job_id = await jobs.start(user_id, kind, work, inputs=inputs)
+    job_id = await jobs.start(user_id, kind, work, inputs=inputs, needs_model=needs_model)
     return JSONResponse(status_code=202, content={"job_id": str(job_id), "status": "running"})
 
 

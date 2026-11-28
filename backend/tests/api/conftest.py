@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.api.deps import get_current_user  # noqa: E402,F401
+from app.core import llm_budget  # noqa: E402
 from app.core.database import get_db  # noqa: E402
 from app.core.security import create_access_token  # noqa: E402
 from app.core.settings import settings  # noqa: E402
@@ -179,10 +180,11 @@ def client(seeded):
 
     app.dependency_overrides[get_db] = override_get_db
     real_factory, background_jobs.session_factory = background_jobs.session_factory, factory
+    llm_budget.session_factory = factory
     with WaitingClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-    background_jobs.session_factory = real_factory
+    background_jobs.session_factory = llm_budget.session_factory = real_factory
 
 
 def _auth(user_id) -> dict:

@@ -60,7 +60,7 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
 
     github_skills = set()
     if github_techs:
-        resolved_gh = await resolve_skills(github_techs, db)
+        resolved_gh = await resolve_skills(github_techs, db, skip_if_unavailable=True)
         github_skills = {val for val in resolved_gh.values() if val is not None}
 
     # ── 3. LeetCode skills ──────────────────────────────────────────────────
@@ -95,7 +95,7 @@ async def analyze_cross_source_coverage(db, user_id: uuid.UUID, resume_id: uuid.
 
     cert_skills = set()
     if all_cert_skills:
-        resolved_certs = await resolve_skills(all_cert_skills, db)
+        resolved_certs = await resolve_skills(all_cert_skills, db, skip_if_unavailable=True)
         cert_skills = {val for val in resolved_certs.values() if val is not None}
 
     # ── Set difference ──────────────────────────────────────────────────────

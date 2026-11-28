@@ -12,10 +12,11 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 - [x] **Commit step 25.** Done.
 - [x] **Commit step 26.** Done.
 - [x] **Commit the password fix.** Done. Run `uv sync` from `backend/` on any other machine that runs the app.
-- [ ] **Commit step 27.**
+- [x] **Commit step 27.** Done.
+- [ ] **Commit step 28.**
 - [ ] **Try the AI features once the Groq allowance has reset:** upload a resume, add a job, open its Skill Gap page, generate a plan and ask an interview question. Most of these have not been run against the real model since step 25. If one shows a fallback or an "incomplete answer" message, send me the server's `llm label=...` log lines.
 - [ ] **Back up the Neon database before migrating.** Use the Neon console (branch or snapshot). The migrations drop `job_descriptions` and rewrite goals and the tailoring cache; the downgrade restores structure only, not data.
-- [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now seven new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, and the background jobs table (most AI features fail without it). Expect the 2 legacy goals to lose their job link if their job can't be matched.
+- [ ] **Apply the migrations to Neon.** From `backend/`: `uv run alembic upgrade head`. There are now eight new ones, applied in order: LinkedIn tables and `source` columns that the real database is currently missing (resume upload and LinkedIn need them), the job re-key, the unused-table drop, the evidence review columns, repo description/URL, the primary target flag, the background jobs table and the daily usage table (most AI features fail without the last two). Expect the 2 legacy goals to lose their job link if their job can't be matched.
 - [ ] **After migrating, re-sync GitHub once** (Profile page, GitHub card). Repo descriptions and URLs are only stored from the next sync on, and GitHub-only projects are only created by a sync or a resume upload.
 - [ ] **Re-sync LeetCode once.** Solved problems only count toward "data structures" and "algorithms" from the next sync on.
 - [ ] **Upload your resume again once.** Evidence rows saved by earlier uploads can be attached to the wrong role (a bug fixed in step 21). A fresh upload replaces them: older rows stop counting.
@@ -28,6 +29,7 @@ Things I can't do or shouldn't decide for you. Ordered by when they matter. Tick
 
 ## Decisions I'm waiting on
 
+- [ ] **Daily AI limit per user.** Set to 100 calls. On Groq's free tier that is too generous to protect anyone: one person using all of it could spend the whole app's 200,000 daily tokens. Roughly 30 would stop one user taking everything but still allows only about a handful of active users a day. Change it with `LLM_DAILY_CALLS_PER_USER` in `.env`; decide it together with the provider below.
 - [ ] **How much evidence should count?** A skill needs a score of 60% to be met and 30% to count partly. One source rarely gets there: a skill used in one job (25%) or seen in one ordinary GitHub repo (18% to 39%) is usually shown as a gap, and one project that describes it (35%) only counts partly. LeetCode is more generous by design: 100 problems across 5 topics meets "algorithms" by itself. Tell me if either should change; the numbers are in `services/evidence/scoring.py`.
 - [ ] **Hosting** (Render or Fly.io with managed Postgres, or one VPS). Needed for step 13 (staging) and Stage J.
 - [ ] **Password reset and email verification.** The app has email/password sign-in and no reset flow, so a forgotten password locks the user out. Choose: build it (needs a transactional email provider such as Resend or Postmark), or drop email/password and keep Google sign-in only.

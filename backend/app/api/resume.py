@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.background_jobs import run_in_background
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.llm import LLMBudgetError
 from app.core.settings import settings
 from app.models.facts import (
     User, Resume, Experience, Project, Education, Certificate,
@@ -22,7 +23,7 @@ from app.services.resume.pdf_parser import PdfParseError, extract_text_from_pdf_
 from app.services.resume.docx_parser import extract_text_from_docx
 from app.services.resume.ingestion import ingest_resume
 from app.services.resume.reviewer import generate_resume_review
-from app.services.identity.role_fit import get_role_fit
+from app.services.identity.role_fit import fallback_role_fit, get_role_fit
 from app.services.identity.role_fit_scoping import build_scoped_skill_evidence, RESUME_SOURCE_TYPES
 
 
@@ -358,7 +359,10 @@ async def get_resume_workspace(
     if not role_fit:
         # FIX (cross-user evidence leak): user_id now required.
         resume_scoped_evidence = await build_scoped_skill_evidence(db, uid, RESUME_SOURCE_TYPES)
-        role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
+        try:
+            role_fit_results = await get_role_fit(resume_scoped_evidence, scope="resume_only")
+        except LLMBudgetError as e:  # the page still loads, saying why
+            role_fit_results = fallback_role_fit(str(e))
         role_fit = [r.model_dump() for r in role_fit_results]
 
     coverage_gaps = await analyze_cross_source_coverage(db, uid, latest.id)
