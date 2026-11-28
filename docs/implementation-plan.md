@@ -24,7 +24,7 @@ Updated after step 26. Unmarked steps (27 to 71, plus 6 and 13) are not started.
 
 **21 of 71 steps done, 1 partial, 2 skipped, 47 not started** (45 of them in Stages E to K).
 
-Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 424 pass against a throwaway database; the frontend builds.
+Legend: ✅ done and verified as described, ◐ partly done, ⏭ skipped on purpose. Tests: 430 pass against a throwaway database; the frontend builds.
 
 ### Where the work differs from the plan
 
@@ -160,7 +160,7 @@ New tables: `InterviewKit` (user, JD), `InterviewQuestion` (category, text, evid
 46. Password reset and email verification through the chosen email provider, or a documented decision to restrict sign-in to Google. Without this, a forgotten password locks the user out.
 47. Account deletion: `DELETE /account` removes all of a user's data (including stored files and encrypted tokens). Add data export if time allows.
 48. Collapse the remaining parallel implementations, one at a time, each with tests first: one role-fit module, one resume-analysis entry point (decide whether `/resume/review` and `/resume/analyze` are separate features), one bullet-analysis path. Migrate the remaining `chat_completion` call sites to `llm_json`.
-49. Dependency hygiene: declare `cryptography` directly, pin versions, replace `passlib`, fix the `utcnow()` deprecation.
+49. Dependency hygiene: declare `cryptography` directly, pin versions, replace `passlib`, fix the `utcnow()` deprecation. (`passlib` is already replaced: it had stopped working with the installed `bcrypt`, which broke email sign-up and sign-in.)
 50. Remove the roughly 114 changelog-style comments ("FIX (Important #5)", "Phase 1 §1.4", "review finding #7") as part of touching each file, keeping comments that explain current behaviour.
 51. Handle LLM prompt-injection risk: delimit untrusted text in the LinkedIn, job and resume prompts and add one test per prompt that injected instructions don't change the output schema.
     - **Gate:** an LLM outage never produces a 500, the rate-limit, deletion and password-reset tests pass.

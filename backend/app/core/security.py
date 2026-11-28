@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from cryptography.fernet import Fernet, InvalidToken
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.settings import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt uses only the first 72 bytes of a password and refuses longer input,
+# so longer passwords are cut here. Stored hashes were always made this way.
+_BCRYPT_MAX_BYTES = 72
 
 # Phase 1 §1.4 — encryption at rest for stored third-party credentials
 # (currently: User.github_token). Fernet key is REQUIRED (settings.py
@@ -15,12 +17,19 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _fernet = Fernet(settings.encryption_key.encode())
 
 
+def _password_bytes(password: str) -> bytes:
+    return password.encode()[:_BCRYPT_MAX_BYTES]
+
+
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode())
+    except ValueError:  # the stored value isn't a bcrypt hash
+        return False
 
 
 def create_access_token(user_id: str) -> str:
@@ -38,7 +47,7 @@ def decode_access_token(token: str) -> str | None:
 
 
 # --- Encryption at rest for sensitive third-party credentials ---------
-# Never used for passwords (those stay one-way hashed via passlib
+# Never used for passwords (those stay one-way hashed with bcrypt
 # above) — only for secrets we genuinely need to read back in plaintext
 # to call an external API on the user's behalf (e.g. a GitHub PAT).
 
